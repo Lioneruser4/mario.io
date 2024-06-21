@@ -1,15 +1,24 @@
-<!-- index.html -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Game</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Mario Tarzı Oyun</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        canvas {
+            display: block;
+            margin: auto;
+            background-color: white;
+        }
+    </style>
 </head>
 <body>
-    <canvas id="game-canvas"></canvas>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
     <script src="game.js"></script>
 </body>
 </html>
