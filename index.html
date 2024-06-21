@@ -7,33 +7,20 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="login-form">
-        <h2>Giriş Yap</h2>
-        <input type="text" id="name-input" placeholder="İsminizi girin">
-        <button onclick="saveUserInfo()">Kaydet ve Oyuna Başla</button>
-    </div>
-    <div id="game-container" style="display:none;">
+    <div id="game-container">
         <canvas id="game-canvas"></canvas>
     </div>
     <script src="game.js"></script>
     <script>
-        function saveUserInfo() {
-            const name = document.getElementById('name-input').value;
+        window.onload = function() {
+            // Canvas boyutlarını ayarla
+            const canvas = document.getElementById('game-canvas');
+            canvas.width = window.innerWidth; // Pencere genişliği kadar
+            canvas.height = window.innerHeight; // Pencere yüksekliği kadar
 
-            // Örnek olarak, burada kullanıcı adını localStorage'da saklayabiliriz.
-            localStorage.setItem('userName', name);
-
-            // Oyuna başla
+            // Oyunu başlat
             startGame();
-        }
-
-        function startGame() {
-            document.getElementById('login-form').style.display = 'none';
-            document.getElementById('game-container').style.display = 'block';
-
-            // Oyun mekaniklerini başlatmak için gerekli JavaScript kodları burada olacak
-            // ...
-        }
+        };
     </script>
 </body>
 </html>
