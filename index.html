@@ -7,22 +7,34 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container">
+    <div id="login-form">
+        <h2>Giriş Yap</h2>
+        <input type="text" id="name-input" placeholder="İsminizi girin">
+        <input type="url" id="photo-input" placeholder="Fotoğraf URL'si">
+        <button onclick="saveUserInfo()">Kaydet ve Oyuna Başla</button>
+    </div>
+    <div id="game-container" style="display:none;">
         <canvas id="game-canvas"></canvas>
     </div>
     <script src="game.js"></script>
     <script>
-        // URL'den Telegram kullanıcı kimliğini al
-        const urlParams = new URLSearchParams(window.location.search);
-        const telegramUserId = urlParams.get('userId');
+        function saveUserInfo() {
+            const name = document.getElementById('name-input').value;
+            const photo = document.getElementById('photo-input').value;
 
-        if (telegramUserId) {
-            // Kullanıcı kimliği varsa, oyun başlat
-            console.log('User ID:', telegramUserId);
-            // Oyun başlatma fonksiyonu çağır
-            startGame(telegramUserId);
-        } else {
-            alert('Kullanıcı kimliği bulunamadı. Lütfen Telegram üzerinden giriş yapın.');
+            // Örnek olarak, burada kullanıcı bilgilerini localStorage'da saklayabiliriz.
+            localStorage.setItem('userInfo', JSON.stringify({ name, photo }));
+
+            // Oyuna başla
+            startGame();
+        }
+
+        function startGame() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+
+            // Oyun mekaniklerini başlatmak için gerekli JavaScript kodları burada olacak
+            // ...
         }
     </script>
 </body>
