@@ -1,33 +1,17 @@
 body {
     margin: 0;
+    overflow: hidden; /* Sayfa taşmalarını engeller */
+}
+
+#game-container {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-    background-color: #282c34;
-    color: white;
-    font-family: Arial, sans-serif;
+    height: 100vh; /* Ekran yüksekliği kadar */
+    background-color: #282c34; /* Arkaplan rengi */
 }
 
-#login-form {
-    text-align: center;
-}
-
-#name-input {
-    margin-bottom: 10px;
-    padding: 8px;
-    font-size: 16px;
-}
-
-button {
-    padding: 10px 20px;
-    font-size: 16px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #45a049;
+canvas {
+    border: 1px solid white; /* Kenarlık rengi */
+    background-color: black; /* Canvas arkaplan rengi */
 }
