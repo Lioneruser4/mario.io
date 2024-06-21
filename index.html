@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coin Collector Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+    </div>
+    <script src="game.js"></script>
+    <script>
+        // URL'den Telegram kullanıcı kimliğini al
+        const urlParams = new URLSearchParams(window.location.search);
+        const telegramUserId = urlParams.get('userId');
+
+        if (telegramUserId) {
+            // Kullanıcı kimliği varsa, oyun başlat
+            console.log('User ID:', telegramUserId);
+            // Oyun başlatma fonksiyonu çağır
+            startGame(telegramUserId);
+        } else {
+            alert('Kullanıcı kimliği bulunamadı. Lütfen Telegram üzerinden giriş yapın.');
+        }
+    </script>
+</body>
+</html>
