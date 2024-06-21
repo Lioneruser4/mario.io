@@ -10,7 +10,6 @@
     <div id="login-form">
         <h2>Giriş Yap</h2>
         <input type="text" id="name-input" placeholder="İsminizi girin">
-        <input type="url" id="photo-input" placeholder="Fotoğraf URL'si">
         <button onclick="saveUserInfo()">Kaydet ve Oyuna Başla</button>
     </div>
     <div id="game-container" style="display:none;">
@@ -20,10 +19,9 @@
     <script>
         function saveUserInfo() {
             const name = document.getElementById('name-input').value;
-            const photo = document.getElementById('photo-input').value;
 
-            // Örnek olarak, burada kullanıcı bilgilerini localStorage'da saklayabiliriz.
-            localStorage.setItem('userInfo', JSON.stringify({ name, photo }));
+            // Örnek olarak, burada kullanıcı adını localStorage'da saklayabiliriz.
+            localStorage.setItem('userName', name);
 
             // Oyuna başla
             startGame();
