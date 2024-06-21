@@ -1,13 +1,22 @@
+// game.js
+
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
-canvas.width = window.innerWidth; // Pencere genişliği kadar
-canvas.height = window.innerHeight; // Pencere yüksekliği kadar
+let playerX = 50;
+let playerY = 500;
+let playerWidth = 50;
+let playerHeight = 50;
 
-// Oyun mekaniklerini burada başlat
-function startGame() {
-    // Oyun başlatma kodları
-    // Örneğin, basit bir kare çizelim
-    ctx.fillStyle = 'red';
-    ctx.fillRect(50, 50, 100, 100);
+function drawPlayer() {
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(playerX, playerY, playerWidth, playerHeight);
 }
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawPlayer();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
