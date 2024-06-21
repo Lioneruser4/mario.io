@@ -1,0 +1,10 @@
+{
+  "userId1": {
+    "name": "John Doe",
+    "photo": "https://example.com/photo.jpg"
+  },
+  "userId2": {
+    "name": "Jane Smith",
+    "photo": "https://example.com/photo2.jpg"
+  }
+}
