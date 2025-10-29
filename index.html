@@ -1,20 +1,228 @@
 <!DOCTYPE html>
-<html lang="az">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meyvə Sürüşdürmə Oyunu (Candy Crush)</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Gerçek Zamanlı Nesne Tespiti - Tek Dosya</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.4.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        
+        #start-button {
+            padding: 20px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        
+        #start-button:hover {
+            background-color: #0056b3;
+        }
+
+        #start-button:active {
+            transform: scale(0.98);
+        }
+
+        #status {
+            margin: 15px 0;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        #video-container {
+            position: relative;
+            display: none; /* Başlangıçta gizli */
+            margin-top: 20px;
+            max-width: 100%;
+            border: 3px solid #333;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        #webcam {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+    </style>
 </head>
 <body>
-    <div class="game-container">
-        <div class="score-board">
-            <h1>Xal: <span id="score">0</span></h1>
-        </div>
-        <div class="grid" id="game-grid">
-            </div>
+    <h1>Hareket Algılamalı Nesne Tespiti</h1>
+    <p id="status">Lütfen "Kamerayı Aç" butonuna dokunun.</p>
+    
+    <button id="start-button" onclick="loadModelAndStart()">Kamerayı Aç</button>
+
+    <div id="video-container">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusElement = document.getElementById('status');
+        const startButton = document.getElementById('start-button');
+        const videoContainer = document.getElementById('video-container');
+
+        let model = null;
+        let lastPersonPosition = {}; // Son tespit edilen insan konumlarını saklamak için
+        const MOVEMENT_THRESHOLD = 20; // Hareket eşiği (piksellerde)
+
+        // Kamerayı Başlatma Fonksiyonu
+        async function setupWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    'video': {
+                        facingMode: 'environment' // Arka kamerayı tercih et (mobil için)
+                    }
+                });
+                video.srcObject = stream;
+                
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+            } catch (error) {
+                console.error("Kamera erişim hatası: ", error);
+                statusElement.innerText = "HATA: Kamera erişimine izin vermeniz gerekiyor.";
+                alert("Kamera erişimi engellendi. Lütfen izinleri kontrol edin.");
+            }
+        }
+
+        // Modeli Yükleme ve Uygulamayı Başlatma
+        async function loadModelAndStart() {
+            startButton.style.display = 'none';
+            statusElement.innerText = 'Model yükleniyor... Bu biraz zaman alabilir.';
+
+            // 1. Modeli Yükle
+            try {
+                model = await cocoSsd.load();
+                statusElement.innerText = 'Model yüklendi. Kamera başlatılıyor...';
+            } catch (e) {
+                statusElement.innerText = 'HATA: Model yüklenirken bir sorun oluştu.';
+                console.error(e);
+                startButton.style.display = 'block';
+                return;
+            }
+
+            // 2. Kamerayı Başlat
+            await setupWebcam();
+            
+            // Video ve Canvas boyutlarını ayarla
+            video.width = video.videoWidth;
+            video.height = video.videoHeight;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Arayüzü göster
+            videoContainer.style.display = 'block';
+            statusElement.innerText = 'Gerçek zamanlı nesne tespiti başladı.';
+            
+            // Tespit döngüsünü başlat
+            detectFrame();
+        }
+
+        // Tespit Döngüsü
+        function detectFrame() {
+            if (model) {
+                model.detect(video).then(predictions => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    predictions.forEach(prediction => {
+                        drawBox(prediction);
+                    });
+
+                    // Bir sonraki video karesi için kendini tekrar çağır (gerçek zamanlı akış)
+                    requestAnimationFrame(detectFrame);
+                });
+            }
+        }
+
+        // Sınırlayıcı Kutuyu Çizme Fonksiyonu
+        function drawBox(prediction) {
+            const [x, y, width, height] = prediction.bbox;
+            const className = prediction.class;
+            const score = Math.round(prediction.score * 100);
+            const label = `${className} (${score}%)`;
+            
+            let color = '#00FFFF'; // Varsayılan renk
+
+            if (className === 'person') {
+                // Hareketi Kontrol Et
+                const centerX = x + width / 2;
+                const centerY = y + height / 2;
+                const personId = prediction.id || `${x}_${y}`; // Basit bir ID ataması
+                
+                let isMoving = false;
+
+                if (lastPersonPosition[personId]) {
+                    const lastX = lastPersonPosition[personId].x;
+                    const lastY = lastPersonPosition[personId].y;
+
+                    // Mesafe hesapla
+                    const distance = Math.sqrt(Math.pow(centerX - lastX, 2) + Math.pow(centerY - lastY, 2));
+                    
+                    if (distance > MOVEMENT_THRESHOLD) {
+                        isMoving = true;
+                    }
+                }
+                
+                // Konumu güncelle
+                lastPersonPosition[personId] = { x: centerX, y: centerY };
+
+                // Eğer hareket ediyorsa rengi Kırmızı yap
+                if (isMoving) {
+                    color = '#FF0000'; // Kırmızı (Hareket ediyor)
+                } else {
+                    color = '#00FF00'; // Yeşil (Hareket etmiyor/Diğer nesneler)
+                }
+            }
+            
+            // Diğer nesneler için yeşil kutu
+            else if (className === 'car' || className === 'truck' || className === 'bus' || className === 'bicycle' || className === 'motorcycle') {
+                color = '#FFA500'; // Turuncu (Araçlar)
+            }
+
+
+            // Kutuyu çiz
+            ctx.strokeStyle = color; 
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, width, height);
+
+            // Etiket arkaplanını çiz
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y - 25, label.length * 10 + 10, 25);
+            
+            // Etiketi çiz
+            ctx.fillStyle = '#000000'; // Siyah metin
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(label, x + 5, y - 5);
+        }
+
+    </script>
 </body>
 </html>
