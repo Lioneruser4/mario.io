@@ -1,119 +1,248 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hareket Algılayan Kamera</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hareket Algılama & Takip Kamerası</title>
   <style>
-    body {
-      margin: 0;
-      background: #000;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      color: white;
-      font-family: sans-serif;
-    }
-    video, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    #info {
-      position: absolute;
-      bottom: 15px;
-      background: rgba(0,0,0,0.6);
-      padding: 10px 20px;
-      border-radius: 10px;
-      font-size: 1.1em;
-    }
+    :root{--bg:#0f1724;--panel:#0b1220;--accent:#3b82f6;--ok:#06b6a4;--warn:#ef4444;color-scheme:dark}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#e6eef8}
+    .app{max-width:980px;margin:18px auto;padding:12px}
+    h1{font-size:18px;margin:6px 0}
+    .stage{position:relative;border:1px solid rgba(255,255,255,.06);border-radius:8px;overflow:hidden;background:#000}
+    video,canvas{display:block;width:100%;height:auto}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .controls > *{background:var(--panel);border:1px solid rgba(255,255,255,.04);padding:8px;border-radius:8px;color:#cfe9ff}
+    label{font-size:13px}
+    input[type=range]{width:160px}
+    .badge{font-size:12px;background:rgba(255,255,255,.04);padding:6px;border-radius:6px}
+    .footer{margin-top:10px;font-size:13px;color:#9fb7d8}
+    .notice{margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;color:#cfe9ff}
   </style>
 </head>
 <body>
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="motion"></canvas>
-  <div id="info">Dokun veya tıkla: Arka kamera açılacak</div>
+  <div class="app">
+    <h1>Hareket Algılama & Takip Kamerası</h1>
+    <p class="notice">Arka kamerayı açıp nesneleri otomatik algılar, takip eder ve hareket eden nesnelerin kutu rengini değiştirir. Bu tek dosyalık demo, tarayıcıda çalışır. (Güvenli bağlam gerekir: https veya localhost.)</p>
+
+    <div class="stage">
+      <video id="video" playsinline autoplay muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Başlat</button>
+      <button id="stopBtn" disabled>Dur</button>
+      <label class="badge">Kamera: <select id="cameraSelect"><option>Otomatik</option></select></label>
+      <label>Hassasiyet <input id="moveThresh" type="range" min="2" max="80" value="18"></label>
+      <label>Algılama FPS <input id="fpsLimit" type="range" min="1" max="20" value="8"></label>
+      <label><input id="drawBoxes" type="checkbox" checked> Kutuları Göster</label>
+      <label><input id="drawIds" type="checkbox" checked> ID ve Hızı Göster</label>
+      <label class="badge">Model: <span id="modelState">Yüklenmedi</span></label>
+    </div>
+
+    <div class="footer">
+      Not: Telefonlarda arka kamera <code>facingMode:environment</code> ile tercih edilir; tarayıcı ve cihaz desteklerine bağlı olarak farklılık gösterebilir.
+    </div>
+  </div>
+
+  <!-- TensorFlow.js + coco-ssd model via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 
   <script>
+    // Kamera + Nesne algılama + Basit takip demo
+    // - Arka kamerayı tercih eder (ideal: environment)
+    // - coco-ssd modelini kullanarak tespit eder
+    // - Basit centroid tabanlı takip ile ID atar
+    // - Eğer son konumdan belirli bir mesafe taşınmışsa "hareketli" kabul eder ve kutu rengini değiştirir
+
     const video = document.getElementById('video');
-    const motionCanvas = document.getElementById('motion');
-    const ctx = motionCanvas.getContext('2d');
-    let lastFrame;
-    let streamStarted = false;
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const moveThresh = document.getElementById('moveThresh');
+    const fpsLimit = document.getElementById('fpsLimit');
+    const modelState = document.getElementById('modelState');
+    const drawBoxes = document.getElementById('drawBoxes');
+    const drawIds = document.getElementById('drawIds');
 
-    async function startCamera() {
+    let model = null;
+    let stream = null;
+    let running = false;
+
+    // Basit tracker
+    const trackers = {}; // id -> {id, x,y,w,h, lastSeen, lastPos, speed}
+    let nextId = 1;
+    const TRACK_EXPIRY = 2000; // ms
+
+    async function enumerateCameras() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "environment" } }, // Arka kamera
-          audio: false
-        });
-        video.srcObject = stream;
-        streamStarted = true;
-        document.getElementById('info').textContent = 'Kamera aktif — hareket eden nesneler renklenecek';
-      } catch (err) {
-        // Eğer arka kamera bulunmazsa öne geç
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          video.srcObject = stream;
-          document.getElementById('info').textContent = 'Arka kamera bulunamadı, ön kamera kullanılıyor';
-        } catch (e) {
-          document.getElementById('info').textContent = 'Kamera erişimi reddedildi.';
-          console.error(e);
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        cameraSelect.innerHTML = '<option value="">Otomatik (facingMode:environment)</option>' + cams.map(c=>`<option value="${c.deviceId}">${c.label || c.deviceId}</option>`).join('');
+      } catch (e) {
+        console.warn('Cihaz listeleme hata', e);
+      }
+    }
+
+    async function startCamera(deviceId) {
+      const constraints = {
+        audio: false,
+        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      };
+      if (stream) stopCamera();
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+      await video.play();
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
+      overlay.style.width = video.clientWidth + 'px';
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(t=>t.stop());
+        stream = null;
+      }
+      video.pause();
+      video.srcObject = null;
+    }
+
+    async function loadModel() {
+      modelState.textContent = 'Yükleniyor...';
+      model = await cocoSsd.load();
+      modelState.textContent = 'Hazır';
+    }
+
+    function distance(a,b){const dx=a.x-b.x;const dy=a.y-b.y;return Math.hypot(dx,dy)}
+
+    function assignTrack(detection){
+      const box = detection.bbox; // [x,y,w,h]
+      const center = {x: box[0]+box[2]/2, y: box[1]+box[3]/2};
+      // en yakın tracker bul
+      let bestId = null; let bestDist = Infinity;
+      for (const id in trackers){
+        const t = trackers[id];
+        const d = distance(center, t.lastPos);
+        if (d < bestDist) { bestDist = d; bestId = id }
+      }
+      // eğer yakınsa eşleştir, değilse yeni ID
+      const maxMatch = Math.max(40, Number(moveThresh.value)*4); // dinamik
+      if (bestId && bestDist < maxMatch) {
+        const t = trackers[bestId];
+        t.x = box[0]; t.y = box[1]; t.w = box[2]; t.h = box[3];
+        t.lastSeen = performance.now();
+        t.lastPos = center;
+        t.speed = bestDist; // px per detection
+        t.label = detection.class;
+        t.score = detection.score;
+        return t;
+      } else {
+        const id = String(nextId++);
+        const t = { id, x: box[0], y: box[1], w: box[2], h: box[3], lastSeen: performance.now(), lastPos: center, speed:0, label: detection.class, score: detection.score };
+        trackers[id] = t;
+        return t;
+      }
+    }
+
+    function cleanupTracks(){
+      const now = performance.now();
+      for (const id in trackers) {
+        if (now - trackers[id].lastSeen > TRACK_EXPIRY) delete trackers[id];
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,overlay.width,overlay.height);
+      // draw each tracker
+      for (const id in trackers){
+        const t = trackers[id];
+        const moving = t.speed > Number(moveThresh.value);
+        if (drawBoxes.checked) {
+          ctx.lineWidth = Math.max(2, Math.round(overlay.width/400));
+          ctx.strokeStyle = moving ? '#ef4444' : '#06b6a4';
+          ctx.fillStyle = moving ? 'rgba(239,68,68,0.15)' : 'rgba(6,182,164,0.08)';
+          ctx.fillRect(t.x, t.y, t.w, t.h);
+          ctx.strokeRect(t.x, t.y, t.w, t.h);
+        }
+        if (drawIds.checked) {
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#e6eef8';
+          const text = `#${t.id} ${t.label} ${Math.round(t.speed)}px`;
+          ctx.fillText(text, t.x + 6, t.y + 18);
         }
       }
     }
 
-    function detectMotion() {
-      if (!streamStarted || video.readyState !== video.HAVE_ENOUGH_DATA) {
-        requestAnimationFrame(detectMotion);
-        return;
+    let lastRun = 0;
+    async function detectLoop() {
+      if (!running) return;
+      const now = performance.now();
+      const fps = Number(fpsLimit.value);
+      if (now - lastRun < 1000 / fps) {
+        requestAnimationFrame(detectLoop); return;
+      }
+      lastRun = now;
+
+      if (!model) { requestAnimationFrame(detectLoop); return; }
+      try {
+        const predictions = await model.detect(video);
+        // sadece güven yüksekleri al
+        const good = predictions.filter(p=>p.score>0.45);
+        // her detection'ı track et
+        for (const d of good) assignTrack(d);
+        // cleanup ve draw
+        cleanupTracks();
+        draw();
+      } catch (e) {
+        console.error('Detect hata', e);
       }
 
-      motionCanvas.width = video.videoWidth;
-      motionCanvas.height = video.videoHeight;
-
-      ctx.drawImage(video, 0, 0, motionCanvas.width, motionCanvas.height);
-      const frame = ctx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
-
-      if (lastFrame) {
-        const len = frame.data.length;
-        for (let i = 0; i < len; i += 4) {
-          const diff =
-            Math.abs(frame.data[i] - lastFrame.data[i]) +
-            Math.abs(frame.data[i + 1] - lastFrame.data[i + 1]) +
-            Math.abs(frame.data[i + 2] - lastFrame.data[i + 2]);
-
-          if (diff > 60) {
-            // Hareket eden bölgeye yeşil renk
-            frame.data[i] = 0;
-            frame.data[i + 1] = 255;
-            frame.data[i + 2] = 0;
-          } else {
-            // Sabit bölgeleri hafif karart
-            frame.data[i] *= 0.3;
-            frame.data[i + 1] *= 0.3;
-            frame.data[i + 2] *= 0.3;
-          }
-        }
-        ctx.putImageData(frame, 0, 0);
-      }
-
-      lastFrame = frame;
-      requestAnimationFrame(detectMotion);
+      requestAnimationFrame(detectLoop);
     }
 
-    document.body.addEventListener('click', () => {
-      if (!streamStarted) {
-        startCamera();
-        detectMotion();
+    startBtn.addEventListener('click', async ()=>{
+      startBtn.disabled = true;
+      try {
+        const selected = cameraSelect.value;
+        await startCamera(selected || undefined);
+        running = true;
+        stopBtn.disabled = false;
+        cameraSelect.disabled = true;
+        if (!model) await loadModel();
+        detectLoop();
+      } catch (e) {
+        alert('Kamera açılamadı veya izin verilmedi. Konsolu kontrol et.');
+        console.error(e);
+        startBtn.disabled = false;
       }
     });
+
+    stopBtn.addEventListener('click', ()=>{
+      running = false; stopBtn.disabled = true; startBtn.disabled = false; cameraSelect.disabled = false; stopCamera(); ctx.clearRect(0,0,overlay.width,overlay.height);
+    });
+
+    cameraSelect.addEventListener('change', async ()=>{
+      if (stream) {
+        try { await startCamera(cameraSelect.value || undefined); } catch(e){console.warn(e)}
+      }
+    });
+
+    // init
+    (async ()=>{
+      if (!('mediaDevices' in navigator)) {
+        alert('Tarayıcınız kamera API'sini desteklemiyor. Mobil tarayıcı ile deneyin.');
+        return;
+      }
+      await enumerateCameras();
+      window.addEventListener('resize', ()=>{
+        if (video.videoWidth) { overlay.width = video.videoWidth; overlay.height = video.videoHeight }
+      });
+    })();
+
   </script>
 </body>
 </html>
