@@ -3,34 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Arka Kamera Hareket Algılama</title>
+<title>Hareket Algılama & Nesne Takip</title>
 <style>
   body{margin:0;font-family:sans-serif;background:#000;color:#fff;text-align:center;}
   video{width:100%;height:auto;}
-  #overlay{position:absolute;top:0;left:0;width:100%;height:100%;}
+  canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
 </style>
 </head>
 <body>
 <h2>Kameraya izin verin</h2>
-<video id="video" autoplay playsinline></video>
+<video id="video" autoplay playsinline muted></video>
 <canvas id="overlay"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
 let model = null;
+const trackers = {};
+let nextId = 1;
+const TRACK_EXPIRY = 2000; // ms
+const MOVE_THRESH = 15; // px per frame
 
-// Kamerayı başlat
+// Kamera açma
 async function startCamera() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    // Arka kamerayı bulmaya çalış
     let backCam = devices.find(d => d.kind === 'videoinput' && d.label.toLowerCase().includes('back'));
     const constraints = {
-      video: backCam ? { deviceId: { exact: backCam.deviceId } } : { facingMode: { exact: "environment" } }
+      video: backCam ? { deviceId: { exact: backCam.deviceId } } : { facingMode: { ideal: "environment" } }
     };
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
@@ -39,39 +43,104 @@ async function startCamera() {
     canvas.height = video.videoHeight;
   } catch(e) {
     console.error("Kamera açılamadı:", e);
-    alert("Kamera açılamadı. Tarayıcı izinlerini kontrol edin ve HTTPS ile açın.");
+    alert("Kamera açılamadı. Tarayıcı izinlerini kontrol edin.");
   }
 }
 
-// Nesne algılama
-async function loadModelAndDetect() {
-  model = await cocoSsd.load();
-  detectLoop();
+// Distance hesapla
+function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+
+// Track atama
+function assignTrack(detection){
+  const [x,y,w,h] = detection.bbox;
+  const center = {x:x+w/2, y:y+h/2};
+  let bestId=null, bestDist=Infinity;
+  for(const id in trackers){
+    const t=trackers[id];
+    const d=distance(center,t.lastPos);
+    if(d<bestDist){bestDist=d;bestId=id}
+  }
+  if(bestId && bestDist < MOVE_THRESH*2){
+    const t=trackers[bestId];
+    t.x=x;t.y=y;t.w=w;t.h=h;
+    t.lastSeen=performance.now();
+    t.lastPos=center;
+    t.speed=bestDist;
+    t.label=detection.class;
+    return t;
+  }else{
+    const id=String(nextId++);
+    const t={id,x,y,w,h,lastSeen:performance.now(),lastPos:center,speed:0,label:detection.class};
+    trackers[id]=t;
+    return t;
+  }
 }
 
-async function detectLoop() {
-  if(!model) return;
-  const predictions = await model.detect(video);
+// Temizleme
+function cleanupTracks(){
+  const now=performance.now();
+  for(const id in trackers){
+    if(now-trackers[id].lastSeen>TRACK_EXPIRY) delete trackers[id];
+  }
+}
+
+// Çizim
+function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  predictions.forEach(p => {
-    const [x,y,w,h] = p.bbox;
-    // Hareket eden nesneleri kırmızı, diğerlerini yeşil
-    ctx.strokeStyle = '#06b6a4';
+  for(const id in trackers){
+    const t=trackers[id];
+    const moving = t.speed > MOVE_THRESH;
+    ctx.strokeStyle = moving ? '#ef4444' : '#06b6a4';
     ctx.lineWidth = 2;
-    ctx.strokeRect(x,y,w,h);
-    ctx.fillStyle = 'rgba(6,182,164,0.2)';
-    ctx.fillRect(x,y,w,h);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(p.class, x+4, y+14);
-  });
+    ctx.strokeRect(t.x,t.y,t.w,t.h);
+    ctx.fillStyle = moving ? 'rgba(239,68,68,0.2)' : 'rgba(6,182,164,0.15)';
+    ctx.fillRect(t.x,t.y,t.w,t.h);
+    ctx.fillStyle='#fff';
+    ctx.fillText(`#${t.id} ${t.label}`, t.x+4,t.y+14);
+  }
+}
+
+// Algılama döngüsü
+let lastRun=0;
+async function detectLoop(){
+  const now=performance.now();
+  if(!model){requestAnimationFrame(detectLoop);return;}
+  try{
+    const predictions = await model.detect(video);
+    for(const d of predictions.filter(p=>p.score>0.45)) assignTrack(d);
+    cleanupTracks();
+    draw();
+  }catch(e){console.error(e);}
   requestAnimationFrame(detectLoop);
 }
 
-// Sayfa açılır açılmaz izin iste ve başlat
+// Başlat
 (async()=>{
   await startCamera();
-  await loadModelAndDetect();
+  model = await cocoSsd.load();
+  detectLoop();
 })();
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
