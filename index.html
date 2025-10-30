@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Hareket Algılama & Nesne Takip</title>
+<title>Otomatik Nesne Takip ve Hareket Algılama</title>
 <style>
-body{margin:0;background:#000;color:#fff;text-align:center;font-family:sans-serif;}
+body{margin:0;background:#000;color:#fff;font-family:sans-serif;text-align:center;}
 video{width:100%;height:auto;}
 canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
 </style>
@@ -22,18 +22,17 @@ canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
 const video=document.getElementById('video');
 const canvas=document.getElementById('overlay');
 const ctx=canvas.getContext('2d');
-let model=null;
 
-// Tracker
+let model=null;
 const trackers={};
 let nextId=1;
 const TRACK_EXPIRY=2000;
-const MOVE_THRESH=15;
+const MOVE_THRESH=10;
 
 // Nesne türlerine göre renk
 const classColors={person:'#3b82f6',car:'#facc15',dog:'#10b981',cat:'#f472b6',default:'#06b6a4'};
 
-// Kamera aç
+// Kamera başlat
 async function startCamera(){
     try{
         const devices=await navigator.mediaDevices.enumerateDevices();
