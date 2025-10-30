@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Gelişmiş Nesne ve Hareket Takip</title>
+<title>Hareket Algılama & Nesne Takip</title>
 <style>
-body{margin:0;font-family:sans-serif;background:#000;color:#fff;text-align:center;}
+body{margin:0;background:#000;color:#fff;text-align:center;font-family:sans-serif;}
 video{width:100%;height:auto;}
 canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
 </style>
@@ -19,49 +19,51 @@ canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('overlay');
-const ctx = canvas.getContext('2d');
+const video=document.getElementById('video');
+const canvas=document.getElementById('overlay');
+const ctx=canvas.getContext('2d');
 let model=null;
 
-const trackers={}; // id -> {id,x,y,w,h,lastPos,speed,label}
+// Tracker
+const trackers={};
 let nextId=1;
-const TRACK_EXPIRY=3000; // ms
-const MOVE_THRESH=10; // px/frame
+const TRACK_EXPIRY=2000;
+const MOVE_THRESH=15;
 
-const classColors = {person:'#3b82f6',car:'#facc15',dog:'#10b981',cat:'#f472b6',default:'#06b6a4'};
+// Nesne türlerine göre renk
+const classColors={person:'#3b82f6',car:'#facc15',dog:'#10b981',cat:'#f472b6',default:'#06b6a4'};
 
-// Kamera açma
+// Kamera aç
 async function startCamera(){
     try{
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        let backCam = devices.find(d=>d.kind==='videoinput' && d.label.toLowerCase().includes('back'));
-        const constraints = {
+        const devices=await navigator.mediaDevices.enumerateDevices();
+        let backCam=devices.find(d=>d.kind==='videoinput' && d.label.toLowerCase().includes('back'));
+        const constraints={
             video: backCam ? {deviceId:{exact:backCam.deviceId}} : {facingMode:{ideal:'environment'}}
         };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = stream;
+        const stream=await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject=stream;
         await video.play();
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
     }catch(e){
-        console.error("Kamera açılamadı:", e);
-        alert("Kamera açılamadı. Tarayıcı izinlerini kontrol edin.");
+        console.error('Kamera açılamadı:',e);
+        alert('Kamera açılamadı. Tarayıcı izinlerini kontrol edin.');
     }
 }
 
-// Distance
-function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+// Mesafe hesapla
+function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
 
-// Track atama
+// Tracker atama
 function assignTrack(detection){
     const [x,y,w,h]=detection.bbox;
     const center={x:x+w/2,y:y+h/2};
-    let bestId=null, bestDist=Infinity;
+    let bestId=null,bestDist=Infinity;
     for(const id in trackers){
         const t=trackers[id];
         const d=distance(center,t.lastPos);
-        if(d<bestDist){bestDist=d;bestId=id}
+        if(d<bestDist){bestDist=d;bestId=id;}
     }
     if(bestId && bestDist<MOVE_THRESH*2){
         const t=trackers[bestId];
@@ -79,7 +81,7 @@ function assignTrack(detection){
     }
 }
 
-// Track cleanup
+// Track temizle
 function cleanupTracks(){
     const now=performance.now();
     for(const id in trackers){
@@ -92,8 +94,8 @@ function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     for(const id in trackers){
         const t=trackers[id];
-        const moving = t.speed>MOVE_THRESH;
-        let color = classColors[t.label] || classColors.default;
+        const moving=t.speed>MOVE_THRESH;
+        let color=classColors[t.label]||classColors.default;
         if(moving) color='#ef4444';
         ctx.strokeStyle=color;
         ctx.lineWidth=2;
@@ -109,7 +111,7 @@ function draw(){
 async function detectLoop(){
     if(!model){requestAnimationFrame(detectLoop);return;}
     try{
-        const predictions = await model.detect(video);
+        const predictions=await model.detect(video);
         predictions.filter(p=>p.score>0.45).forEach(assignTrack);
         cleanupTracks();
         draw();
