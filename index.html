@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Hareket Algılama & Nesne Takip</title>
+<title>Gelişmiş Nesne ve Hareket Takip</title>
 <style>
-  body{margin:0;font-family:sans-serif;background:#000;color:#fff;text-align:center;}
-  video{width:100%;height:auto;}
-  canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
+body{margin:0;font-family:sans-serif;background:#000;color:#fff;text-align:center;}
+video{width:100%;height:auto;}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
 </style>
 </head>
 <body>
@@ -22,125 +22,107 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
-let model = null;
-const trackers = {};
-let nextId = 1;
-const TRACK_EXPIRY = 2000; // ms
-const MOVE_THRESH = 15; // px per frame
+let model=null;
+
+const trackers={}; // id -> {id,x,y,w,h,lastPos,speed,label}
+let nextId=1;
+const TRACK_EXPIRY=3000; // ms
+const MOVE_THRESH=10; // px/frame
+
+const classColors = {person:'#3b82f6',car:'#facc15',dog:'#10b981',cat:'#f472b6',default:'#06b6a4'};
 
 // Kamera açma
-async function startCamera() {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    let backCam = devices.find(d => d.kind === 'videoinput' && d.label.toLowerCase().includes('back'));
-    const constraints = {
-      video: backCam ? { deviceId: { exact: backCam.deviceId } } : { facingMode: { ideal: "environment" } }
-    };
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    await video.play();
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-  } catch(e) {
-    console.error("Kamera açılamadı:", e);
-    alert("Kamera açılamadı. Tarayıcı izinlerini kontrol edin.");
-  }
+async function startCamera(){
+    try{
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        let backCam = devices.find(d=>d.kind==='videoinput' && d.label.toLowerCase().includes('back'));
+        const constraints = {
+            video: backCam ? {deviceId:{exact:backCam.deviceId}} : {facingMode:{ideal:'environment'}}
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        await video.play();
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    }catch(e){
+        console.error("Kamera açılamadı:", e);
+        alert("Kamera açılamadı. Tarayıcı izinlerini kontrol edin.");
+    }
 }
 
-// Distance hesapla
+// Distance
 function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
 
 // Track atama
 function assignTrack(detection){
-  const [x,y,w,h] = detection.bbox;
-  const center = {x:x+w/2, y:y+h/2};
-  let bestId=null, bestDist=Infinity;
-  for(const id in trackers){
-    const t=trackers[id];
-    const d=distance(center,t.lastPos);
-    if(d<bestDist){bestDist=d;bestId=id}
-  }
-  if(bestId && bestDist < MOVE_THRESH*2){
-    const t=trackers[bestId];
-    t.x=x;t.y=y;t.w=w;t.h=h;
-    t.lastSeen=performance.now();
-    t.lastPos=center;
-    t.speed=bestDist;
-    t.label=detection.class;
-    return t;
-  }else{
-    const id=String(nextId++);
-    const t={id,x,y,w,h,lastSeen:performance.now(),lastPos:center,speed:0,label:detection.class};
-    trackers[id]=t;
-    return t;
-  }
+    const [x,y,w,h]=detection.bbox;
+    const center={x:x+w/2,y:y+h/2};
+    let bestId=null, bestDist=Infinity;
+    for(const id in trackers){
+        const t=trackers[id];
+        const d=distance(center,t.lastPos);
+        if(d<bestDist){bestDist=d;bestId=id}
+    }
+    if(bestId && bestDist<MOVE_THRESH*2){
+        const t=trackers[bestId];
+        t.x=x;t.y=y;t.w=w;t.h=h;
+        t.lastSeen=performance.now();
+        t.speed=bestDist;
+        t.lastPos=center;
+        t.label=detection.class;
+        return t;
+    }else{
+        const id=String(nextId++);
+        const t={id,x,y,w,h,lastSeen:performance.now(),lastPos:center,speed:0,label:detection.class};
+        trackers[id]=t;
+        return t;
+    }
 }
 
-// Temizleme
+// Track cleanup
 function cleanupTracks(){
-  const now=performance.now();
-  for(const id in trackers){
-    if(now-trackers[id].lastSeen>TRACK_EXPIRY) delete trackers[id];
-  }
+    const now=performance.now();
+    for(const id in trackers){
+        if(now-trackers[id].lastSeen>TRACK_EXPIRY) delete trackers[id];
+    }
 }
 
 // Çizim
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(const id in trackers){
-    const t=trackers[id];
-    const moving = t.speed > MOVE_THRESH;
-    ctx.strokeStyle = moving ? '#ef4444' : '#06b6a4';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(t.x,t.y,t.w,t.h);
-    ctx.fillStyle = moving ? 'rgba(239,68,68,0.2)' : 'rgba(6,182,164,0.15)';
-    ctx.fillRect(t.x,t.y,t.w,t.h);
-    ctx.fillStyle='#fff';
-    ctx.fillText(`#${t.id} ${t.label}`, t.x+4,t.y+14);
-  }
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(const id in trackers){
+        const t=trackers[id];
+        const moving = t.speed>MOVE_THRESH;
+        let color = classColors[t.label] || classColors.default;
+        if(moving) color='#ef4444';
+        ctx.strokeStyle=color;
+        ctx.lineWidth=2;
+        ctx.strokeRect(t.x,t.y,t.w,t.h);
+        ctx.fillStyle=color+'33';
+        ctx.fillRect(t.x,t.y,t.w,t.h);
+        ctx.fillStyle='#fff';
+        ctx.fillText(`#${t.id} ${t.label} ${Math.round(t.speed)}px`, t.x+4,t.y+14);
+    }
 }
 
 // Algılama döngüsü
-let lastRun=0;
 async function detectLoop(){
-  const now=performance.now();
-  if(!model){requestAnimationFrame(detectLoop);return;}
-  try{
-    const predictions = await model.detect(video);
-    for(const d of predictions.filter(p=>p.score>0.45)) assignTrack(d);
-    cleanupTracks();
-    draw();
-  }catch(e){console.error(e);}
-  requestAnimationFrame(detectLoop);
+    if(!model){requestAnimationFrame(detectLoop);return;}
+    try{
+        const predictions = await model.detect(video);
+        predictions.filter(p=>p.score>0.45).forEach(assignTrack);
+        cleanupTracks();
+        draw();
+    }catch(e){console.error(e);}
+    requestAnimationFrame(detectLoop);
 }
 
 // Başlat
 (async()=>{
-  await startCamera();
-  model = await cocoSsd.load();
-  detectLoop();
+    await startCamera();
+    model=await cocoSsd.load();
+    detectLoop();
 })();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
