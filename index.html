@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gelişmiş Kripto Pump Simülasyonu | Binance Tarzı</title>
+    <title>Volatil Kripto Simülasyonu | Binance Tarzı</title>
     
     <style>
         /* ------------------------------------------- */
@@ -40,7 +40,7 @@
         }
 
         #grafikAlani {
-            position: relative; /* Fiyat etiketini yerleştirmek için */
+            position: relative; 
             border: 1px solid #2b3137;
             border-radius: 4px;
             overflow: hidden;
@@ -217,9 +217,8 @@
         let fiyatGecmisi = [];
         const MAX_VERI_NOKTASI = 150;
         let sonFiyat = 50000.00; 
-        const PUMP_EĞİLİMİ = 1.0007; // Daha güçlü yükseliş eğilimi
         const KALDIRAÇ = 10; 
-        const Y_EKSEDI_ARALIK = 100; // Ekrandaki fiyat aralığını dinamik tutmak için (örneğin $1000'lık pencere)
+        const Y_EKSEDI_ARALIK = 100; // Görsel pencere genişliği (örneğin $1000'lık pencere)
 
         // Bahis Değişkenleri
         let sanalBakiye = 10000.00;
@@ -231,15 +230,14 @@
             kaldıraç: KALDIRAÇ
         };
 
-        // --- Yardımcı Fonksiyonlar ---
-
+        // --- Yardımcı Fonksiyonlar (UI ve Bahis Mantığı) ---
         function formatPara(deger) {
             return `$${deger.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
 
         function guncelleUI() {
             bakiyeElement.innerText = formatPara(sanalBakiye);
-            canliFiyatEtiketi.innerText = formatPara(sonFiyat); // Canlı fiyatı sağda göster
+            canliFiyatEtiketi.innerText = formatPara(sonFiyat); 
 
             if (pozisyon.acik) {
                 btnYukselis.disabled = true;
@@ -318,31 +316,30 @@
             guncelleUI();
         }
 
-        // --- Olay Dinleyicileri ---
+        // Olay Dinleyicileri
         btnYukselis.addEventListener('click', () => pozisyonAc('long'));
         btnDusme.addEventListener('click', () => pozisyonAc('short'));
         btnKapat.addEventListener('click', pozisyonKapat);
 
-        // --- Gelişmiş Grafik Çizim Mekaniği (Soldan Sağa Akış) ---
+        // --- Grafik Çizim Mekaniği ---
 
         function cizIzgara() {
-            ctx.strokeStyle = '#2b3137'; // Koyu ızgara çizgisi
+            ctx.strokeStyle = '#2b3137'; 
             ctx.lineWidth = 0.5;
 
-            // Yatay çizgiler (Fiyat Ekseni)
-            const izgaraSayisiY = 8;
-            for (let i = 0; i <= izgaraSayisiY; i++) {
-                const y = height * i / izgaraSayisiY;
+            // Yatay ve Dikey Izgara Çizgileri
+            const izgaraSayisi = 8;
+            for (let i = 0; i <= izgaraSayisi; i++) {
+                const y = height * i / izgaraSayisi;
+                const x = width * i / izgaraSayisi;
+                
+                // Yatay
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(width, y);
                 ctx.stroke();
-            }
 
-            // Dikey çizgiler (Zaman Ekseni)
-            const izgaraSayisiX = 10;
-            for (let i = 0; i <= izgaraSayisiX; i++) {
-                const x = width * i / izgaraSayisiX;
+                // Dikey
                 ctx.beginPath();
                 ctx.moveTo(x, 0);
                 ctx.lineTo(x, height);
@@ -352,30 +349,33 @@
 
         function cizGrafik() {
             ctx.clearRect(0, 0, width, height);
-            cizIzgara(); // Izgarayı çiz
+            cizIzgara();
 
             if (fiyatGecmisi.length < 2) return;
 
-            // Görsel Pencereyi Belirle (Binance gibi, sadece yakın aralığı göster)
-            const enYuksekFiyat = Math.max(...fiyatGecmisi.map(data => data.fiyat));
-            const enDusukFiyat = Math.min(...fiyatGecmisi.map(data => data.fiyat));
+            // Görsel Pencereyi Belirle (Fiyatı ortalamak için)
+            const fiyatlar = fiyatGecmisi.map(data => data.fiyat);
+            const enYuksekFiyatGecmis = Math.max(...fiyatlar);
+            const enDusukFiyatGecmis = Math.min(...fiyatlar);
             
-            // Fiyat aralığını dinamik olarak ayarla (en son fiyatın etrafındaki bir pencere)
-            const fiyatGosterimAraligi = enYuksekFiyat - enDusukFiyat > Y_EKSEDI_ARALIK 
-                                         ? enYuksekFiyat - enDusukFiyat : Y_EKSEDI_ARALIK;
-            
-            // Fiyatın ortasına odaklan
-            const gorunenMinFiyat = sonFiyat - fiyatGosterimAraligi / 2;
-            const gorunenMaxFiyat = sonFiyat + fiyatGosterimAraligi / 2;
+            const gorunenMinFiyat = enDusukFiyatGecmis;
+            const gorunenMaxFiyat = enYuksekFiyatGecmis;
 
-            const ySkala = height / fiyatGosterimAraligi;
+            const fiyatGosterimAraligi = gorunenMaxFiyat - gorunenMinFiyat;
+            const ySkala = height / (fiyatGosterimAraligi === 0 ? 1 : fiyatGosterimAraligi);
 
             // Çizgi Stili
             ctx.beginPath();
-            ctx.strokeStyle = '#03a66d'; // Yeşil (Yükseliş)
+            ctx.strokeStyle = '#03a66d'; // Varsayılan Yeşil
             ctx.lineWidth = 2;
             ctx.shadowBlur = 8;
             ctx.shadowColor = '#03a66d';
+            
+            // Fiyat son düşüşte miydi? Renk kararı için
+            const sonFiyatDegisimi = fiyatGecmisi[fiyatGecmisi.length - 1].fiyat - fiyatGecmisi[fiyatGecmisi.length - 2].fiyat;
+            const anaRenk = sonFiyatDegisimi >= 0 ? '#03a66d' : '#ea3943';
+            ctx.strokeStyle = anaRenk;
+            ctx.shadowColor = anaRenk;
 
             // İlk noktadan başla
             const y0 = height - (fiyatGecmisi[0].fiyat - gorunenMinFiyat) * ySkala;
@@ -386,38 +386,28 @@
                 const x = i * (width / MAX_VERI_NOKTASI);
                 const y = height - (fiyatGecmisi[i].fiyat - gorunenMinFiyat) * ySkala;
                 
-                // Sadece ekran içinde kalan noktaları çiz
-                if (y >= 0 && y <= height) {
-                    ctx.lineTo(x, y);
-                } else {
-                    // Eğer çizgi ekran dışına çıkarsa (çok hızlı hareket) çizimi durdur ve yeniden başlat
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                }
+                ctx.lineTo(x, y);
             }
             
             ctx.stroke();
 
             // Gölge Alanı (Daha estetik bir görünüm için)
-            // Son noktadan alt köşelere in
             const sonY = height - (fiyatGecmisi[fiyatGecmisi.length - 1].fiyat - gorunenMinFiyat) * ySkala;
             ctx.lineTo(width, height);
             ctx.lineTo(0, height);
             ctx.closePath();
-            ctx.fillStyle = 'rgba(3, 166, 109, 0.1)'; 
+            ctx.fillStyle = anaRenk === '#03a66d' ? 'rgba(3, 166, 109, 0.1)' : 'rgba(234, 57, 67, 0.1)';
             ctx.fill();
 
-            // Giriş Fiyatı Çizgisi (Binance tarzı sarı çizgi)
+            // Giriş Fiyatı Çizgisi (Pozisyon Açıkken)
             if (pozisyon.acik) {
                 ctx.shadowBlur = 0;
-                ctx.strokeStyle = '#f0b90b'; // Sarı çizgi
+                ctx.strokeStyle = '#f0b90b'; 
                 ctx.lineWidth = 1;
                 ctx.setLineDash([5, 5]);
 
                 const girisY = height - (pozisyon.girisFiyati - gorunenMinFiyat) * ySkala;
                 
-                // Çizgi sadece ekran içindeyse çiz
                 if (girisY >= 0 && girisY <= height) {
                     ctx.beginPath();
                     ctx.moveTo(0, girisY);
@@ -433,19 +423,23 @@
             }
 
             ctx.shadowBlur = 0;
-            // Canlı fiyat etiketini güncel konuma taşı (Y-ekseni üzerinde)
+            // Canlı fiyat etiketini güncel konuma taşı
             const canliYKonum = height - (sonFiyat - gorunenMinFiyat) * ySkala;
             const yOffset = canliYKonum < 20 ? 20 : (canliYKonum > height - 20 ? height - 20 : canliYKonum);
-            canliFiyatEtiketi.style.top = `${yOffset + 25}px`; // 25px başlık boşluğu
+            canliFiyatEtiketi.style.top = `${yOffset + 25}px`;
+            canliFiyatEtiketi.style.color = anaRenk;
+            canliFiyatEtiketi.style.border = `1px solid ${anaRenk}`;
         }
 
         function guncelleFiyat() {
-            // Rastgele değişim (daha çok yükseliş eğilimli)
-            const rastgeleDegisim = (Math.random() * (1.001 - 0.999)) + 0.999;
-            const degisimCarpan = PUMP_EĞİLİMİ * rastgeleDegisim; 
-            let yeniFiyat = sonFiyat * degisimCarpan;
+            // RASTGELE İNİŞ/ÇIKIŞ OLUŞTURMA
+            // Çarpan 0.9997 ile 1.0003 arasında rastgele seçilir. 
+            // 1'e yakın olduğu için inişler ve çıkışlar çok küçük olur (gerçek volatilite simülasyonu)
+            const rastgeleDegisim = (Math.random() * (1.0003 - 0.9997)) + 0.9997;
+            
+            let yeniFiyat = sonFiyat * rastgeleDegisim;
 
-            yeniFiyat = Math.round(yeniFiyat * 100) / 100;
+            yeniFiyat = Math.round(yeniFiyat * 100) / 100; // İki ondalık basamak
 
             fiyatGecmisi.push({fiyat: yeniFiyat, zaman: Date.now()});
             if (fiyatGecmisi.length > MAX_VERI_NOKTASI) {
@@ -465,11 +459,11 @@
         function animasyonDongusu() {
             guncelleFiyat();
             guncelleUI(); 
-            // 150ms aralık: Hızlı ve akıcı bir animasyon hissi verir.
-            setTimeout(animasyonDongusu, 150); 
+            // 250ms aralık: Daha yavaş ve doğal bir akış.
+            setTimeout(animasyonDongusu, 250); 
         }
 
-        // Simülasyonu başlat (Başlangıçta grafiği doldur)
+        // Simülasyonu başlat
         for (let i = 0; i < MAX_VERI_NOKTASI; i++) {
             guncelleFiyat();
         }
