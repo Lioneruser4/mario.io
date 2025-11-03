@@ -3,81 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sahte Kripto Grafik Simülasyonu</title>
+    <title>Kripto Pump Simülasyonu | Sanal Bahis Oyunu</title>
     
     <style>
+        /* ------------------------------------------- */
+        /* BINANCE TARZI CSS STİLLERİ */
+        /* ------------------------------------------- */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #0d1117; /* GitHub koyu tema rengi */
-            color: #c9d1d9;
+            font-family: 'Open Sans', Arial, sans-serif;
+            background-color: #1e2329; /* Koyu Binance Arka Planı */
+            color: #eaecef; /* Açık Gri Metin */
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            padding: 20px;
         }
 
         .grafik-kapsayici {
-            background-color: #161b22;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); /* Yeşil neon gölge */
-            text-align: center;
-            width: 90%;
-            max-width: 900px;
+            background-color: #131722; /* Daha Koyu Grafik Alanı */
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            width: 95%;
+            max-width: 1000px;
         }
 
         .baslik {
-            color: #2ea44f; /* GitHub yeşili */
-            animation: nabiz 1.5s infinite alternate;
+            color: #f0b90b; /* Binance Altın Sarısı */
+            font-size: 1.8em;
+            text-align: left;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #2b3137;
+            padding-bottom: 10px;
         }
 
         #kriptoGrafik {
-            background-color: #0d1117;
-            border: 2px solid #2ea44f;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(46, 164, 79, 0.8);
+            background-color: #131722;
+            border: 1px solid #2b3137;
+            border-radius: 4px;
+        }
+        
+        /* Bilgi Kutusu ve Bakiye */
+        .kontrol-alani {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-top: 20px;
+            padding: 15px;
+            background-color: #1e2329;
+            border-radius: 6px;
         }
 
-        .bilgi-kutusu {
+        .bakiye-gosterge p {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #eaecef;
+        }
+
+        .bakiye-deger {
+            color: #f0b90b;
+            margin-left: 10px;
+            font-size: 1.4em;
+        }
+
+        /* Bahis Kontrolleri */
+        .bahis-alani {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #bahisMiktari {
+            padding: 10px;
+            border: 1px solid #2b3137;
+            border-radius: 4px;
+            background-color: #2b3137;
+            color: #eaecef;
+            width: 100px;
+            text-align: center;
+        }
+
+        .btn-bahis {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .yukselis {
+            background-color: #03a66d; /* Yeşil (Long/Al) */
+            color: #fff;
+        }
+        .yukselis:hover:not(:disabled) { background-color: #048c5e; }
+        
+        .dusme {
+            background-color: #ea3943; /* Kırmızı (Short/Sat) */
+            color: #fff;
+        }
+        .dusme:hover:not(:disabled) { background-color: #c7313a; }
+
+        .btn-bahis:disabled {
+            background-color: #3e444b;
+            cursor: not-allowed;
+            color: #8f959e;
+        }
+
+        .kapat-btn {
+            background-color: #f0b90b;
+            color: #131722;
+            margin-left: 15px;
+        }
+        .kapat-btn:hover:not(:disabled) { background-color: #d1a007; }
+
+        /* Pozisyon Bilgisi */
+        .pozisyon-bilgi {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #2b3137;
+            border-radius: 4px;
             display: flex;
             justify-content: space-around;
-            padding: 15px;
-            margin-top: 20px;
-            background-color: #21262d;
-            border-radius: 8px;
-        }
-
-        #sonFiyat, #degisim {
-            font-weight: bold;
-            color: #3fb950;
-            font-size: 1.2em;
-            text-shadow: 0 0 5px #3fb950;
-        }
-
-        .uyari {
-            color: #f85149; /* Kırmızı uyarı rengi */
-            margin-top: 20px;
             font-size: 0.9em;
         }
+        
+        #pozisyonDurumu { color: #f0b90b; font-weight: bold; }
+        .kar { color: #03a66d; } /* Yeşil Kâr */
+        .zarar { color: #ea3943; } /* Kırmızı Zarar */
 
-        /* Animasyon: Başlığın hafifçe parlayıp sönmesi */
-        @keyframes nabiz {
-            from { text-shadow: 0 0 5px #2ea44f; }
-            to { text-shadow: 0 0 15px #2ea44f, 0 0 25px #2ea44f; }
+        .uyari {
+            margin-top: 15px;
+            color: #f0b90b;
+            text-align: center;
+            font-size: 0.8em;
+            border-top: 1px dashed #2b3137;
+            padding-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="grafik-kapsayici">
-        <h1 class="baslik">🚀 FAKE COIN (FKN) Fiyat Grafiği</h1>
-        <canvas id="kriptoGrafik" width="800" height="400"></canvas>
-        <div class="bilgi-kutusu">
-            <p>Son Fiyat: <span id="sonFiyat">$12,345.67</span></p>
-            <p>Değişim: <span id="degisim">+5.00%</span></p>
+        <h1 class="baslik">FAKE COIN (FKN/USDT) | Kaldıraçlı İşlem Simülasyonu</h1>
+        
+        <canvas id="kriptoGrafik" width="950" height="400"></canvas>
+        
+        <div class="kontrol-alani">
+            <div class="bakiye-gosterge">
+                <p>SANAL BAKİYE: <span id="sanalBakiye" class="bakiye-deger">$10,000.00</span></p>
+            </div>
+            
+            <div class="bahis-alani">
+                <input type="number" id="bahisMiktari" value="100" min="1" placeholder="Bahis Miktarı">
+                <button id="btnYukselis" class="btn-bahis yukselis">📈 LONG (AL)</button>
+                <button id="btnDusme" class="btn-bahis dusme">📉 SHORT (SAT)</button>
+            </div>
         </div>
-        <p class="uyari">🚨 **UYARI:** Bu, yalnızca görsel bir simülasyondur ve GERÇEK bir finansal veriyi temsil etmemektedir. Eğlence amaçlıdır.</p>
+
+        <div class="pozisyon-bilgi">
+            <p>Pozisyon: <span id="pozisyonDurumu" style="color: grey;">Kapalı</span></p>
+            <p>Giriş Fiyatı: <span id="girisFiyati">--</span></p>
+            <p>Bahis Miktarı: <span id="pozisyonMiktari">--</span></p>
+            <p>Anlık K/Z: <span id="karZarar" class="kar">$0.00</span></p>
+            <button id="btnPozisyonKapat" class="btn-bahis kapat-btn" disabled>Pozisyon Kapat</button>
+        </div>
+
+        <p class="uyari">⚠️ Bu simülasyon, tamamen sahte ve rastgele verilerle çalışır. Gerçek finansal durumları yansıtmamaktadır. Eğlence amaçlıdır.</p>
     </div>
 
     <script>
@@ -86,56 +179,175 @@
         const width = canvas.width;
         const height = canvas.height;
 
+        // HTML Elementleri
+        const bakiyeElement = document.getElementById('sanalBakiye');
+        const miktarInput = document.getElementById('bahisMiktari');
+        const btnYukselis = document.getElementById('btnYukselis');
+        const btnDusme = document.getElementById('btnDusme');
+        const btnKapat = document.getElementById('btnPozisyonKapat');
+        const pozisyonDurumuElement = document.getElementById('pozisyonDurumu');
+        const girisFiyatiElement = document.getElementById('girisFiyati');
+        const pozisyonMiktariElement = document.getElementById('pozisyonMiktari');
+        const karZararElement = document.getElementById('karZarar');
+
+        // Oyun ve Grafik Değişkenleri
         let fiyatGecmisi = [];
-        const MAX_VERI_NOKTASI = 100;
+        const MAX_VERI_NOKTASI = 150;
+        let sonFiyat = 50000.00; // Başlangıç fiyatı
+        const PUMP_EĞİLİMİ = 1.0005; // Fiyatın ortalama yükseliş eğilimi
+        const KALDIRAÇ = 10; // x10 kaldıraç simülasyonu
 
-        // Başlangıç fiyatı
-        let sonFiyat = 20000.00;
+        // Bahis Değişkenleri
+        let sanalBakiye = 10000.00;
+        let pozisyon = {
+            acik: false,
+            tip: '', // 'long' veya 'short'
+            girisFiyati: 0,
+            miktar: 0,
+            kaldıraç: KALDIRAÇ
+        };
 
-        // Grafik Çizim Fonksiyonu
-        function cizGrafik() {
-            // Canvas'ı temizle
-            ctx.clearRect(0, 0, width, height);
-            
-            // Yatay ızgara çizgileri
-            ctx.strokeStyle = '#21262d'; 
-            ctx.lineWidth = 0.5;
-            for (let i = 0; i <= 10; i++) {
-                const y = height * i / 10;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
+        // --- Yardımcı Fonksiyonlar ---
+
+        function formatPara(deger) {
+            return `$${deger.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        function guncelleUI() {
+            bakiyeElement.innerText = formatPara(sanalBakiye);
+
+            if (pozisyon.acik) {
+                // Pozisyon Açıkken butonları kapat
+                btnYukselis.disabled = true;
+                btnDusme.disabled = true;
+                btnKapat.disabled = false;
+                miktarInput.disabled = true;
+
+                pozisyonDurumuElement.innerText = pozisyon.tip === 'long' ? 'LONG (↑)' : 'SHORT (↓)';
+                pozisyonDurumuElement.style.color = pozisyon.tip === 'long' ? '#03a66d' : '#ea3943';
+                girisFiyatiElement.innerText = formatPara(pozisyon.girisFiyati);
+                pozisyonMiktariElement.innerText = formatPara(pozisyon.miktar);
+                
+                // K/Z Hesapla ve Göster
+                hesaplaKarZarar();
+            } else {
+                // Pozisyon Kapalıyken butonları aç
+                btnYukselis.disabled = false;
+                btnDusme.disabled = false;
+                btnKapat.disabled = true;
+                miktarInput.disabled = false;
+
+                pozisyonDurumuElement.innerText = 'Kapalı';
+                pozisyonDurumuElement.style.color = 'grey';
+                girisFiyatiElement.innerText = '--';
+                pozisyonMiktariElement.innerText = '--';
+                karZararElement.innerText = formatPara(0);
+                karZararElement.className = 'kar';
             }
+        }
+
+        function hesaplaKarZarar() {
+            if (!pozisyon.acik) return 0;
+
+            const fiyatFarki = sonFiyat - pozisyon.girisFiyati;
+            let karZarar;
+
+            // Kaldıraçlı PNL Hesaplaması: (Şimdiki Fiyat - Giriş Fiyatı) / Giriş Fiyatı * Kaldıraç * Miktar
+            if (pozisyon.tip === 'long') {
+                karZarar = (fiyatFarki / pozisyon.girisFiyati) * pozisyon.kaldıraç * pozisyon.miktar;
+            } else { // Short
+                // Short pozisyonda fiyat düşerse kâr edilir, yükselirse zarar.
+                karZarar = (-fiyatFarki / pozisyon.girisFiyati) * pozisyon.kaldıraç * pozisyon.miktar;
+            }
+
+            // K/Z'yi UI'da güncelle
+            karZararElement.innerText = formatPara(karZarar);
+            karZararElement.className = karZarar >= 0 ? 'kar' : 'zarar';
+            return karZarar;
+        }
+
+        function pozisyonAc(tip) {
+            const miktar = parseFloat(miktarInput.value);
+
+            if (isNaN(miktar) || miktar <= 0 || miktar > sanalBakiye) {
+                alert('Geçerli bir miktar giriniz veya bakiyeniz yetersiz.');
+                return;
+            }
+
+            // Miktarı bakiyeden düş
+            sanalBakiye -= miktar;
+
+            // Pozisyonu kaydet
+            pozisyon = {
+                acik: true,
+                tip: tip,
+                girisFiyati: sonFiyat,
+                miktar: miktar,
+                kaldıraç: KALDIRAÇ
+            };
+            guncelleUI();
+        }
+
+        function pozisyonKapat() {
+            if (!pozisyon.acik) return;
+
+            const karZarar = hesaplaKarZarar();
+            const toplamKazanilan = pozisyon.miktar + karZarar;
+
+            // Toplam bakiyeye ekle
+            sanalBakiye += toplamKazanilan;
+
+            // Pozisyonu sıfırla
+            pozisyon = { acik: false, tip: '', girisFiyati: 0, miktar: 0, kaldıraç: KALDIRAÇ };
+
+            alert(`Pozisyon Kapandı! K/Z: ${formatPara(karZarar)}. Yeni Bakiye: ${formatPara(sanalBakiye)}`);
+            guncelleUI();
+        }
+
+        // --- Olay Dinleyicileri ---
+
+        btnYukselis.addEventListener('click', () => pozisyonAc('long'));
+        btnDusme.addEventListener('click', () => pozisyonAc('short'));
+        btnKapat.addEventListener('click', pozisyonKapat);
+
+        // --- Grafik ve Simülasyon Mantığı (Önceki Koddan Güncellendi) ---
+
+        function cizGrafik() {
+            ctx.clearRect(0, 0, width, height);
 
             if (fiyatGecmisi.length < 2) return;
 
             // Fiyatları normalize et
-            const minFiyat = Math.min(...fiyatGecmisi);
-            const maxFiyat = Math.max(...fiyatGecmisi);
+            const fiyatlar = fiyatGecmisi.map(data => data.fiyat);
+            const minFiyat = Math.min(...fiyatlar);
+            const maxFiyat = Math.max(...fiyatlar);
             const fiyatAraligi = maxFiyat - minFiyat;
+            const ySkala = fiyatAraligi === 0 ? 1 : height / fiyatAraligi;
 
             // Çizgi Stili
             ctx.beginPath();
-            ctx.strokeStyle = '#3fb950'; // Yeşil (Yükseliş Rengi)
-            ctx.lineWidth = 3;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = '#3fb950';
+            ctx.strokeStyle = '#03a66d'; // Binance Yeşil (Genellikle Yükseliş)
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#03a66d';
 
             // İlk noktadan başla
-            ctx.moveTo(0, height - (fiyatGecmisi[0] - minFiyat) / fiyatAraligi * height);
+            const y0 = height - (fiyatlar[0] - minFiyat) * ySkala;
+            ctx.moveTo(0, y0);
 
             // Tüm noktaları çiz
-            for (let i = 1; i < fiyatGecmisi.length; i++) {
+            for (let i = 1; i < fiyatlar.length; i++) {
                 const x = i * (width / MAX_VERI_NOKTASI);
-                // Eğer fiyatAraligi 0 ise (yani tüm fiyatlar aynıysa) y'yi ortada tut
-                let y;
-                if (fiyatAraligi === 0) {
-                    y = height / 2;
-                } else {
-                    y = height - (fiyatGecmisi[i] - minFiyat) / fiyatAraligi * height;
-                }
+                const y = height - (fiyatlar[i] - minFiyat) * ySkala;
                 ctx.lineTo(x, y);
+
+                // Giriş fiyatını işaretle (Opsiyonel)
+                if (pozisyon.acik && fiyatGecmisi[i].fiyat === pozisyon.girisFiyati) {
+                    ctx.fillStyle = '#f0b90b';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
             
             ctx.stroke();
@@ -144,44 +356,52 @@
             ctx.lineTo(width, height);
             ctx.lineTo(0, height);
             ctx.closePath();
-            ctx.fillStyle = 'rgba(63, 185, 80, 0.2)'; 
+            ctx.fillStyle = 'rgba(3, 166, 109, 0.1)'; 
             ctx.fill();
 
-            // Animasyon etkisini kaldır
+            // Giriş Fiyatı Çizgisi (Pozisyon Açıkken)
+            if (pozisyon.acik) {
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#f0b90b'; // Sarı çizgi
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]); // Kesikli çizgi
+
+                const girisY = height - (pozisyon.girisFiyati - minFiyat) * ySkala;
+                ctx.beginPath();
+                ctx.moveTo(0, girisY);
+                ctx.lineTo(width, girisY);
+                ctx.stroke();
+                ctx.setLineDash([]); // Çizgi stilini sıfırla
+
+                // Giriş fiyatı etiketi
+                ctx.fillStyle = '#f0b90b';
+                ctx.font = '12px Arial';
+                ctx.fillText(`Giriş: ${formatPara(pozisyon.girisFiyati)}`, width - 150, girisY - 5);
+            }
+
             ctx.shadowBlur = 0;
         }
 
-        // Rastgele Fiyat Güncelleme Fonksiyonu
         function guncelleFiyat() {
-            // Rastgele değişim yarat (genellikle pozitif yönde)
-            const degisimCarpan = (Math.random() * (1.015 - 0.999)) + 0.999; 
+            // Rastgele değişim (daha çok yükseliş eğilimli)
+            // Pump eğilimi (1.0005) + Rastgele titreşim (0.9995 - 1.0015)
+            const rastgeleDegisim = (Math.random() * (1.0015 - 0.9995)) + 0.9995;
+            const degisimCarpan = PUMP_EĞİLİMİ * rastgeleDegisim; 
             let yeniFiyat = sonFiyat * degisimCarpan;
 
-            // Fiyatı iki ondalık basamağa yuvarla
             yeniFiyat = Math.round(yeniFiyat * 100) / 100;
 
-            // Veri geçmişine ekle
-            fiyatGecmisi.push(yeniFiyat);
+            fiyatGecmisi.push({fiyat: yeniFiyat, zaman: Date.now()});
             if (fiyatGecmisi.length > MAX_VERI_NOKTASI) {
                 fiyatGecmisi.shift(); 
             }
 
-            // Bilgi kutularını güncelle
-            const degisim = ((yeniFiyat / sonFiyat) - 1) * 100;
-            const sonFiyatElement = document.getElementById('sonFiyat');
-            const degisimElement = document.getElementById('degisim');
-
-            // Fiyat formatlama
-            sonFiyatElement.innerText = `$${yeniFiyat.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-            degisimElement.innerText = `${degisim.toFixed(2)}%`;
-            
-            // Renk ayarı
-            const renk = degisim >= 0 ? '#3fb950' : '#f85149';
-            degisimElement.style.color = renk;
-            sonFiyatElement.style.color = renk;
-            sonFiyatElement.style.textShadow = `0 0 5px ${renk}`;
-
             sonFiyat = yeniFiyat;
+            
+            // Pozisyon açıksa K/Z'yi güncelle
+            if (pozisyon.acik) {
+                hesaplaKarZarar();
+            }
             
             cizGrafik();
         }
@@ -189,14 +409,16 @@
         // Animasyon Döngüsü
         function animasyonDongusu() {
             guncelleFiyat();
-            // Her 250 milisaniyede (saniyenin 4'te 1'i) bir güncelleme yap
-            setTimeout(animasyonDongusu, 250); 
+            guncelleUI(); // Her adımda UI'ı güncelle
+            setTimeout(animasyonDongusu, 200); // Daha hızlı simülasyon (her 200ms)
         }
 
         // Simülasyonu başlat (Başlangıçta grafiği doldur)
         for (let i = 0; i < MAX_VERI_NOKTASI; i++) {
             guncelleFiyat();
         }
+
+        guncelleUI();
         animasyonDongusu();
     </script>
 </body>
