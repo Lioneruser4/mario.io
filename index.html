@@ -1,129 +1,203 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Otomatik Nesne Takip ve Hareket Algılama</title>
-<style>
-body{margin:0;background:#000;color:#fff;font-family:sans-serif;text-align:center;}
-video{width:100%;height:auto;}
-canvas{position:absolute;top:0;left:0;width:100%;height:100%;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sahte Kripto Grafik Simülasyonu</title>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0d1117; /* GitHub koyu tema rengi */
+            color: #c9d1d9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .grafik-kapsayici {
+            background-color: #161b22;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); /* Yeşil neon gölge */
+            text-align: center;
+            width: 90%;
+            max-width: 900px;
+        }
+
+        .baslik {
+            color: #2ea44f; /* GitHub yeşili */
+            animation: nabiz 1.5s infinite alternate;
+        }
+
+        #kriptoGrafik {
+            background-color: #0d1117;
+            border: 2px solid #2ea44f;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(46, 164, 79, 0.8);
+            margin-top: 20px;
+        }
+
+        .bilgi-kutusu {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px;
+            margin-top: 20px;
+            background-color: #21262d;
+            border-radius: 8px;
+        }
+
+        #sonFiyat, #degisim {
+            font-weight: bold;
+            color: #3fb950;
+            font-size: 1.2em;
+            text-shadow: 0 0 5px #3fb950;
+        }
+
+        .uyari {
+            color: #f85149; /* Kırmızı uyarı rengi */
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        /* Animasyon: Başlığın hafifçe parlayıp sönmesi */
+        @keyframes nabiz {
+            from { text-shadow: 0 0 5px #2ea44f; }
+            to { text-shadow: 0 0 15px #2ea44f, 0 0 25px #2ea44f; }
+        }
+    </style>
 </head>
 <body>
-<h2>Kameraya izin verin</h2>
-<video id="video" autoplay playsinline muted></video>
-<canvas id="overlay"></canvas>
+    <div class="grafik-kapsayici">
+        <h1 class="baslik">🚀 FAKE COIN (FKN) Fiyat Grafiği</h1>
+        <canvas id="kriptoGrafik" width="800" height="400"></canvas>
+        <div class="bilgi-kutusu">
+            <p>Son Fiyat: <span id="sonFiyat">$12,345.67</span></p>
+            <p>Değişim: <span id="degisim">+5.00%</span></p>
+        </div>
+        <p class="uyari">🚨 **UYARI:** Bu, yalnızca görsel bir simülasyondur ve GERÇEK bir finansal veriyi temsil etmemektedir. Eğlence amaçlıdır.</p>
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+    <script>
+        const canvas = document.getElementById('kriptoGrafik');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
 
-<script>
-const video=document.getElementById('video');
-const canvas=document.getElementById('overlay');
-const ctx=canvas.getContext('2d');
+        let fiyatGecmisi = [];
+        const MAX_VERI_NOKTASI = 100;
 
-let model=null;
-const trackers={};
-let nextId=1;
-const TRACK_EXPIRY=2000;
-const MOVE_THRESH=10;
+        // Başlangıç fiyatı
+        let sonFiyat = 20000.00;
 
-// Nesne türlerine göre renk
-const classColors={person:'#3b82f6',car:'#facc15',dog:'#10b981',cat:'#f472b6',default:'#06b6a4'};
+        // Grafik Çizim Fonksiyonu
+        function cizGrafik() {
+            // Canvas'ı temizle
+            ctx.clearRect(0, 0, width, height);
+            
+            // Yatay ızgara çizgileri
+            ctx.strokeStyle = '#21262d'; 
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= 10; i++) {
+                const y = height * i / 10;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
 
-// Kamera başlat
-async function startCamera(){
-    try{
-        const devices=await navigator.mediaDevices.enumerateDevices();
-        let backCam=devices.find(d=>d.kind==='videoinput' && d.label.toLowerCase().includes('back'));
-        const constraints={
-            video: backCam ? {deviceId:{exact:backCam.deviceId}} : {facingMode:{ideal:'environment'}}
-        };
-        const stream=await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject=stream;
-        await video.play();
-        canvas.width=video.videoWidth;
-        canvas.height=video.videoHeight;
-    }catch(e){
-        console.error('Kamera açılamadı:',e);
-        alert('Kamera açılamadı. Tarayıcı izinlerini kontrol edin.');
-    }
-}
+            if (fiyatGecmisi.length < 2) return;
 
-// Mesafe hesapla
-function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+            // Fiyatları normalize et
+            const minFiyat = Math.min(...fiyatGecmisi);
+            const maxFiyat = Math.max(...fiyatGecmisi);
+            const fiyatAraligi = maxFiyat - minFiyat;
 
-// Tracker atama
-function assignTrack(detection){
-    const [x,y,w,h]=detection.bbox;
-    const center={x:x+w/2,y:y+h/2};
-    let bestId=null,bestDist=Infinity;
-    for(const id in trackers){
-        const t=trackers[id];
-        const d=distance(center,t.lastPos);
-        if(d<bestDist){bestDist=d;bestId=id;}
-    }
-    if(bestId && bestDist<MOVE_THRESH*2){
-        const t=trackers[bestId];
-        t.x=x;t.y=y;t.w=w;t.h=h;
-        t.lastSeen=performance.now();
-        t.speed=bestDist;
-        t.lastPos=center;
-        t.label=detection.class;
-        return t;
-    }else{
-        const id=String(nextId++);
-        const t={id,x,y,w,h,lastSeen:performance.now(),lastPos:center,speed:0,label:detection.class};
-        trackers[id]=t;
-        return t;
-    }
-}
+            // Çizgi Stili
+            ctx.beginPath();
+            ctx.strokeStyle = '#3fb950'; // Yeşil (Yükseliş Rengi)
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#3fb950';
 
-// Track temizle
-function cleanupTracks(){
-    const now=performance.now();
-    for(const id in trackers){
-        if(now-trackers[id].lastSeen>TRACK_EXPIRY) delete trackers[id];
-    }
-}
+            // İlk noktadan başla
+            ctx.moveTo(0, height - (fiyatGecmisi[0] - minFiyat) / fiyatAraligi * height);
 
-// Çizim
-function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    for(const id in trackers){
-        const t=trackers[id];
-        const moving=t.speed>MOVE_THRESH;
-        let color=classColors[t.label]||classColors.default;
-        if(moving) color='#ef4444';
-        ctx.strokeStyle=color;
-        ctx.lineWidth=2;
-        ctx.strokeRect(t.x,t.y,t.w,t.h);
-        ctx.fillStyle=color+'33';
-        ctx.fillRect(t.x,t.y,t.w,t.h);
-        ctx.fillStyle='#fff';
-        ctx.fillText(`#${t.id} ${t.label} ${Math.round(t.speed)}px`, t.x+4,t.y+14);
-    }
-}
+            // Tüm noktaları çiz
+            for (let i = 1; i < fiyatGecmisi.length; i++) {
+                const x = i * (width / MAX_VERI_NOKTASI);
+                // Eğer fiyatAraligi 0 ise (yani tüm fiyatlar aynıysa) y'yi ortada tut
+                let y;
+                if (fiyatAraligi === 0) {
+                    y = height / 2;
+                } else {
+                    y = height - (fiyatGecmisi[i] - minFiyat) / fiyatAraligi * height;
+                }
+                ctx.lineTo(x, y);
+            }
+            
+            ctx.stroke();
 
-// Algılama döngüsü
-async function detectLoop(){
-    if(!model){requestAnimationFrame(detectLoop);return;}
-    try{
-        const predictions=await model.detect(video);
-        predictions.filter(p=>p.score>0.45).forEach(assignTrack);
-        cleanupTracks();
-        draw();
-    }catch(e){console.error(e);}
-    requestAnimationFrame(detectLoop);
-}
+            // Gölge Alanı
+            ctx.lineTo(width, height);
+            ctx.lineTo(0, height);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(63, 185, 80, 0.2)'; 
+            ctx.fill();
 
-// Başlat
-(async()=>{
-    await startCamera();
-    model=await cocoSsd.load();
-    detectLoop();
-})();
-</script>
+            // Animasyon etkisini kaldır
+            ctx.shadowBlur = 0;
+        }
+
+        // Rastgele Fiyat Güncelleme Fonksiyonu
+        function guncelleFiyat() {
+            // Rastgele değişim yarat (genellikle pozitif yönde)
+            const degisimCarpan = (Math.random() * (1.015 - 0.999)) + 0.999; 
+            let yeniFiyat = sonFiyat * degisimCarpan;
+
+            // Fiyatı iki ondalık basamağa yuvarla
+            yeniFiyat = Math.round(yeniFiyat * 100) / 100;
+
+            // Veri geçmişine ekle
+            fiyatGecmisi.push(yeniFiyat);
+            if (fiyatGecmisi.length > MAX_VERI_NOKTASI) {
+                fiyatGecmisi.shift(); 
+            }
+
+            // Bilgi kutularını güncelle
+            const degisim = ((yeniFiyat / sonFiyat) - 1) * 100;
+            const sonFiyatElement = document.getElementById('sonFiyat');
+            const degisimElement = document.getElementById('degisim');
+
+            // Fiyat formatlama
+            sonFiyatElement.innerText = `$${yeniFiyat.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            degisimElement.innerText = `${degisim.toFixed(2)}%`;
+            
+            // Renk ayarı
+            const renk = degisim >= 0 ? '#3fb950' : '#f85149';
+            degisimElement.style.color = renk;
+            sonFiyatElement.style.color = renk;
+            sonFiyatElement.style.textShadow = `0 0 5px ${renk}`;
+
+            sonFiyat = yeniFiyat;
+            
+            cizGrafik();
+        }
+
+        // Animasyon Döngüsü
+        function animasyonDongusu() {
+            guncelleFiyat();
+            // Her 250 milisaniyede (saniyenin 4'te 1'i) bir güncelleme yap
+            setTimeout(animasyonDongusu, 250); 
+        }
+
+        // Simülasyonu başlat (Başlangıçta grafiği doldur)
+        for (let i = 0; i < MAX_VERI_NOKTASI; i++) {
+            guncelleFiyat();
+        }
+        animasyonDongusu();
+    </script>
 </body>
 </html>
