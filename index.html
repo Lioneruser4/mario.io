@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kripto Pump Simülasyonu | Sanal Bahis Oyunu</title>
+    <title>Gelişmiş Kripto Pump Simülasyonu | Binance Tarzı</title>
     
     <style>
         /* ------------------------------------------- */
@@ -39,13 +39,34 @@
             padding-bottom: 10px;
         }
 
-        #kriptoGrafik {
-            background-color: #131722;
+        #grafikAlani {
+            position: relative; /* Fiyat etiketini yerleştirmek için */
             border: 1px solid #2b3137;
             border-radius: 4px;
+            overflow: hidden;
+            background-color: #131722;
         }
         
-        /* Bilgi Kutusu ve Bakiye */
+        #kriptoGrafik {
+            display: block;
+        }
+        
+        /* Sağdaki Fiyat Etiketi */
+        .fiyat-etiketi {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 5px 10px;
+            background-color: #131722;
+            border: 1px solid #f0b90b;
+            color: #f0b90b;
+            font-weight: bold;
+            font-size: 1.1em;
+            z-index: 10;
+        }
+
+        /* Kontrol ve Bilgi Stilleri (Öncekiyle Aynı) */
         .kontrol-alani {
             display: flex;
             justify-content: space-between;
@@ -68,7 +89,6 @@
             font-size: 1.4em;
         }
 
-        /* Bahis Kontrolleri */
         .bahis-alani {
             display: flex;
             gap: 10px;
@@ -119,7 +139,6 @@
         }
         .kapat-btn:hover:not(:disabled) { background-color: #d1a007; }
 
-        /* Pozisyon Bilgisi */
         .pozisyon-bilgi {
             margin-top: 20px;
             padding: 10px;
@@ -148,7 +167,10 @@
     <div class="grafik-kapsayici">
         <h1 class="baslik">FAKE COIN (FKN/USDT) | Kaldıraçlı İşlem Simülasyonu</h1>
         
-        <canvas id="kriptoGrafik" width="950" height="400"></canvas>
+        <div id="grafikAlani">
+            <canvas id="kriptoGrafik" width="950" height="400"></canvas>
+            <div id="canliFiyatEtiketi" class="fiyat-etiketi">$50,000.00</div>
+        </div>
         
         <div class="kontrol-alani">
             <div class="bakiye-gosterge">
@@ -181,6 +203,7 @@
 
         // HTML Elementleri
         const bakiyeElement = document.getElementById('sanalBakiye');
+        const canliFiyatEtiketi = document.getElementById('canliFiyatEtiketi');
         const miktarInput = document.getElementById('bahisMiktari');
         const btnYukselis = document.getElementById('btnYukselis');
         const btnDusme = document.getElementById('btnDusme');
@@ -193,15 +216,16 @@
         // Oyun ve Grafik Değişkenleri
         let fiyatGecmisi = [];
         const MAX_VERI_NOKTASI = 150;
-        let sonFiyat = 50000.00; // Başlangıç fiyatı
-        const PUMP_EĞİLİMİ = 1.0005; // Fiyatın ortalama yükseliş eğilimi
-        const KALDIRAÇ = 10; // x10 kaldıraç simülasyonu
+        let sonFiyat = 50000.00; 
+        const PUMP_EĞİLİMİ = 1.0007; // Daha güçlü yükseliş eğilimi
+        const KALDIRAÇ = 10; 
+        const Y_EKSEDI_ARALIK = 100; // Ekrandaki fiyat aralığını dinamik tutmak için (örneğin $1000'lık pencere)
 
         // Bahis Değişkenleri
         let sanalBakiye = 10000.00;
         let pozisyon = {
             acik: false,
-            tip: '', // 'long' veya 'short'
+            tip: '', 
             girisFiyati: 0,
             miktar: 0,
             kaldıraç: KALDIRAÇ
@@ -215,9 +239,9 @@
 
         function guncelleUI() {
             bakiyeElement.innerText = formatPara(sanalBakiye);
+            canliFiyatEtiketi.innerText = formatPara(sonFiyat); // Canlı fiyatı sağda göster
 
             if (pozisyon.acik) {
-                // Pozisyon Açıkken butonları kapat
                 btnYukselis.disabled = true;
                 btnDusme.disabled = true;
                 btnKapat.disabled = false;
@@ -228,10 +252,8 @@
                 girisFiyatiElement.innerText = formatPara(pozisyon.girisFiyati);
                 pozisyonMiktariElement.innerText = formatPara(pozisyon.miktar);
                 
-                // K/Z Hesapla ve Göster
                 hesaplaKarZarar();
             } else {
-                // Pozisyon Kapalıyken butonları aç
                 btnYukselis.disabled = false;
                 btnDusme.disabled = false;
                 btnKapat.disabled = true;
@@ -252,15 +274,13 @@
             const fiyatFarki = sonFiyat - pozisyon.girisFiyati;
             let karZarar;
 
-            // Kaldıraçlı PNL Hesaplaması: (Şimdiki Fiyat - Giriş Fiyatı) / Giriş Fiyatı * Kaldıraç * Miktar
+            // Kaldıraçlı PNL Hesaplaması
             if (pozisyon.tip === 'long') {
                 karZarar = (fiyatFarki / pozisyon.girisFiyati) * pozisyon.kaldıraç * pozisyon.miktar;
             } else { // Short
-                // Short pozisyonda fiyat düşerse kâr edilir, yükselirse zarar.
                 karZarar = (-fiyatFarki / pozisyon.girisFiyati) * pozisyon.kaldıraç * pozisyon.miktar;
             }
 
-            // K/Z'yi UI'da güncelle
             karZararElement.innerText = formatPara(karZarar);
             karZararElement.className = karZarar >= 0 ? 'kar' : 'zarar';
             return karZarar;
@@ -274,10 +294,7 @@
                 return;
             }
 
-            // Miktarı bakiyeden düş
             sanalBakiye -= miktar;
-
-            // Pozisyonu kaydet
             pozisyon = {
                 acik: true,
                 tip: tip,
@@ -294,10 +311,7 @@
             const karZarar = hesaplaKarZarar();
             const toplamKazanilan = pozisyon.miktar + karZarar;
 
-            // Toplam bakiyeye ekle
             sanalBakiye += toplamKazanilan;
-
-            // Pozisyonu sıfırla
             pozisyon = { acik: false, tip: '', girisFiyati: 0, miktar: 0, kaldıraç: KALDIRAÇ };
 
             alert(`Pozisyon Kapandı! K/Z: ${formatPara(karZarar)}. Yeni Bakiye: ${formatPara(sanalBakiye)}`);
@@ -305,87 +319,129 @@
         }
 
         // --- Olay Dinleyicileri ---
-
         btnYukselis.addEventListener('click', () => pozisyonAc('long'));
         btnDusme.addEventListener('click', () => pozisyonAc('short'));
         btnKapat.addEventListener('click', pozisyonKapat);
 
-        // --- Grafik ve Simülasyon Mantığı (Önceki Koddan Güncellendi) ---
+        // --- Gelişmiş Grafik Çizim Mekaniği (Soldan Sağa Akış) ---
+
+        function cizIzgara() {
+            ctx.strokeStyle = '#2b3137'; // Koyu ızgara çizgisi
+            ctx.lineWidth = 0.5;
+
+            // Yatay çizgiler (Fiyat Ekseni)
+            const izgaraSayisiY = 8;
+            for (let i = 0; i <= izgaraSayisiY; i++) {
+                const y = height * i / izgaraSayisiY;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            // Dikey çizgiler (Zaman Ekseni)
+            const izgaraSayisiX = 10;
+            for (let i = 0; i <= izgaraSayisiX; i++) {
+                const x = width * i / izgaraSayisiX;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+        }
 
         function cizGrafik() {
             ctx.clearRect(0, 0, width, height);
+            cizIzgara(); // Izgarayı çiz
 
             if (fiyatGecmisi.length < 2) return;
 
-            // Fiyatları normalize et
-            const fiyatlar = fiyatGecmisi.map(data => data.fiyat);
-            const minFiyat = Math.min(...fiyatlar);
-            const maxFiyat = Math.max(...fiyatlar);
-            const fiyatAraligi = maxFiyat - minFiyat;
-            const ySkala = fiyatAraligi === 0 ? 1 : height / fiyatAraligi;
+            // Görsel Pencereyi Belirle (Binance gibi, sadece yakın aralığı göster)
+            const enYuksekFiyat = Math.max(...fiyatGecmisi.map(data => data.fiyat));
+            const enDusukFiyat = Math.min(...fiyatGecmisi.map(data => data.fiyat));
+            
+            // Fiyat aralığını dinamik olarak ayarla (en son fiyatın etrafındaki bir pencere)
+            const fiyatGosterimAraligi = enYuksekFiyat - enDusukFiyat > Y_EKSEDI_ARALIK 
+                                         ? enYuksekFiyat - enDusukFiyat : Y_EKSEDI_ARALIK;
+            
+            // Fiyatın ortasına odaklan
+            const gorunenMinFiyat = sonFiyat - fiyatGosterimAraligi / 2;
+            const gorunenMaxFiyat = sonFiyat + fiyatGosterimAraligi / 2;
+
+            const ySkala = height / fiyatGosterimAraligi;
 
             // Çizgi Stili
             ctx.beginPath();
-            ctx.strokeStyle = '#03a66d'; // Binance Yeşil (Genellikle Yükseliş)
+            ctx.strokeStyle = '#03a66d'; // Yeşil (Yükseliş)
             ctx.lineWidth = 2;
             ctx.shadowBlur = 8;
             ctx.shadowColor = '#03a66d';
 
             // İlk noktadan başla
-            const y0 = height - (fiyatlar[0] - minFiyat) * ySkala;
+            const y0 = height - (fiyatGecmisi[0].fiyat - gorunenMinFiyat) * ySkala;
             ctx.moveTo(0, y0);
 
-            // Tüm noktaları çiz
-            for (let i = 1; i < fiyatlar.length; i++) {
+            // Tüm noktaları Soldan Sağa çiz
+            for (let i = 1; i < fiyatGecmisi.length; i++) {
                 const x = i * (width / MAX_VERI_NOKTASI);
-                const y = height - (fiyatlar[i] - minFiyat) * ySkala;
-                ctx.lineTo(x, y);
-
-                // Giriş fiyatını işaretle (Opsiyonel)
-                if (pozisyon.acik && fiyatGecmisi[i].fiyat === pozisyon.girisFiyati) {
-                    ctx.fillStyle = '#f0b90b';
+                const y = height - (fiyatGecmisi[i].fiyat - gorunenMinFiyat) * ySkala;
+                
+                // Sadece ekran içinde kalan noktaları çiz
+                if (y >= 0 && y <= height) {
+                    ctx.lineTo(x, y);
+                } else {
+                    // Eğer çizgi ekran dışına çıkarsa (çok hızlı hareket) çizimi durdur ve yeniden başlat
+                    ctx.stroke();
                     ctx.beginPath();
-                    ctx.arc(x, y, 4, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.moveTo(x, y);
                 }
             }
             
             ctx.stroke();
 
-            // Gölge Alanı
+            // Gölge Alanı (Daha estetik bir görünüm için)
+            // Son noktadan alt köşelere in
+            const sonY = height - (fiyatGecmisi[fiyatGecmisi.length - 1].fiyat - gorunenMinFiyat) * ySkala;
             ctx.lineTo(width, height);
             ctx.lineTo(0, height);
             ctx.closePath();
             ctx.fillStyle = 'rgba(3, 166, 109, 0.1)'; 
             ctx.fill();
 
-            // Giriş Fiyatı Çizgisi (Pozisyon Açıkken)
+            // Giriş Fiyatı Çizgisi (Binance tarzı sarı çizgi)
             if (pozisyon.acik) {
                 ctx.shadowBlur = 0;
                 ctx.strokeStyle = '#f0b90b'; // Sarı çizgi
                 ctx.lineWidth = 1;
-                ctx.setLineDash([5, 5]); // Kesikli çizgi
+                ctx.setLineDash([5, 5]);
 
-                const girisY = height - (pozisyon.girisFiyati - minFiyat) * ySkala;
-                ctx.beginPath();
-                ctx.moveTo(0, girisY);
-                ctx.lineTo(width, girisY);
-                ctx.stroke();
-                ctx.setLineDash([]); // Çizgi stilini sıfırla
-
-                // Giriş fiyatı etiketi
-                ctx.fillStyle = '#f0b90b';
-                ctx.font = '12px Arial';
-                ctx.fillText(`Giriş: ${formatPara(pozisyon.girisFiyati)}`, width - 150, girisY - 5);
+                const girisY = height - (pozisyon.girisFiyati - gorunenMinFiyat) * ySkala;
+                
+                // Çizgi sadece ekran içindeyse çiz
+                if (girisY >= 0 && girisY <= height) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, girisY);
+                    ctx.lineTo(width, girisY);
+                    ctx.stroke();
+                    
+                    // Giriş fiyatı etiketi
+                    ctx.fillStyle = '#f0b90b';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(`Giriş: ${formatPara(pozisyon.girisFiyati)}`, width - 200, girisY - 5);
+                }
+                ctx.setLineDash([]); 
             }
 
             ctx.shadowBlur = 0;
+            // Canlı fiyat etiketini güncel konuma taşı (Y-ekseni üzerinde)
+            const canliYKonum = height - (sonFiyat - gorunenMinFiyat) * ySkala;
+            const yOffset = canliYKonum < 20 ? 20 : (canliYKonum > height - 20 ? height - 20 : canliYKonum);
+            canliFiyatEtiketi.style.top = `${yOffset + 25}px`; // 25px başlık boşluğu
         }
 
         function guncelleFiyat() {
             // Rastgele değişim (daha çok yükseliş eğilimli)
-            // Pump eğilimi (1.0005) + Rastgele titreşim (0.9995 - 1.0015)
-            const rastgeleDegisim = (Math.random() * (1.0015 - 0.9995)) + 0.9995;
+            const rastgeleDegisim = (Math.random() * (1.001 - 0.999)) + 0.999;
             const degisimCarpan = PUMP_EĞİLİMİ * rastgeleDegisim; 
             let yeniFiyat = sonFiyat * degisimCarpan;
 
@@ -398,7 +454,6 @@
 
             sonFiyat = yeniFiyat;
             
-            // Pozisyon açıksa K/Z'yi güncelle
             if (pozisyon.acik) {
                 hesaplaKarZarar();
             }
@@ -409,8 +464,9 @@
         // Animasyon Döngüsü
         function animasyonDongusu() {
             guncelleFiyat();
-            guncelleUI(); // Her adımda UI'ı güncelle
-            setTimeout(animasyonDongusu, 200); // Daha hızlı simülasyon (her 200ms)
+            guncelleUI(); 
+            // 150ms aralık: Hızlı ve akıcı bir animasyon hissi verir.
+            setTimeout(animasyonDongusu, 150); 
         }
 
         // Simülasyonu başlat (Başlangıçta grafiği doldur)
