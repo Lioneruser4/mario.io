@@ -5,27 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram Match App</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script> 
     <style>
-        body { background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; }
+        body { background-color: #f0ffef; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; }
         .swipe-container { position: relative; width: 350px; height: 450px; margin: 20px; }
         .profile-card { 
-            position: absolute; 
-            width: 100%; 
-            height: 100%; 
-            border-radius: 15px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2); 
-            background-size: cover; 
-            background-position: center; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: flex-end; 
-            padding: 20px; 
-            color: white; 
-            transition: transform 0.5s ease; 
-            /* Kalın çerçeve ile profili vurgula */
-            border: 5px solid white; 
-            background-color: #6c757d; /* Resim yüklenmezse gri arka plan */
+            position: absolute; width: 100%; height: 100%; border-radius: 15px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); background-size: cover; 
+            background-position: center; display: flex; flex-direction: column; 
+            justify-content: flex-end; padding: 20px; color: white; 
+            transition: transform 0.5s ease; border: 5px solid white; 
+            background-color: #6c757d;
         }
         .profile-info { background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0)); border-radius: 0 0 15px 15px; padding: 10px; }
         .action-buttons { margin-top: 20px; display: flex; justify-content: space-around; width: 350px; }
@@ -38,7 +28,7 @@
 <div id="loading-screen" class="text-center">
     <h2 class="text-primary">Telegram Verileri Yükleniyor...</h2>
     <div class="spinner-border text-primary mt-4" role="status"></div>
-    <p id="error-message" class="text-danger mt-3" style="display: none;"></p>
+    <p id="error-message" class="text-danger mt-3" style="display: none;">Hata: Bu uygulama sadece Telegram Web View içinde çalışır.</p>
 </div>
 
 <div id="main-app" style="display: none;">
@@ -47,7 +37,7 @@
         <span class="fw-bold text-muted">Görünürlük Durumu:</span>
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="online-switch" checked>
-          <label class="form-check-label fw-bold" for="online-switch" id="status-label">ONLINE</label>
+          <label class="form-check-label fw-bold text-success" for="online-switch" id="status-label">ONLINE</label>
         </div>
     </div>
     
@@ -65,13 +55,14 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    const BACKEND_URL = "https://chatio-zllq.onrender.com"; // ✅ Render URL'niz
+    // ✅ KESİNLEŞMİŞ RENDER URL'İNİZ
+    const BACKEND_URL = "https://chatio-zllq.onrender.com"; 
+    
     let currentUser = null;
     let profiles = [];
     let currentProfileIndex = 0;
     let socket = null;
     
-    // Sayfa yüklendiğinde başlat
     document.addEventListener('DOMContentLoaded', initApp);
 
     // --- Uygulama Başlatma ---
@@ -102,7 +93,7 @@
                 if (data.success) {
                     currentUser = data.user;
                     mainApp.style.display = 'block';
-                    setupSocket(); // Giriş başarılıysa Socket.IO'yu başlat
+                    setupSocket(); 
                 } else {
                     errorMessage.textContent = 'Yetkilendirme Başarısız: ' + data.message;
                     errorMessage.style.display = 'block';
@@ -110,14 +101,13 @@
             })
             .catch(error => {
                 loadingScreen.style.display = 'none';
-                errorMessage.textContent = 'Ağ Hatası: Sunucuya ulaşılamadı. Render veya CORS ayarlarını kontrol edin.';
+                errorMessage.textContent = 'Ağ Hatası: Sunucuya (Render) ulaşılamadı. CORS veya domain kontrolü yapın.';
                 errorMessage.style.display = 'block';
                 console.error('Giriş Hata:', error);
             });
 
         } else {
             loadingScreen.style.display = 'none';
-            errorMessage.textContent = 'Bu uygulama sadece Telegram Web View (Mini App) içinde çalışır.';
             errorMessage.style.display = 'block';
         }
     }
@@ -130,20 +120,16 @@
             // Backend'e kimliğimizi bildir
             socket.emit('setUserId', currentUser.id); 
             
-            // Varsayılan Online durumunu Backend'de ve UI'da ayarla (UI'da varsayılan "checked" zaten var)
-            setOnlineStatus(true);
-            
             // Online/Offline Anahtarı olaylarını dinle
             document.getElementById('online-switch').addEventListener('change', (e) => {
                 setOnlineStatus(e.target.checked);
             });
             
+            // Başlangıçta Online durumu (Backend'de de varsayılan true'dur)
+            setOnlineStatus(document.getElementById('online-switch').checked);
+            
             // Profilleri yükle
             loadProfiles();
-        });
-        
-        socket.on('disconnect', () => {
-             console.log("Socket bağlantısı kesildi. Yeniden bağlanmayı deneyin.");
         });
     }
     
@@ -152,24 +138,22 @@
         const onlineSwitch = document.getElementById('online-switch');
         
         if (status) {
-            socket.emit('setOnline');
+            if(socket) socket.emit('setOnline');
             statusLabel.textContent = 'ONLINE';
-            statusLabel.classList.remove('text-danger');
-            statusLabel.classList.add('text-success');
-            onlineSwitch.checked = true; // UI'ı güncelle
+            statusLabel.classList.replace('text-danger', 'text-success');
+            onlineSwitch.checked = true;
         } else {
-            socket.emit('setOffline');
+            if(socket) socket.emit('setOffline');
             statusLabel.textContent = 'OFFLINE (Görünmez)';
-            statusLabel.classList.remove('text-success');
-            statusLabel.classList.add('text-danger');
-            onlineSwitch.checked = false; // UI'ı güncelle
+            statusLabel.classList.replace('text-success', 'text-danger');
+            onlineSwitch.checked = false;
         }
         
-        // Online/Offline durumu değiştiğinde yeni profilleri yükle
-        loadProfiles();
+        // Durum değişince profilleri yeniden yükle (Online filtreli)
+        loadProfiles(); 
     }
 
-    // --- Profilleri Yükleme (Online filtreli) ---
+    // --- Profilleri Yükleme ---
     async function loadProfiles() {
         if (!currentUser) return;
         
@@ -237,7 +221,7 @@
 
             if (data.status === 'match') {
                 // Telegram bildirimi gönderildi.
-                Telegram.WebApp.showAlert(`🎉 EŞLEŞME! ${data.target} seni beğendi! Bildirim Telegram'a gönderildi.`);
+                Telegram.WebApp.showAlert(`🎉 EŞLEŞME! ${data.target} seni beğendi! Bildirim Telegram'a gitti.`);
             }
         } catch (error) {
             console.error('Swipe hatası:', error);
