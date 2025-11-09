@@ -3,409 +3,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PROFESYONEL KRİPTO SİMÜLASYONU | Telegram Girişli</title>
-    
+    <title>Anonim Telegram Sohbet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        /* ------------------------------------------- */
-        /* BINANCE TARZI CSS STİLLERİ */
-        /* ------------------------------------------- */
-        body {
-            font-family: 'Open Sans', Arial, sans-serif;
-            background-color: #1e2329;
-            color: #eaecef;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            overflow: hidden;
-        }
-
-        .grafik-kapsayici {
-            background-color: #131722;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            width: 95%;
-            max-width: 1000px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .baslik {
-            color: #f0b90b;
-            font-size: 1.8em;
-            text-align: left;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #2b3137;
-            padding-bottom: 10px;
-        }
-
-        #grafikAlani {
-            position: relative;
-            border: 1px solid #2b3137;
-            border-radius: 4px;
-            overflow: hidden;
-            background-color: #131722;
-            flex-grow: 1;
-        }
-        
-        #kriptoGrafik, #hacimGrafik {
-            display: block;
-            position: absolute;
-            left: 0;
-        }
-        #kriptoGrafik { top: 0; }
-        #hacimGrafik { bottom: 0; border-top: 1px solid #2b3137; }
-
-        .fiyat-etiketi {
-            position: absolute;
-            right: 0;
-            padding: 5px 10px;
-            background-color: #131722;
-            border: 1px solid #f0b90b;
-            color: #f0b90b;
-            font-weight: bold;
-            font-size: 1.1em;
-            z-index: 10;
-            transition: top 0.1s linear;
-        }
-
-        .y-ekseni-etiketleri {
-            position: absolute;
-            right: 0;
-            height: 100%;
-            width: 80px;
-            color: #8f959e;
-            font-size: 0.8em;
-            pointer-events: none;
-            z-index: 5;
-        }
-        .y-ekseni-etiketleri div {
-            position: absolute;
-            right: 5px;
-            transform: translateY(-50%);
-            border-bottom: 1px dashed #2b3137;
-            white-space: nowrap;
-        }
-        
-        .kontrol-alani {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #1e2329;
-            border-radius: 6px;
-        }
-
-        .bakiye-gosterge p { font-size: 1.1em; font-weight: bold; }
-        .bakiye-deger { color: #f0b90b; margin-left: 10px; font-size: 1.4em; }
-
-        .bahis-alani, .liderlik-kontrol { display: flex; gap: 10px; align-items: center; }
-
-        #bahisMiktari { padding: 10px; border: 1px solid #2b3137; border-radius: 4px; background-color: #2b3137; color: #eaecef; width: 100px; text-align: center; }
-
-        .btn-bahis { padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
-        .yukselis { background-color: #03a66d; color: #fff; }
-        .dusme { background-color: #ea3943; color: #fff; }
-        .kapat-btn { background-color: #f0b90b; color: #131722; margin-left: 15px; }
-        .btn-bahis:disabled { background-color: #3e444b; cursor: not-allowed; color: #8f959e; }
-
-        .pozisyon-bilgi {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #2b3137;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-around;
-            font-size: 0.9em;
-        }
-        
-        #pozisyonDurumu { color: #f0b90b; font-weight: bold; }
-        .kar { color: #03a66d; }
-        .zarar { color: #ea3943; }
-
-        .uyari { margin-top: 15px; color: #f0b90b; text-align: center; font-size: 0.8em; border-top: 1px dashed #2b3137; padding-top: 10px; }
-
-        /* GİRİŞ EKRANI VE MODAL STİLLERİ */
-        #girisEkrani {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #1e2329; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 100; text-align: center;
-        }
-        #girisEkrani h2 { color: #f0b90b; margin-bottom: 30px; }
-        #oyunKapsayici { display: none; }
-        
-        .modal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); }
-        .modal-icerik { background-color: #131722; margin: 10% auto; padding: 30px; border: 1px solid #2b3137; width: 80%; max-width: 500px; border-radius: 8px; box-shadow: 0 0 20px rgba(240, 185, 11, 0.2); }
-        #liderlikBaslik { color: #f0b90b; text-align: center; margin-bottom: 20px; }
-        .kapat-buton { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-        #leaderboardTablo { width: 100%; border-collapse: collapse; color: #eaecef; }
-        #leaderboardTablo th, #leaderboardTablo td { padding: 10px; text-align: left; border-bottom: 1px solid #2b3137; }
-        #leaderboardTablo th { color: #f0b90b; background-color: #1e2329; }
-        .sira-bir td { background-color: rgba(240, 185, 11, 0.2); color: #f0b90b; font-weight: bold; font-size: 1.1em; }
-
+        body { background-color: #f0f2f5; min-height: 100vh; padding: 20px; }
+        .container-app { max-width: 800px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin: 50px auto; }
+        .profile-img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; }
+        .chat-container { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+        .message-box { max-height: 450px; overflow-y: auto; padding: 15px; background-color: #f9f9f9; border-radius: 8px; }
+        .system-message { font-size: 0.8em; color: #888; text-align: center; margin: 5px 0; }
+        .message-row strong { color: #007bff; }
     </style>
 </head>
 <body>
+
+<div class="container container-app">
+    <div id="login-screen">
+        <h2 class="text-center mb-4 text-primary">Anonim Sohbet - Giriş</h2>
+        <div class="d-flex justify-content-center">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                    data-telegram-login="stickerazbot" 
+                    data-size="large" 
+                    data-onauth="onTelegramAuth" 
+                    data-request-access="write"></script>
+        </div>
+        <p class="text-center mt-3 text-muted">Telegram ile giriş yaparak anonim sohbetlere başlayın.</p>
+    </div>
+
+    <div id="main-screen" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center pb-3 border-bottom">
+            <h3 class="mb-0 text-success">Anasayfa</h3>
+            <div class="d-flex align-items-center">
+                <span id="user-name" class="fw-bold me-2 text-info"></span>
+                <img id="user-photo" class="profile-img" alt="Profil Resmi">
+            </div>
+        </div>
+        
+        <div id="control-panel" class="row mt-4 g-3">
+            <div class="col-md-6">
+                <button id="create-room-btn" class="btn btn-primary w-100 py-2">➕ Yeni Anonim Oda Oluştur</button>
+            </div>
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" id="room-code-input" class="form-control form-control-lg" placeholder="6 Karakterli Oda Kodunu Girin..." maxlength="6">
+                    <button class="btn btn-success btn-lg" type="button" id="join-room-btn">Katıl</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="chat-room" class="chat-container" style="display: none;">
+            <h4 id="room-title" class="text-center mb-3 p-2 bg-light rounded"></h4>
+            <div class="message-box mb-3" id="messages">
+                </div>
+            <div class="input-group">
+                <input type="text" id="message-input" class="form-control" placeholder="Anonim mesajınızı yazın..." disabled>
+                <button class="btn btn-info" type="button" id="send-message-btn" disabled>Gönder</button>
+            </div>
+            <button id="leave-room-btn" class="btn btn-danger btn-sm mt-2 w-100">Odadan Güvenle Ayrıl</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+<script>
+    // ✅ KULLANIMA HAZIR RENDER URL'İNİZ
+    const BACKEND_URL = "https://chatio-zllq.onrender.com"; 
+    // ✅ BOT KULLANICI ADINIZ
+    const BOT_USERNAME = "stickerazbot"; 
     
-    <div id="girisEkrani">
-        <h2>Telegram ile Giriş Yapın ve Sanal Bakiyenizi Yönetin!</h2>
-        <p style="color: #eaecef;">(Simülasyon İçin Aşağıdaki Butona Tıklayın)</p>
-        <button onclick="simuleGiris(1234567, 'TestUser')" style="padding: 15px 30px; font-size: 1.2em; background-color: #0088cc; color: white; border: none; border-radius: 8px; cursor: pointer;">
-            Simüle Telegram Girişi
-        </button>
-    </div>
+    let user = null;
+    let currentRoomCode = null;
+    let socket = null;
+    let anonimUserName = null; 
 
-    <div class="grafik-kapsayici" id="oyunKapsayici">
-        <h1 class="baslik">FAKE COIN (FKN/USDT) | Kaldıraçlı İşlem Simülasyonu</h1>
-        
-        <div id="grafikAlani" style="height: 480px;">
-            <canvas id="kriptoGrafik" width="950" height="380"></canvas>
-            <canvas id="hacimGrafik" width="950" height="100"></canvas>
-            <div id="canliFiyatEtiketi" class="fiyat-etiketi">$50,000.00</div>
-            <div id="yEkseniEtiketleri" class="y-ekseni-etiketleri"></div>
-        </div>
-        
-        <div class="kontrol-alani">
-            <div class="bakiye-gosterge">
-                <p>SANAL BAKİYE: <span id="sanalBakiye" class="bakiye-deger">$10,000.00</span></p>
-            </div>
-            
-            <div class="bahis-alani">
-                <input type="number" id="bahisMiktari" value="100" min="1" placeholder="Bahis Miktarı">
-                <button id="btnYukselis" class="btn-bahis yukselis">📈 LONG (AL)</button>
-                <button id="btnDusme" class="btn-bahis dusme">📉 SHORT (SAT)</button>
-            </div>
-            
-            <div class="liderlik-kontrol">
-                <button id="btnLiderler" class="btn-bahis kapat-btn">🏆 Liderlik Tablosu</button>
-            </div>
-        </div>
-
-        <div class="pozisyon-bilgi">
-            <p>Pozisyon: <span id="pozisyonDurumu" style="color: grey;">Kapalı</span></p>
-            <p>Giriş Fiyatı: <span id="girisFiyati">--</span></p>
-            <p>Bahis Miktarı: <span id="pozisyonMiktari">--</span></p>
-            <p>Anlık K/Z: <span id="karZarar" class="kar">$0.00</span></p>
-            <button id="btnPozisyonKapat" class="btn-bahis kapat-btn" disabled>Pozisyon Kapat</button>
-        </div>
-
-        <p class="uyari">⚠️ Bu simülasyon, tamamen sahte ve rastgele verilerle çalışır. Gerçek finansal durumları yansıtmamaktadır. Eğlence amaçlıdır.</p>
-    </div>
-
-    <div id="leaderboardModal" class="modal">
-        <div class="modal-icerik">
-            <span class="kapat-buton" onclick="kapatModal()">&times;</span>
-            <h3 id="liderlikBaslik">🏆 En Zengin 10 Yatırımcı</h3>
-            <table id="leaderboardTablo">
-                </table>
-        </div>
-    </div>
-
-    <script>
-        // --- API Yolu ---
-        // BURAYI KENDİ RENDER BACKEND URL'İNİZLE DEĞİŞTİRİN
-        const RENDER_API_URL = 'http://localhost:3000/api'; // Yerel test için
-        // Gerçek Render URL'i Örn: 'https://fake-crypto-api.onrender.com/api'
-
-        // --- Canvas ve HTML Element Tanımlamaları ---
-        const priceCanvas = document.getElementById('kriptoGrafik');
-        const priceCtx = priceCanvas.getContext('2d');
-        const priceWidth = priceCanvas.width;
-        const priceHeight = priceCanvas.height;
-
-        const volumeCanvas = document.getElementById('hacimGrafik');
-        const volumeCtx = volumeCanvas.getContext('2d');
-        const volumeWidth = volumeCanvas.width;
-        const volumeHeight = volumeCanvas.height;
-
-        const bakiyeElement = document.getElementById('sanalBakiye');
-        const canliFiyatEtiketi = document.getElementById('canliFiyatEtiketi');
-        const yEkseniEtiketleriDiv = document.getElementById('yEkseniEtiketleri');
-        const miktarInput = document.getElementById('bahisMiktari');
-        const btnYukselis = document.getElementById('btnYukselis');
-        const btnDusme = document.getElementById('btnDusme');
-        const btnKapat = document.getElementById('btnPozisyonKapat');
-        const pozisyonDurumuElement = document.getElementById('pozisyonDurumu');
-        const girisFiyatiElement = document.getElementById('girisFiyati');
-        const pozisyonMiktariElement = document.getElementById('pozisyonMiktari');
-        const karZararElement = document.getElementById('karZarar');
-
-        const btnLiderler = document.getElementById('btnLiderler');
-        const leaderboardModal = document.getElementById('leaderboardModal');
-        const leaderboardTablo = document.getElementById('leaderboardTablo');
-
-        // --- Oyun ve Kalıcı Veri Değişkenleri ---
-        let mumVerisi = []; // [open, high, low, close, volume]
-        const MAX_MUM_SAYISI = 100;
-        let sonFiyat = 50000.00;
-        const KALDIRAÇ = 10;
-        let ANIMATION_SPEED = 250; // Mum güncelleme hızı (ms)
-        const CIZIM_ARALIGI = 16; // 60 FPS çizim hızı
-
-        let sanalBakiye = 10000.00; // Varsayılan, API'den güncellenecek
-        let pozisyon = { acik: false, tip: '', girisFiyati: 0, miktar: 0, kaldıraç: KALDIRAÇ };
-        
-        // Kalıcı Veri
-        let USER_TELEGRAM_ID = null;
-        let AUTH_TOKEN = null;
-        let lastUpdateTime = Date.now();
-
-        // --- Grafik Animasyon Değişkenleri ---
-        let hedefCanliFiyatY = 0;
-        let mevcutCanliFiyatY = 0;
-        let animationFrameId; // requestAnimationFrame için
-
-        // -------------------------------------------
-        // 1. GİRİŞ VE API MANTIKLARI
-        // -------------------------------------------
-
-        async function simuleGiris(id, username) {
-            // Gerçek senaryoda, Telegram Widget'ı bu veriyi sunucuya gönderir. 
-            // Biz burada sunucu ile konuşmayı simüle ediyoruz.
-            
-            USER_TELEGRAM_ID = id;
-
-            try {
-                // Sunucuya POST isteği gönderme simülasyonu
-                const response = await fetch(`${RENDER_API_URL}/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    // Gerçek Telegram verileri: id, username, photo_url, hash vb.
-                    body: JSON.stringify({ id: id, username: username || `User_${id}` })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    AUTH_TOKEN = data.token;
-                    sanalBakiye = data.bakiye;
-                    
-                    document.getElementById('girisEkrani').style.display = 'none';
-                    document.getElementById('oyunKapsayici').style.display = 'flex';
-                    
-                    baslatOyun();
-                } else {
-                    alert(`Giriş Başarısız: ${data.error || 'Bilinmeyen Hata'}`);
-                }
-            } catch (error) {
-                console.error('Giriş veya API Hatası:', error);
-                alert('Sunucuya bağlanılamıyor. Lütfen Render API URL\'ini kontrol edin.');
+    window.onTelegramAuth = function(authData) {
+        fetch(`${BACKEND_URL}/api/auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(authData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                user = data.user;
+                initializeMainScreen();
+            } else {
+                alert('Giriş doğrulama başarısız: ' + data.message);
             }
+        })
+        .catch(error => console.error('Giriş Hata:', error));
+    }
+
+    function initializeMainScreen() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('main-screen').style.display = 'block';
+
+        document.getElementById('user-name').textContent = user.first_name || `ID: ${user.id}`;
+        document.getElementById('user-photo').src = user.photo_url || 'https://via.placeholder.com/45/007bff/ffffff?text=U';
+        
+        document.getElementById('create-room-btn').onclick = createRoom;
+        document.getElementById('join-room-btn').onclick = () => {
+            const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (code.length === 6) joinRoom(code);
+            else alert('Lütfen 6 karakterli geçerli bir oda kodu girin.');
+        };
+    }
+
+    function createRoom() {
+        fetch(`${BACKEND_URL}/api/create-room`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telegramId: user.id })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                joinRoom(data.roomCode);
+            } else {
+                alert('Oda oluşturulamadı. Sunucu hatası.');
+            }
+        })
+        .catch(error => console.error('Oda Oluşturma Hata:', error));
+    }
+
+    function joinRoom(roomCode) {
+        if (socket && socket.connected) {
+            alert('Öncelikle mevcut odadan ayrılmalısınız.');
+            return;
         }
 
-        async function pozisyonKapat() {
-            if (!pozisyon.acik || !AUTH_TOKEN) return;
+        currentRoomCode = roomCode;
+        
+        // Anonim kullanıcı adı atama: Anonimliğinizi korur
+        anonimUserName = `Anonim-${user.first_name || user.id}`.slice(0, 10) + Math.floor(Math.random() * 100);
 
-            const karZarar = hesaplaKarZarar();
-            const toplamKazanilan = pozisyon.miktar + karZarar;
-            
-            // Pozisyonu yerel olarak kapat
-            pozisyon = { acik: false, tip: '', girisFiyati: 0, miktar: 0, kaldıraç: KALDIRAÇ };
+        document.getElementById('room-title').textContent = `Anonim Oda: ${currentRoomCode}`;
+        document.getElementById('chat-room').style.display = 'block';
+        document.getElementById('control-panel').style.display = 'none';
+        document.getElementById('messages').innerHTML = ''; 
+        document.getElementById('message-input').disabled = false;
+        document.getElementById('send-message-btn').disabled = false;
 
-            try {
-                // Sunucuya bakiye güncelleme isteği
-                const response = await fetch(`${RENDER_API_URL}/update-bakiye`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${AUTH_TOKEN}` 
-                    },
-                    body: JSON.stringify({ karZarar: karZarar })
-                });
+        
+        socket = io(BACKEND_URL);
 
-                const data = await response.json();
-
-                if (data.success) {
-                    sanalBakiye = data.yeniBakiye;
-                    alert(`Pozisyon Kapandı! K/Z: ${formatPara(karZarar)}. Yeni Kalıcı Bakiye: ${formatPara(sanalBakiye)}`);
-                    guncelleUI();
-                } else {
-                    alert(`Hata: Bakiye sunucuya kaydedilemedi. ${data.error}`);
-                    // Hata durumunda, pozisyonu yerelde kapatıp kullanıcıya bildirdik.
-                    guncelleUI();
-                }
-            } catch (error) {
-                console.error('Bakiye API Hatası:', error);
-                alert('İnternet bağlantısı veya sunucu hatası. Bakiye kaydedilemedi.');
-                guncelleUI();
-            }
-        }
-
-        // --- Liderlik Tablosu Mantığı (Frontend) ---
-
-        btnLiderler.addEventListener('click', () => {
-            leaderboardModal.style.display = 'block';
-            liderleriCekVeGoster();
+        socket.on('connect', () => {
+            addSystemMessage('Sunucuya bağlanıldı. Odaya giriş yapılıyor...');
+            socket.emit('joinRoom', { roomCode: currentRoomCode, telegramId: user.id, anonName: anonimUserName });
+        });
+        
+        socket.on('roomMessages', (messages) => {
+            messages.forEach(displayMessage);
         });
 
-        function kapatModal() { leaderboardModal.style.display = 'none'; }
-        window.onclick = (event) => { if (event.target === leaderboardModal) kapatModal(); }
+        socket.on('message', displayMessage);
 
-        async function liderleriCekVeGoster() {
-            leaderboardTablo.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #f0b90b;">Yükleniyor...</td></tr>`;
+        socket.on('userJoined', (name) => {
+            addSystemMessage(`👤 ${name} odaya katıldı.`);
+        });
+        socket.on('userLeft', (name) => {
+            addSystemMessage(`👋 ${name} odadan ayrıldı.`);
+        });
+        socket.on('error', (err) => {
+            addSystemMessage(`❌ Hata: ${err}`, 'text-danger');
+            leaveRoom();
+        });
+        socket.on('disconnect', () => {
+             addSystemMessage('Bağlantı kesildi. Odadan ayrıldınız.');
+             resetChatUI();
+        });
 
-            try {
-                const response = await fetch(`${RENDER_API_URL}/leaderboard`);
-                const data = await response.json();
+        document.getElementById('send-message-btn').onclick = sendMessage;
+        document.getElementById('leave-room-btn').onclick = leaveRoom;
+        document.getElementById('message-input').onkeyup = (e) => {
+             if (e.key === 'Enter') sendMessage();
+        };
+    }
 
-                if (data.success) {
-                    const top10 = data.leaderboard;
-                    let html = '<thead><tr><th>Sıra</th><th>Kullanıcı Adı</th><th>Bakiye</th></tr></thead><tbody>';
+    function displayMessage(msg) {
+        const messagesDiv = document.getElementById('messages');
+        const isSelf = msg.anonName === anonimUserName;
+        const nameColor = isSelf ? 'text-primary' : 'text-success';
+        
+        messagesDiv.innerHTML += `
+            <p class="mb-1 message-row">
+                <strong class="${nameColor}">${msg.anonName}</strong> 
+                <span class="text-muted small">(${msg.timestamp}):</span>
+                <span class="text-dark">${msg.text}</span>
+            </p>`;
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
 
-                    top10.forEach(kisi => {
-                        const bakiyeStr = formatPara(kisi.bakiye);
-                        const sinif = kisi.sira === 1 ? 'sira-bir' : '';
-                        
-                        html += `<tr class="${sinif}">
-                                    <td>${kisi.sira}</td>
-                                    <td>${kisi.username}</td>
-                                    <td>${bakiyeStr}</td>
-                                 </tr>`;
-                    });
-                    
-                    html += '</tbody>';
-                    leaderboardTablo.innerHTML = html;
-                } else {
-                    leaderboardTablo.innerHTML = `<tr><td colspan="3" style="color: #ea3943; text-align: center;">Hata: Veri çekilemedi.</td></tr>`;
-                }
-            } catch (error) {
-                console.error('Liderlik tablosu API Hatası:', error);
-                leaderboardTablo.innerHTML = `<tr><td colspan="3" style="color: #ea3943; text-align: center;">Sunucuya bağlanılamıyor.</td></tr>`;
-            }
+    function sendMessage() {
+        const input = document.getElementById('message-input');
+        const message = input.value.trim();
+        if (message && socket && currentRoomCode) {
+            socket.emit('sendMessage', { roomCode: currentRoomCode, telegramId: user.id, message });
+            input.value = '';
         }
-
-        // -------------------------------------------
-        // 2. OYUN ÇİZİM VE MANTIKLARI (Gelişmiş Mum Grafik)
-        // -------------------------------------------
-        
-        // ... (Buraya Mum Grafik, Hacim, Fiyat Güncelleme ve UI fonksiyonlarının tam JS kodu gelmeli) ...
-        
-        // Not: Alan kısıtlaması nedeniyle tüm kod buraya kopyalanmadı. 
-        // Lütfen bu kısma önceki MUM GRAFİKLİ cevabımdaki tüm JavaScript kodunu kopyalayın.
-        // Özellikle: formatPara, guncelleUI, hesaplaKarZarar, pozisyonAc, cizMumGrafik, cizHacimGrafik, guncelleFiyat, animasyonDongusu ve baslatOyun fonksiyonları.
-
-        // Örnek baslatOyun tanımı:
-        function baslatOyun() {
-            // İlk veriyi doldur
-            for (let i = 0; i < MAX_MUM_SAYISI; i++) {
-                guncelleFiyat(true); // true = Sadece yeni mum başlat
-            }
-            // İlk çizimi yap
-            cizMumGrafik(); 
-            cizHacimGrafik();
-            guncelleUI(); 
-            // Animasyon döngüsünü başlat
-            animasyonDongusu();
-            // Periyodik mum oluşturma döngüsünü başlat
-            setInterval(() => guncelleFiyat(true), ANIMATION_SPEED);
+    }
+    
+    function leaveRoom() {
+        if (socket) {
+            socket.disconnect();
+        } else {
+            resetChatUI();
         }
-        
-        // İlk yüklemede UI'ı güncelle
-        // guncelleUI(); // İlk girişte giriş ekranı görüneceği için burası gereksiz.
-    </script>
+    }
+
+    function resetChatUI() {
+        currentRoomCode = null;
+        anonimUserName = null;
+        document.getElementById('chat-room').style.display = 'none';
+        document.getElementById('control-panel').style.display = 'flex';
+        document.getElementById('message-input').disabled = true;
+        document.getElementById('send-message-btn').disabled = true;
+        document.getElementById('messages').innerHTML = '';
+    }
+    
+    function addSystemMessage(text, className = 'text-muted fst-italic') {
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.innerHTML += `<p class="system-message ${className}">${text}</p>`;
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+</script>
+
 </body>
 </html>
