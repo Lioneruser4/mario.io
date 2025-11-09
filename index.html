@@ -18,16 +18,12 @@
 <body>
 
 <div class="container container-app">
-    <div id="login-screen">
-        <h2 class="text-center mb-4 text-primary">Anonim Sohbet - Giriş</h2>
-        <div class="d-flex justify-content-center">
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="stickerazbot" 
-                    data-size="large" 
-                    data-onauth="onTelegramAuth" 
-                    data-request-access="write"></script>
+    <div id="loading-screen" class="text-center">
+        <h2 class="text-primary">Telegram Verileri Yükleniyor...</h2>
+        <div class="spinner-border text-primary mt-4" role="status">
+          <span class="visually-hidden">Yükleniyor...</span>
         </div>
-        <p class="text-center mt-3 text-muted">Telegram ile giriş yaparak anonim sohbetlere başlayın.</p>
+        <p id="error-message" class="text-danger mt-3" style="display: none;">Hata: Bu siteyi yalnızca Telegram Web View içinde açın.</p>
     </div>
 
     <div id="main-screen" style="display: none;">
@@ -66,38 +62,68 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script> 
 
 <script>
-    // ✅ KULLANIMA HAZIR RENDER URL'İNİZ
+    // ✅ KESİNLEŞMİŞ RENDER URL'İNİZ
     const BACKEND_URL = "https://chatio-zllq.onrender.com"; 
-    // ✅ BOT KULLANICI ADINIZ
-    const BOT_USERNAME = "stickerazbot"; 
     
     let user = null;
     let currentRoomCode = null;
     let socket = null;
     let anonimUserName = null; 
 
-    window.onTelegramAuth = function(authData) {
-        fetch(`${BACKEND_URL}/api/auth`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(authData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                user = data.user;
-                initializeMainScreen();
-            } else {
-                alert('Giriş doğrulama başarısız: ' + data.message);
+    // Uygulama başlatıldığında veya yüklendiğinde Web View verilerini yakala
+    function initApp() {
+        const loadingScreen = document.getElementById('loading-screen');
+        const errorMessage = document.getElementById('error-message');
+
+        if (window.Telegram && window.Telegram.WebApp) {
+            const initData = Telegram.WebApp.initData;
+            
+            if (!initData) {
+                 loadingScreen.style.display = 'none';
+                 errorMessage.textContent = 'Hata: Telegram başlangıç verisi (initData) eksik.';
+                 errorMessage.style.display = 'block';
+                 return;
             }
-        })
-        .catch(error => console.error('Giriş Hata:', error));
+
+            // initData'yı Arka Uç'a doğrulamaya gönder
+            fetch(`${BACKEND_URL}/api/auth`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ initData: initData }) 
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingScreen.style.display = 'none';
+                if (data.success) {
+                    user = data.user;
+                    initializeMainScreen();
+                } else {
+                    errorMessage.textContent = 'Yetkilendirme Başarısız: ' + data.message;
+                    errorMessage.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                loadingScreen.style.display = 'none';
+                errorMessage.textContent = 'Ağ Hatası: Sunucuya ulaşılamadı. CORS veya Render ayarlarınızı kontrol edin.';
+                errorMessage.style.display = 'block';
+                console.error('Giriş Hata:', error);
+            });
+
+        } else {
+            // Web View dışında açılmışsa
+            loadingScreen.style.display = 'none';
+            errorMessage.textContent = 'Bu uygulama sadece Telegram Web View (Mini App) içinde çalışır.';
+            errorMessage.style.display = 'block';
+        }
     }
 
+    document.addEventListener('DOMContentLoaded', initApp);
+
     function initializeMainScreen() {
-        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-screen').style.display = 'block';
 
         document.getElementById('user-name').textContent = user.first_name || `ID: ${user.id}`;
@@ -136,7 +162,6 @@
 
         currentRoomCode = roomCode;
         
-        // Anonim kullanıcı adı atama: Anonimliğinizi korur
         anonimUserName = `Anonim-${user.first_name || user.id}`.slice(0, 10) + Math.floor(Math.random() * 100);
 
         document.getElementById('room-title').textContent = `Anonim Oda: ${currentRoomCode}`;
