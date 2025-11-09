@@ -11,13 +11,13 @@ const server = http.createServer(app);
 // Render ortamı portu otomatik olarak process.env.PORT üzerinden sağlar.
 const PORT = process.env.PORT || 10000; 
 
-// 🚨 GÜNCELLEME GEREKİYOR: Lütfen bu URL'yi kendi GitHub Pages domaininizle değiştirin!
-// Örn: "https://your-username.github.io"
-const FRONTEND_ORIGIN = "https://my-github-user.github.io"; 
-// Sizin Render URL'niz: https://chatio-zllq.onrender.com
+// ✅ GÜNCELLENDİ: Frontend Origin (GitHub Pages URL'niz)
+const FRONTEND_ORIGIN = "https://lioneruser4.github.io"; 
+// Backend URL: https://chatio-zllq.onrender.com
 
 const io = socketio(server, { 
     cors: { 
+        // İzin verilen tek alan adınız.
         origin: FRONTEND_ORIGIN,
         methods: ["GET", "POST"] 
     } 
@@ -26,7 +26,7 @@ const io = socketio(server, {
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!TELEGRAM_BOT_TOKEN) {
-    console.error("HATA: TELEGRAM_BOT_TOKEN Ortam Değişkeni Tanımlanmamış! Lütfen Render'a ekleyin.");
+    console.error("HATA: TELEGRAM_BOT_TOKEN Ortam Değişkeni Tanımlanmamış!");
     process.exit(1);
 }
 
@@ -35,40 +35,64 @@ let rooms = {};
 
 app.use(express.json());
 
-// --- Telegram Yetkilendirme Doğrulama Fonksiyonu ---
-function checkTelegramAuth(data) {
-    const check_hash = data.hash;
-    const data_check_string = Object.keys(data)
-        .filter(key => key !== 'hash')
-        .sort()
-        .map(key => `${key}=${data[key]}`)
+// --- Telegram Web App Yetkilendirme Doğrulama Fonksiyonu ---
+// Web App'den gelen initData'yı doğrular.
+function checkTelegramWebAppAuth(initData) {
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+
+    if (!hash) return null;
+
+    const dataCheckString = Array.from(params.entries())
+        .filter(([key]) => key !== 'hash')
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+        .map(([key, value]) => `${key}=${value}`)
         .join('\n');
 
-    const secret_key = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
-    const hash = crypto.createHmac('sha256', secret_key).update(data_check_string).digest('hex');
+    const secret_key = crypto.createHmac('sha256', 'WebAppData').update(TELEGRAM_BOT_TOKEN).digest();
+    const calculatedHash = crypto.createHmac('sha256', secret_key).update(dataCheckString).digest('hex');
 
-    // 24 saat içinde gerçekleşen istekleri kontrol et
-    const isTimestampValid = (Date.now() / 1000) - data.auth_date < 86400;
-    
-    return hash === check_hash && isTimestampValid;
+    if (calculatedHash === hash) {
+        const userData = params.get('user');
+        if (userData) {
+            try {
+                const user = JSON.parse(userData);
+                // Auth Date kontrolü (24 saatten eski olmamalı)
+                const isTimestampValid = (Date.now() / 1000) - params.get('auth_date') < 86400;
+                if (isTimestampValid) return user;
+
+            } catch (e) {
+                console.error("Kullanıcı verisi JSON parse hatası:", e);
+                return null;
+            }
+        }
+    }
+    return null;
 }
 
 // --- API Endpoints ---
 
-// Telegram Girişi Doğrulama
+// Telegram Web App Girişi Doğrulama
 app.post('/api/auth', (req, res) => {
-    const authData = req.body;
-    if (checkTelegramAuth(authData)) {
+    const { initData } = req.body;
+    
+    if (!initData) {
+        return res.status(400).json({ success: false, message: 'initData eksik.' });
+    }
+
+    const user = checkTelegramWebAppAuth(initData);
+
+    if (user) {
         res.json({ 
             success: true, 
             user: { 
-                id: authData.id, 
-                first_name: authData.first_name || 'Anonim User', 
-                photo_url: authData.photo_url 
+                id: user.id, 
+                first_name: user.first_name || 'Anonim User', 
+                photo_url: user.photo_url 
             } 
         });
     } else {
-        res.status(401).json({ success: false, message: 'Telegram Yetkilendirme Başarısız veya Süresi Geçmiş.' });
+        res.status(401).json({ success: false, message: 'Telegram Web App Yetkilendirme Başarısız veya Süresi Geçmiş.' });
     }
 });
 
@@ -87,10 +111,9 @@ app.post('/api/create-room', (req, res) => {
 });
 
 // --- Socket.IO Bağlantıları ---
-
+// (Bu kısım önceki kodla aynıdır ve stabil çalışır.)
 io.on('connection', (socket) => {
     
-    // Odaya Katılma
     socket.on('joinRoom', ({ roomCode, telegramId, anonName }) => {
         if (!rooms[roomCode]) {
             return socket.emit('error', 'Oda bulunamadı.');
@@ -109,7 +132,6 @@ io.on('connection', (socket) => {
         socket.emit('roomMessages', rooms[roomCode].messages);
     });
 
-    // Mesaj Gönderme
     socket.on('sendMessage', ({ roomCode, telegramId, message }) => {
         if (!rooms[roomCode] || !rooms[roomCode].users[telegramId]) {
             return socket.emit('error', 'Mesaj gönderilemedi: Oda/Kullanıcı geçerli değil.');
@@ -123,12 +145,11 @@ io.on('connection', (socket) => {
         };
         
         rooms[roomCode].messages.push(messageData);
-        rooms[roomCode].messages = rooms[roomCode].messages.slice(-100); // Son 100 mesajı tut
+        rooms[roomCode].messages = rooms[roomCode].messages.slice(-100); 
 
         io.to(roomCode).emit('message', messageData);
     });
 
-    // Bağlantı Kesilmesi
     socket.on('disconnect', () => {
         const roomCode = socket.currentRoom;
         if (roomCode && rooms[roomCode]) {
