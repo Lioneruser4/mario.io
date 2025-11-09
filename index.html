@@ -3,81 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anonim Telegram Sohbet</title>
+    <title>Telegram Match App</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <style>
-        body { background-color: #f0f2f5; min-height: 100vh; padding: 20px; }
-        .container-app { max-width: 800px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin: 50px auto; }
-        .profile-img { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; }
-        .chat-container { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
-        .message-box { max-height: 450px; overflow-y: auto; padding: 15px; background-color: #f9f9f9; border-radius: 8px; }
-        .system-message { font-size: 0.8em; color: #888; text-align: center; margin: 5px 0; }
-        .message-row strong { color: #007bff; }
+        body { background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; }
+        .swipe-container { position: relative; width: 350px; height: 450px; margin: 20px; }
+        .profile-card { 
+            position: absolute; 
+            width: 100%; 
+            height: 100%; 
+            border-radius: 15px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); 
+            background-size: cover; 
+            background-position: center; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: flex-end; 
+            padding: 20px; 
+            color: white; 
+            transition: transform 0.5s ease; 
+            /* Kalın çerçeve ile profili vurgula */
+            border: 5px solid white; 
+            background-color: #6c757d; /* Resim yüklenmezse gri arka plan */
+        }
+        .profile-info { background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0)); border-radius: 0 0 15px 15px; padding: 10px; }
+        .action-buttons { margin-top: 20px; display: flex; justify-content: space-around; width: 350px; }
+        .status-toggle { display: flex; justify-content: space-between; align-items: center; width: 350px; margin-bottom: 15px; background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
+        #loading-screen { padding: 40px; background: white; border-radius: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container container-app">
-    <div id="loading-screen" class="text-center">
-        <h2 class="text-primary">Telegram Verileri Yükleniyor...</h2>
-        <div class="spinner-border text-primary mt-4" role="status">
-          <span class="visually-hidden">Yükleniyor...</span>
+<div id="loading-screen" class="text-center">
+    <h2 class="text-primary">Telegram Verileri Yükleniyor...</h2>
+    <div class="spinner-border text-primary mt-4" role="status"></div>
+    <p id="error-message" class="text-danger mt-3" style="display: none;"></p>
+</div>
+
+<div id="main-app" style="display: none;">
+    
+    <div class="status-toggle">
+        <span class="fw-bold text-muted">Görünürlük Durumu:</span>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="online-switch" checked>
+          <label class="form-check-label fw-bold" for="online-switch" id="status-label">ONLINE</label>
         </div>
-        <p id="error-message" class="text-danger mt-3" style="display: none;">Hata: Bu siteyi yalnızca Telegram Web View içinde açın.</p>
     </div>
-
-    <div id="main-screen" style="display: none;">
-        <div class="d-flex justify-content-between align-items-center pb-3 border-bottom">
-            <h3 class="mb-0 text-success">Anasayfa</h3>
-            <div class="d-flex align-items-center">
-                <span id="user-name" class="fw-bold me-2 text-info"></span>
-                <img id="user-photo" class="profile-img" alt="Profil Resmi">
-            </div>
-        </div>
-        
-        <div id="control-panel" class="row mt-4 g-3">
-            <div class="col-md-6">
-                <button id="create-room-btn" class="btn btn-primary w-100 py-2">➕ Yeni Anonim Oda Oluştur</button>
-            </div>
-            <div class="col-md-6">
-                <div class="input-group">
-                    <input type="text" id="room-code-input" class="form-control form-control-lg" placeholder="6 Karakterli Oda Kodunu Girin..." maxlength="6">
-                    <button class="btn btn-success btn-lg" type="button" id="join-room-btn">Katıl</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="chat-room" class="chat-container" style="display: none;">
-            <h4 id="room-title" class="text-center mb-3 p-2 bg-light rounded"></h4>
-            <div class="message-box mb-3" id="messages">
-                </div>
-            <div class="input-group">
-                <input type="text" id="message-input" class="form-control" placeholder="Anonim mesajınızı yazın..." disabled>
-                <button class="btn btn-info" type="button" id="send-message-btn" disabled>Gönder</button>
-            </div>
-            <button id="leave-room-btn" class="btn btn-danger btn-sm mt-2 w-100">Odadan Güvenle Ayrıl</button>
-        </div>
+    
+    <div class="swipe-container" id="swipe-area">
+        <h4 id="no-profiles" class="text-muted text-center p-5" style="display: none;">Taranacak yeni online profil kalmadı.</h4>
+    </div>
+    
+    <div class="action-buttons">
+        <button id="pass-btn" class="btn btn-danger btn-lg rounded-circle shadow" style="width: 70px; height: 70px; font-size: 24px;">❌</button>
+        <button id="like-btn" class="btn btn-success btn-lg rounded-circle shadow" style="width: 70px; height: 70px; font-size: 24px;">❤️</button>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script> 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // ✅ KESİNLEŞMİŞ RENDER URL'İNİZ
-    const BACKEND_URL = "https://chatio-zllq.onrender.com"; 
-    
-    let user = null;
-    let currentRoomCode = null;
+    const BACKEND_URL = "https://chatio-zllq.onrender.com"; // ✅ Render URL'niz
+    let currentUser = null;
+    let profiles = [];
+    let currentProfileIndex = 0;
     let socket = null;
-    let anonimUserName = null; 
+    
+    // Sayfa yüklendiğinde başlat
+    document.addEventListener('DOMContentLoaded', initApp);
 
-    // Uygulama başlatıldığında veya yüklendiğinde Web View verilerini yakala
+    // --- Uygulama Başlatma ---
     function initApp() {
         const loadingScreen = document.getElementById('loading-screen');
+        const mainApp = document.getElementById('main-app');
         const errorMessage = document.getElementById('error-message');
-
+        
         if (window.Telegram && window.Telegram.WebApp) {
             const initData = Telegram.WebApp.initData;
             
@@ -98,8 +100,9 @@
             .then(data => {
                 loadingScreen.style.display = 'none';
                 if (data.success) {
-                    user = data.user;
-                    initializeMainScreen();
+                    currentUser = data.user;
+                    mainApp.style.display = 'block';
+                    setupSocket(); // Giriş başarılıysa Socket.IO'yu başlat
                 } else {
                     errorMessage.textContent = 'Yetkilendirme Başarısız: ' + data.message;
                     errorMessage.style.display = 'block';
@@ -107,151 +110,146 @@
             })
             .catch(error => {
                 loadingScreen.style.display = 'none';
-                errorMessage.textContent = 'Ağ Hatası: Sunucuya ulaşılamadı. CORS veya Render ayarlarınızı kontrol edin.';
+                errorMessage.textContent = 'Ağ Hatası: Sunucuya ulaşılamadı. Render veya CORS ayarlarını kontrol edin.';
                 errorMessage.style.display = 'block';
                 console.error('Giriş Hata:', error);
             });
 
         } else {
-            // Web View dışında açılmışsa
             loadingScreen.style.display = 'none';
             errorMessage.textContent = 'Bu uygulama sadece Telegram Web View (Mini App) içinde çalışır.';
             errorMessage.style.display = 'block';
         }
     }
-
-    document.addEventListener('DOMContentLoaded', initApp);
-
-    function initializeMainScreen() {
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('main-screen').style.display = 'block';
-
-        document.getElementById('user-name').textContent = user.first_name || `ID: ${user.id}`;
-        document.getElementById('user-photo').src = user.photo_url || 'https://via.placeholder.com/45/007bff/ffffff?text=U';
+    
+    // --- Socket.IO ve Online Durumu Yönetimi ---
+    function setupSocket() {
+        socket = io(BACKEND_URL);
         
-        document.getElementById('create-room-btn').onclick = createRoom;
-        document.getElementById('join-room-btn').onclick = () => {
-            const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-            if (code.length === 6) joinRoom(code);
-            else alert('Lütfen 6 karakterli geçerli bir oda kodu girin.');
-        };
+        socket.on('connect', () => {
+            // Backend'e kimliğimizi bildir
+            socket.emit('setUserId', currentUser.id); 
+            
+            // Varsayılan Online durumunu Backend'de ve UI'da ayarla (UI'da varsayılan "checked" zaten var)
+            setOnlineStatus(true);
+            
+            // Online/Offline Anahtarı olaylarını dinle
+            document.getElementById('online-switch').addEventListener('change', (e) => {
+                setOnlineStatus(e.target.checked);
+            });
+            
+            // Profilleri yükle
+            loadProfiles();
+        });
+        
+        socket.on('disconnect', () => {
+             console.log("Socket bağlantısı kesildi. Yeniden bağlanmayı deneyin.");
+        });
+    }
+    
+    function setOnlineStatus(status) {
+        const statusLabel = document.getElementById('status-label');
+        const onlineSwitch = document.getElementById('online-switch');
+        
+        if (status) {
+            socket.emit('setOnline');
+            statusLabel.textContent = 'ONLINE';
+            statusLabel.classList.remove('text-danger');
+            statusLabel.classList.add('text-success');
+            onlineSwitch.checked = true; // UI'ı güncelle
+        } else {
+            socket.emit('setOffline');
+            statusLabel.textContent = 'OFFLINE (Görünmez)';
+            statusLabel.classList.remove('text-success');
+            statusLabel.classList.add('text-danger');
+            onlineSwitch.checked = false; // UI'ı güncelle
+        }
+        
+        // Online/Offline durumu değiştiğinde yeni profilleri yükle
+        loadProfiles();
     }
 
-    function createRoom() {
-        fetch(`${BACKEND_URL}/api/create-room`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ telegramId: user.id })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                joinRoom(data.roomCode);
-            } else {
-                alert('Oda oluşturulamadı. Sunucu hatası.');
-            }
-        })
-        .catch(error => console.error('Oda Oluşturma Hata:', error));
+    // --- Profilleri Yükleme (Online filtreli) ---
+    async function loadProfiles() {
+        if (!currentUser) return;
+        
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/profiles/${currentUser.id}`);
+            profiles = await response.json();
+            currentProfileIndex = 0;
+            renderProfile();
+            
+        } catch (error) {
+            document.getElementById('no-profiles').textContent = 'Profilleri yüklerken hata oluştu.';
+            document.getElementById('no-profiles').style.display = 'block';
+        }
     }
 
-    function joinRoom(roomCode) {
-        if (socket && socket.connected) {
-            alert('Öncelikle mevcut odadan ayrılmalısınız.');
+    // --- Profil Kartını Oluşturma ---
+    function renderProfile() {
+        const swipeArea = document.getElementById('swipe-area');
+        swipeArea.innerHTML = '';
+        
+        if (profiles.length === 0 || currentProfileIndex >= profiles.length) {
+            document.getElementById('no-profiles').style.display = 'block';
+            document.getElementById('like-btn').disabled = true;
+            document.getElementById('pass-btn').disabled = true;
             return;
         }
 
-        currentRoomCode = roomCode;
+        document.getElementById('no-profiles').style.display = 'none';
+        document.getElementById('like-btn').disabled = false;
+        document.getElementById('pass-btn').disabled = false;
+
+        const profile = profiles[currentProfileIndex];
+        const card = document.createElement('div');
+        card.className = 'profile-card';
+        card.style.backgroundImage = `url('${profile.photoUrl || 'https://via.placeholder.com/350x450?text=Telegram%20User'}')`;
+        card.innerHTML = `
+            <div class="profile-info">
+                <h3>${profile.firstName}</h3>
+                <p>${profile.bio || 'Hakkında bilgi yok.'}</p>
+            </div>
+        `;
+        swipeArea.appendChild(card);
         
-        anonimUserName = `Anonim-${user.first_name || user.id}`.slice(0, 10) + Math.floor(Math.random() * 100);
-
-        document.getElementById('room-title').textContent = `Anonim Oda: ${currentRoomCode}`;
-        document.getElementById('chat-room').style.display = 'block';
-        document.getElementById('control-panel').style.display = 'none';
-        document.getElementById('messages').innerHTML = ''; 
-        document.getElementById('message-input').disabled = false;
-        document.getElementById('send-message-btn').disabled = false;
-
-        
-        socket = io(BACKEND_URL);
-
-        socket.on('connect', () => {
-            addSystemMessage('Sunucuya bağlanıldı. Odaya giriş yapılıyor...');
-            socket.emit('joinRoom', { roomCode: currentRoomCode, telegramId: user.id, anonName: anonimUserName });
-        });
-        
-        socket.on('roomMessages', (messages) => {
-            messages.forEach(displayMessage);
-        });
-
-        socket.on('message', displayMessage);
-
-        socket.on('userJoined', (name) => {
-            addSystemMessage(`👤 ${name} odaya katıldı.`);
-        });
-        socket.on('userLeft', (name) => {
-            addSystemMessage(`👋 ${name} odadan ayrıldı.`);
-        });
-        socket.on('error', (err) => {
-            addSystemMessage(`❌ Hata: ${err}`, 'text-danger');
-            leaveRoom();
-        });
-        socket.on('disconnect', () => {
-             addSystemMessage('Bağlantı kesildi. Odadan ayrıldınız.');
-             resetChatUI();
-        });
-
-        document.getElementById('send-message-btn').onclick = sendMessage;
-        document.getElementById('leave-room-btn').onclick = leaveRoom;
-        document.getElementById('message-input').onkeyup = (e) => {
-             if (e.key === 'Enter') sendMessage();
-        };
-    }
-
-    function displayMessage(msg) {
-        const messagesDiv = document.getElementById('messages');
-        const isSelf = msg.anonName === anonimUserName;
-        const nameColor = isSelf ? 'text-primary' : 'text-success';
-        
-        messagesDiv.innerHTML += `
-            <p class="mb-1 message-row">
-                <strong class="${nameColor}">${msg.anonName}</strong> 
-                <span class="text-muted small">(${msg.timestamp}):</span>
-                <span class="text-dark">${msg.text}</span>
-            </p>`;
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function sendMessage() {
-        const input = document.getElementById('message-input');
-        const message = input.value.trim();
-        if (message && socket && currentRoomCode) {
-            socket.emit('sendMessage', { roomCode: currentRoomCode, telegramId: user.id, message });
-            input.value = '';
-        }
+        // Buton olaylarını ayarla
+        document.getElementById('like-btn').onclick = () => handleSwipe(profile.id, 'like', card);
+        document.getElementById('pass-btn').onclick = () => handleSwipe(profile.id, 'pass', card);
     }
     
-    function leaveRoom() {
-        if (socket) {
-            socket.disconnect();
-        } else {
-            resetChatUI();
-        }
-    }
+    // --- Kaydırma (Swipe) İşlemi ---
+    async function handleSwipe(targetId, action, cardElement) {
+        
+        const isLike = action === 'like';
+        
+        // Animasyon
+        cardElement.style.transform = isLike ? 'translateX(400px) rotate(10deg)' : 'translateX(-400px) rotate(-10deg)';
+        
+        // API İsteği
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/swipe/${currentUser.id}/${targetId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            });
+            const data = await response.json();
 
-    function resetChatUI() {
-        currentRoomCode = null;
-        anonimUserName = null;
-        document.getElementById('chat-room').style.display = 'none';
-        document.getElementById('control-panel').style.display = 'flex';
-        document.getElementById('message-input').disabled = true;
-        document.getElementById('send-message-btn').disabled = true;
-        document.getElementById('messages').innerHTML = '';
-    }
-    
-    function addSystemMessage(text, className = 'text-muted fst-italic') {
-        const messagesDiv = document.getElementById('messages');
-        messagesDiv.innerHTML += `<p class="system-message ${className}">${text}</p>`;
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            if (data.status === 'match') {
+                // Telegram bildirimi gönderildi.
+                Telegram.WebApp.showAlert(`🎉 EŞLEŞME! ${data.target} seni beğendi! Bildirim Telegram'a gönderildi.`);
+            }
+        } catch (error) {
+            console.error('Swipe hatası:', error);
+        }
+
+        // Bir sonraki profile geç
+        setTimeout(() => {
+            currentProfileIndex++;
+            renderProfile();
+            // Tüm profiller biterse yenisini yükle
+            if (currentProfileIndex >= profiles.length) loadProfiles(); 
+        }, 500); 
     }
 </script>
 
