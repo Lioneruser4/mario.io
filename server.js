@@ -3,13 +3,14 @@ const http = require('http');
 const socketio = require('socket.io');
 const crypto = require('crypto');
 const axios = require('axios');
-require('dotenv').config();
+require('dotenv').config(); // Ortam değişkenlerini yüklemek için
 
 const app = express();
 const server = http.createServer(app);
 
 // ✅ KESİNLEŞMİŞ FRONTEND URL'İNİZ
 const FRONTEND_ORIGIN = "https://lioneruser4.github.io"; 
+const BOT_USERNAME = "@stickerazbot"; // Botunuzun kullanıcı adı
 
 const io = socketio(server, { 
     cors: { 
@@ -21,11 +22,15 @@ const io = socketio(server, {
 const PORT = process.env.PORT || 10000;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// --- IN-MEMORY VERİ YAPISI ---
-// isOnline: Kullanıcının sitede görünüp görünmeme tercihi.
-let users = {};         // { telegramId: { id, firstName, photoUrl, bio, likes: [], matches: [], isOnline: false, socketId: null } }
+if (!TELEGRAM_BOT_TOKEN) {
+    console.error("HATA: TELEGRAM_BOT_TOKEN Ortam Değişkeni Tanımlanmamış! Sunucu başlatılamaz.");
+    process.exit(1);
+}
+
+// --- IN-MEMORY VERİ YAPISI (Sunucu yeniden başlatılınca sıfırlanır) ---
+let users = {};         // { telegramId: { id, firstName, photoUrl, bio, likes: [], matches: [], isOnline: false, socketId: null, username } }
 let swipeHistory = {};  // { swiperId: { liked: [targetId], passed: [targetId] } } 
-// ----------------------------
+// --------------------------------------------------------------------
 
 app.use(express.json());
 app.use(require('cors')({
@@ -33,8 +38,7 @@ app.use(require('cors')({
     methods: ["GET", "POST"]
 }));
 
-// --- Telegram Web App Yetkilendirme Doğrulama Fonksiyonu ---
-// (Önceki kodunuzdan kopyalanan, Telegram güvenliği için kritik parça)
+// --- Telegram Web App Yetkilendirme Doğrulama Fonksiyonu (KRİTİK) ---
 function checkTelegramWebAppAuth(initData) {
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');
@@ -47,9 +51,7 @@ function checkTelegramWebAppAuth(initData) {
         .map(([key, value]) => `${key}=${value}`)
         .join('\n');
 
-    // Bot Token ile Kök Anahtarı oluşturma
     const secret_key = crypto.createHmac('sha256', 'WebAppData').update(TELEGRAM_BOT_TOKEN).digest();
-    // Veri Doğrulama
     const calculatedHash = crypto.createHmac('sha256', secret_key).update(dataCheckString).digest('hex');
 
     if (calculatedHash === hash) {
@@ -71,17 +73,19 @@ function checkTelegramWebAppAuth(initData) {
 // --- Telegram Bot API Bildirim Fonksiyonu ---
 async function sendMatchNotification(telegramId, matchedUser) {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const message = `🎉 TEBRİKLER! **${matchedUser.firstName}** seni beğendi ve **eşleştiniz!** Artık Telegram'da doğrudan mesajlaşabilirsiniz: [https://t.me/${matchedUser.username || 'user' + matchedUser.id}]`;
     
+    // Eşleşen kullanıcıya direkt Telegram'dan ulaşım linki verilir.
+    const message = `🎉 TEBRİKLER! **${matchedUser.firstName}** seni beğendi ve **eşleştiniz!** Artık Telegram'da sohbet edebilirsiniz: `;
+    const linkText = matchedUser.username ? `[${matchedUser.username} ile Konuş](https://t.me/${matchedUser.username})` : `[Botunuza mesaj atın](https://t.me/${BOT_USERNAME.replace('@', '')})`;
+
     try {
         await axios.post(url, {
             chat_id: telegramId, 
-            text: message,
+            text: message + linkText,
             parse_mode: 'Markdown'
         });
-        console.log(`Bildirim ${telegramId} kullanıcısına gönderildi.`);
     } catch (error) {
-        console.error('Telegram Bildirim Gönderme Hatası:', error.response ? error.response.data : error.message);
+        console.error(`Bildirim Gönderme Hatası (${telegramId}):`, error.response ? error.response.data : error.message);
     }
 }
 
@@ -97,24 +101,23 @@ app.post('/api/auth', (req, res) => {
         let user = users[authUser.id];
 
         if (!user) {
-            // Yeni Kullanıcı
+            // Yeni Kullanıcı kaydı
             user = {
                 id: authUser.id,
                 telegramId: authUser.id,
                 firstName: authUser.first_name || 'Anonim User',
                 photoUrl: authUser.photo_url || 'https://via.placeholder.com/45/007bff/ffffff?text=U',
                 bio: 'Hey! I am using the Telegram Match App.',
-                username: authUser.username, // Telegram kullanıcı adı
+                username: authUser.username || null, 
                 likes: [],
                 matches: [],
-                isOnline: true, // Varsayılan olarak online başlat
+                isOnline: true, // Varsayılan: Online ve görünür
                 socketId: null
             };
             users[authUser.id] = user;
             swipeHistory[authUser.id] = { liked: [], passed: [] };
         }
         
-        // Kullanıcının güncel durumunu döndür
         res.json({ success: true, user: users[authUser.id] });
     } else {
         res.status(401).json({ success: false, message: 'Yetkilendirme Başarısız.' });
@@ -140,8 +143,7 @@ app.get('/api/profiles/:swiperId', (req, res) => {
             id: user.id,
             firstName: user.firstName,
             photoUrl: user.photoUrl,
-            bio: user.bio,
-            username: user.username
+            bio: user.bio
         }));
     
     // Rastgele 10 profil gönder
@@ -169,12 +171,8 @@ app.post('/api/swipe/:swiperId/:targetId', async (req, res) => {
         // 2. Eşleşme Kontrolü: Target, Swiper'ı daha önce beğenmiş mi?
         if (swipeHistory[targetId] && swipeHistory[targetId].liked.includes(swiperId)) {
             // EŞLEŞME VAR!
-            if (!swiper.matches.includes(targetId)) {
-                 swiper.matches.push(targetId);
-            }
-            if (!target.matches.includes(swiperId)) {
-                 target.matches.push(swiperId);
-            }
+            if (!swiper.matches.includes(targetId)) { swiper.matches.push(targetId); }
+            if (!target.matches.includes(swiperId)) { target.matches.push(swiperId); }
             
             // 3. Telegram Bildirimi GÖNDER!
             await sendMatchNotification(swiper.id, target); 
@@ -201,15 +199,14 @@ app.post('/api/swipe/:swiperId/:targetId', async (req, res) => {
 
 io.on('connection', (socket) => {
     
-    // İstemci, Telegram ID'si ile bağlantı kurduğunu bildirir.
+    // Kullanıcı ilk bağlandığında kimliğini bildirir
     socket.on('setUserId', (telegramId) => {
         if (users[telegramId]) {
             users[telegramId].socketId = socket.id;
-            socket.telegramId = telegramId; // Sokete kimliği kaydet
+            socket.telegramId = telegramId;
             
-            // Yeni bağlantıda varsayılan durumu ON olarak ayarla (Frontend de bunu tetikleyecek)
+            // Kullanıcı bağlandığında (Web View açıkken) varsayılan olarak ONLINE'dır
             users[telegramId].isOnline = true; 
-            console.log(`${users[telegramId].firstName} bağlandı. Varsayılan ONLINE.`);
         }
     });
     
@@ -218,7 +215,6 @@ io.on('connection', (socket) => {
         const telegramId = socket.telegramId;
         if (telegramId && users[telegramId]) {
             users[telegramId].isOnline = true;
-            console.log(`${users[telegramId].firstName} elle ONLINE oldu.`);
         }
     });
 
@@ -227,7 +223,6 @@ io.on('connection', (socket) => {
         const telegramId = socket.telegramId;
         if (telegramId && users[telegramId]) {
             users[telegramId].isOnline = false;
-            console.log(`${users[telegramId].firstName} elle OFFLINE oldu.`);
         }
     });
 
@@ -237,7 +232,6 @@ io.on('connection', (socket) => {
         if (telegramId && users[telegramId]) {
             users[telegramId].isOnline = false;
             users[telegramId].socketId = null;
-            console.log(`${users[telegramId].firstName} bağlantısı kesildi ve OFFLINE oldu.`);
         }
     });
 });
