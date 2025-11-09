@@ -1,147 +1,154 @@
-// server.js (Render Web Service Üzerinde Çalışacak)
-
+// Gereken Kütüphaneler: express, socket.io, dotenv, crypto (Node.js yerleşik)
 const express = require('express');
-const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
-const cors = require('cors'); // Frontend (GitHub IO) farklı bir domainde olduğu için CORS gerekli
-const jwt = require('jsonwebtoken'); // Kullanıcı oturumunu yönetmek için
+const http = require('http');
+const socketio = require('socket.io');
+const crypto = require('crypto');
+require('dotenv').config();
 
-// --- Yapılandırma ---
 const app = express();
-const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/fakecrypto';
-const JWT_SECRET = process.env.JWT_SECRET || 'cok_gizli_anahtar';
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN'; 
-// Gerçek Telegram Bot Token'ınız
+const server = http.createServer(app);
 
-// --- Middleware ---
-app.use(cors()); 
-app.use(bodyParser.json());
+// Render ortamı portu otomatik olarak process.env.PORT üzerinden sağlar.
+const PORT = process.env.PORT || 10000; 
 
-// --- Veritabanı Bağlantısı ---
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('MongoDB başarıyla bağlandı.'))
-    .catch(err => console.error('MongoDB bağlantı hatası:', err));
+// 🚨 GÜNCELLEME GEREKİYOR: Lütfen bu URL'yi kendi GitHub Pages domaininizle değiştirin!
+// Örn: "https://your-username.github.io"
+const FRONTEND_ORIGIN = "https://my-github-user.github.io"; 
+// Sizin Render URL'niz: https://chatio-zllq.onrender.com
 
-// --- Veritabanı Şeması ---
-const UserSchema = new mongoose.Schema({
-    telegramId: { type: String, required: true, unique: true },
-    username: String,
-    sanalBakiye: { type: Number, default: 10000.00 } // Kalıcı bakiye
+const io = socketio(server, { 
+    cors: { 
+        origin: FRONTEND_ORIGIN,
+        methods: ["GET", "POST"] 
+    } 
 });
-const User = mongoose.model('User', UserSchema);
 
-// --- Yardımcı Fonksiyonlar ---
-// Basit JWT Token oluşturucu
-const generateAuthToken = (user) => {
-    return jwt.sign({ id: user.telegramId, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-};
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// JWT Token doğrulama middleware'i
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+if (!TELEGRAM_BOT_TOKEN) {
+    console.error("HATA: TELEGRAM_BOT_TOKEN Ortam Değişkeni Tanımlanmamış! Lütfen Render'a ekleyin.");
+    process.exit(1);
+}
 
-    if (token == null) return res.sendStatus(401); // Token yok
+// Basit geçici oda ve kullanıcı depolama yapısı (Anonimlik için in-memory)
+let rooms = {}; 
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403); // Token geçerli değil
-        req.user = user;
-        next();
-    });
-};
+app.use(express.json());
 
-// --- API Endpoint'leri ---
+// --- Telegram Yetkilendirme Doğrulama Fonksiyonu ---
+function checkTelegramAuth(data) {
+    const check_hash = data.hash;
+    const data_check_string = Object.keys(data)
+        .filter(key => key !== 'hash')
+        .sort()
+        .map(key => `${key}=${data[key]}`)
+        .join('\n');
 
-// 1. Telegram Giriş ve Kullanıcı Doğrulama
-app.post('/api/login', async (req, res) => {
-    const data = req.body;
+    const secret_key = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
+    const hash = crypto.createHmac('sha256', secret_key).update(data_check_string).digest('hex');
+
+    // 24 saat içinde gerçekleşen istekleri kontrol et
+    const isTimestampValid = (Date.now() / 1000) - data.auth_date < 86400;
     
-    if (!data.id) {
-        return res.status(400).json({ error: 'Telegram ID eksik.' });
-    }
+    return hash === check_hash && isTimestampValid;
+}
 
-    const telegramId = data.id.toString();
+// --- API Endpoints ---
 
-    // GERÇEK SENARYODA BURADA TELEGRAM VERİLERİ (HASH) KESİNLİKLE DOĞRULANMALIDIR!
-    // Gelişmiş güvenlik için bir Telegram Bot kütüphanesi kullanın.
-    
-    try {
-        let user = await User.findOne({ telegramId: telegramId });
-
-        if (!user) {
-            // Yeni kullanıcı: 10000$ bakiye ile oluşturulur.
-            user = new User({
-                telegramId: telegramId,
-                username: data.username || `User_${telegramId}`,
-                sanalBakiye: 10000.00 
-            });
-            await user.save();
-        }
-
-        const token = generateAuthToken(user);
-
+// Telegram Girişi Doğrulama
+app.post('/api/auth', (req, res) => {
+    const authData = req.body;
+    if (checkTelegramAuth(authData)) {
         res.json({ 
             success: true, 
-            token: token, 
-            bakiye: user.sanalBakiye,
-            username: user.username
+            user: { 
+                id: authData.id, 
+                first_name: authData.first_name || 'Anonim User', 
+                photo_url: authData.photo_url 
+            } 
         });
-
-    } catch (error) {
-        console.error('Login/Kayıt Hatası:', error);
-        res.status(500).json({ error: 'Sunucu hatası.' });
+    } else {
+        res.status(401).json({ success: false, message: 'Telegram Yetkilendirme Başarısız veya Süresi Geçmiş.' });
     }
 });
 
-// 2. Bakiye Güncelleme (Pozisyon Kapatıldığında)
-app.post('/api/update-bakiye', authenticateToken, async (req, res) => {
-    const { karZarar } = req.body; 
-    const userId = req.user.id; // JWT'den alınan ID
+// Oda Oluşturma
+app.post('/api/create-room', (req, res) => {
+    const roomCode = crypto.randomBytes(3).toString('hex').toUpperCase(); // 6 karakterli kod
+    rooms[roomCode] = { users: {}, messages: [] };
+    
+    // 1 saat sonra odayı sil (Anonim ve geçici mesajlaşma kuralı)
+    setTimeout(() => {
+        delete rooms[roomCode];
+        console.log(`Oda ${roomCode} silindi.`);
+    }, 60 * 60 * 1000); 
 
-    if (typeof karZarar !== 'number') {
-        return res.status(400).json({ error: 'Geçersiz K/Z miktarı.' });
-    }
-
-    try {
-        const user = await User.findOne({ telegramId: userId });
-        if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-
-        // Bakiyeyi güncelle
-        user.sanalBakiye = parseFloat((user.sanalBakiye + karZarar).toFixed(2)); // Küsurat hatasını önle
-        await user.save();
-
-        res.json({ success: true, yeniBakiye: user.sanalBakiye });
-
-    } catch (error) {
-        console.error('Bakiye Güncelleme Hatası:', error);
-        res.status(500).json({ error: 'Sunucu hatası.' });
-    }
+    res.json({ success: true, roomCode });
 });
 
-// 3. Liderlik Tablosu
-app.get('/api/leaderboard', async (req, res) => {
-    try {
-        const topUsers = await User.find({})
-            .sort({ sanalBakiye: -1 }) // Azalan sırada
-            .limit(10)
-            .select('username sanalBakiye -_id'); // Sadece gerekli alanları seç
+// --- Socket.IO Bağlantıları ---
 
-        const leaderboard = topUsers.map((user, index) => ({
-            sira: index + 1,
-            username: user.username,
-            bakiye: user.sanalBakiye
-        }));
+io.on('connection', (socket) => {
+    
+    // Odaya Katılma
+    socket.on('joinRoom', ({ roomCode, telegramId, anonName }) => {
+        if (!rooms[roomCode]) {
+            return socket.emit('error', 'Oda bulunamadı.');
+        }
 
-        res.json({ success: true, leaderboard: leaderboard });
+        if (rooms[roomCode].users[telegramId]) {
+            rooms[roomCode].users[telegramId].socketId = socket.id;
+        } else {
+            rooms[roomCode].users[telegramId] = { anonName, socketId: socket.id, telegramId };
+            io.to(roomCode).emit('userJoined', anonName);
+        }
 
-    } catch (error) {
-        console.error('Liderlik Tablosu Hatası:', error);
-        res.status(500).json({ error: 'Sunucu hatası.' });
-    }
+        socket.join(roomCode);
+        socket.currentRoom = roomCode;
+        
+        socket.emit('roomMessages', rooms[roomCode].messages);
+    });
+
+    // Mesaj Gönderme
+    socket.on('sendMessage', ({ roomCode, telegramId, message }) => {
+        if (!rooms[roomCode] || !rooms[roomCode].users[telegramId]) {
+            return socket.emit('error', 'Mesaj gönderilemedi: Oda/Kullanıcı geçerli değil.');
+        }
+
+        const user = rooms[roomCode].users[telegramId];
+        const messageData = { 
+            anonName: user.anonName, 
+            text: message, 
+            timestamp: new Date().toLocaleTimeString('tr-TR'),
+        };
+        
+        rooms[roomCode].messages.push(messageData);
+        rooms[roomCode].messages = rooms[roomCode].messages.slice(-100); // Son 100 mesajı tut
+
+        io.to(roomCode).emit('message', messageData);
+    });
+
+    // Bağlantı Kesilmesi
+    socket.on('disconnect', () => {
+        const roomCode = socket.currentRoom;
+        if (roomCode && rooms[roomCode]) {
+            const users = rooms[roomCode].users;
+            
+            for (const id in users) {
+                if (users[id].socketId === socket.id) {
+                    const anonName = users[id].anonName;
+                    delete users[id];
+                    io.to(roomCode).emit('userLeft', anonName);
+
+                    if (Object.keys(users).length === 0) {
+                        delete rooms[roomCode];
+                        console.log(`Boş oda ${roomCode} silindi.`);
+                    }
+                    return;
+                }
+            }
+        }
+    });
 });
 
-// --- Sunucuyu Başlat ---
-app.listen(PORT, () => {
-    console.log(`Sunucu http://localhost:${PORT} adresinde çalışıyor.`);
-});
+server.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor.`));
