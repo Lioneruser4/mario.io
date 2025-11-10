@@ -1,14 +1,14 @@
 // client.js (Frontend)
 
-// ⚠️⚠️ DİQQƏT! BU ÜNVANI ÖZ RENDER SERVER ÜNVANINIZ İLƏ DƏYİŞİN! ⚠️⚠️
-const RENDER_SERVER_URL = 'https://sizin-serveriniz.onrender.com';
-// ⚠️⚠️-----------------------------------------------------------⚠️⚠️
+// 🟢🟢 BU ÜNVAN SİZİN VERDİYİNİZ ÜNVANLA DƏYİŞDİRİLDİ: 🟢🟢
+const RENDER_SERVER_URL = 'https://mario-io-1.onrender.com';
+// 🟢🟢-----------------------------------------------------------🟢🟢
 
 const socket = io(RENDER_SERVER_URL);
 
 let player;         // YouTube player obyekti
 let currentRoom = '';
-let isSyncing = false; // Serverdən gələn siqnalı təkrar serverə göndərməmək üçün
+let isSyncing = false; 
 
 // Elementləri seçmək
 const joinRoomBtn = document.getElementById('joinRoomBtn');
@@ -21,7 +21,7 @@ function onYouTubeIframeAPIReady() {
   player = new YT.Player('player', {
     height: '100%',
     width: '100%',
-    videoId: 'dQw4w9WgXcQ', // Başlanğıc video
+    videoId: 'dQw4w9WgXcQ', 
     playerVars: {
       'playsinline': 1
     },
@@ -54,7 +54,6 @@ loadVideoBtn.onclick = () => {
     let videoId = extractYouTubeID(url);
     
     if (videoId) {
-        // Həm özümüzdə, həm server vasitəsilə başqalarında yükləyirik
         player.loadVideoById(videoId);
         socket.emit('load_video', { room: currentRoom, videoId: videoId });
     } else {
@@ -64,7 +63,7 @@ loadVideoBtn.onclick = () => {
 
 // 4. İstifadəçi videonu idarə etdikdə (Play/Pause/Seek)
 function onPlayerStateChange(event) {
-    if (isSyncing || !currentRoom) return; // Əgər serverdən gələn siqnalla dəyişibsə, heç nə etmə
+    if (isSyncing || !currentRoom) return; 
 
     const time = player.getCurrentTime();
 
@@ -73,13 +72,11 @@ function onPlayerStateChange(event) {
     } else if (event.data == YT.PlayerState.PAUSED) {
         socket.emit('pause', { room: currentRoom });
     }
-    // Qeyd: Axtarış (seek) daha mürəkkəbdir, hələlik play/pause ilə kifayətlənək
 }
 
 
 // --- Serverdən Gələn Siqnalları Qəbul Etmə ---
 
-// Başqa biri videonu dəyişdi
 socket.on('sync_load_video', (videoId) => {
     console.log('Serverdən gəldi: YENİ VİDEO', videoId);
     isSyncing = true;
@@ -87,16 +84,14 @@ socket.on('sync_load_video', (videoId) => {
     isSyncing = false;
 });
 
-// Başqa biri videonu "Play" etdi
 socket.on('sync_play', (time) => {
     console.log('Serverdən gəldi: PLAY');
     isSyncing = true;
-    player.seekTo(time, true); // Vaxtı bərabərləşdir
+    player.seekTo(time, true); 
     player.playVideo();
-    setTimeout(() => { isSyncing = false; }, 1000); // 1 saniyə kilidlə
+    setTimeout(() => { isSyncing = false; }, 1000); 
 });
 
-// Başqa biri videonu "Pause" etdi
 socket.on('sync_pause', () => {
     console.log('Serverdən gəldi: PAUSE');
     isSyncing = true;
