@@ -11,21 +11,98 @@ body {
 
 h1 {
     color: #e91e63;
+    margin-bottom: 30px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* LOBBY STYLES */
+#lobby-screen {
+    background-color: #1e1e1e;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.input-group input {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#enterRoomBtn {
+    background-color: #4CAF50;
+    border-radius: 5px;
+}
+
+/* ROOM STYLES */
+#room-screen {
+    width: 100%;
+    max-width: 800px;
+}
+
+.room-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #333;
+    border-radius: 5px;
+}
+
+.code-share {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#roomCodeToCopy {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+.user-list-container {
+    background-color: #222;
+    padding: 10px;
+    border-radius: 5px;
+    min-width: 150px;
+}
+
+.users-title {
+    margin-top: 0;
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+#userList {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#userList li {
+    padding: 3px 0;
+    color: #fff;
 }
 
 .controls-area {
     display: flex;
-    flex-wrap: wrap;
     gap: 15px;
     margin-bottom: 20px;
     width: 100%;
-    max-width: 800px;
 }
 
 .control-group {
     flex: 1;
     display: flex;
-    min-width: 300px;
 }
 
 input[type="text"] {
@@ -54,7 +131,7 @@ button:hover {
 #player-container {
     width: 100%;
     max-width: 800px;
-    aspect-ratio: 16 / 9; /* Videonun formasını qoruyur */
+    aspect-ratio: 16 / 9;
     background-color: #000;
 }
 
