@@ -1,241 +1,33 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="az">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Match App</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script> 
-    <style>
-        body { background-color: #f0ffef; display: flex; justify-content: center; align-items: center; min-height: 100vh; flex-direction: column; }
-        .swipe-container { position: relative; width: 350px; height: 450px; margin: 20px; }
-        .profile-card { 
-            position: absolute; width: 100%; height: 100%; border-radius: 15px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2); background-size: cover; 
-            background-position: center; display: flex; flex-direction: column; 
-            justify-content: flex-end; padding: 20px; color: white; 
-            transition: transform 0.5s ease; border: 5px solid white; 
-            background-color: #6c757d;
-        }
-        .profile-info { background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0)); border-radius: 0 0 15px 15px; padding: 10px; }
-        .action-buttons { margin-top: 20px; display: flex; justify-content: space-around; width: 350px; }
-        .status-toggle { display: flex; justify-content: space-between; align-items: center; width: 350px; margin-bottom: 15px; background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);}
-        #loading-screen { padding: 40px; background: white; border-radius: 10px; }
-    </style>
+    <title>Birlikdə İzlə</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div id="loading-screen" class="text-center">
-    <h2 class="text-primary">Telegram Verileri Yükleniyor...</h2>
-    <div class="spinner-border text-primary mt-4" role="status"></div>
-    <p id="error-message" class="text-danger mt-3" style="display: none;">Hata: Bu uygulama sadece Telegram Web View içinde çalışır.</p>
-</div>
+    <h1>Birlikdə İzlə Otağı</h1>
 
-<div id="main-app" style="display: none;">
-    
-    <div class="status-toggle">
-        <span class="fw-bold text-muted">Görünürlük Durumu:</span>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="online-switch" checked>
-          <label class="form-check-label fw-bold text-success" for="online-switch" id="status-label">ONLINE</label>
+    <div class="controls-area">
+        <div class="control-group">
+            <input type="text" id="roomId" placeholder="Otaq ID daxil edin...">
+            <button id="joinRoomBtn">Qoşul / Yarat</button>
+        </div>
+
+        <div class="control-group">
+            <input type="text" id="videoUrl" placeholder="YouTube Linkini bura yapışdırın...">
+            <button id="loadVideoBtn">Videonu Yüklə</button>
         </div>
     </div>
-    
-    <div class="swipe-container" id="swipe-area">
-        <h4 id="no-profiles" class="text-muted text-center p-5" style="display: none;">Taranacak yeni online profil kalmadı.</h4>
+
+    <div id="player-container">
+        <div id="player"></div>
     </div>
-    
-    <div class="action-buttons">
-        <button id="pass-btn" class="btn btn-danger btn-lg rounded-circle shadow" style="width: 70px; height: 70px; font-size: 24px;">❌</button>
-        <button id="like-btn" class="btn btn-success btn-lg rounded-circle shadow" style="width: 70px; height: 70px; font-size: 24px;">❤️</button>
-    </div>
-</div>
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script> 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-    // ✅ KESİNLEŞMİŞ RENDER URL'İNİZ
-    const BACKEND_URL = "https://chatio-zllq.onrender.com"; 
-    
-    let currentUser = null;
-    let profiles = [];
-    let currentProfileIndex = 0;
-    let socket = null;
-    
-    document.addEventListener('DOMContentLoaded', initApp);
-
-    // --- Uygulama Başlatma ---
-    function initApp() {
-        const loadingScreen = document.getElementById('loading-screen');
-        const mainApp = document.getElementById('main-app');
-        const errorMessage = document.getElementById('error-message');
-        
-        if (window.Telegram && window.Telegram.WebApp) {
-            const initData = Telegram.WebApp.initData;
-            
-            if (!initData) {
-                 loadingScreen.style.display = 'none';
-                 errorMessage.textContent = 'Hata: Telegram başlangıç verisi (initData) eksik.';
-                 errorMessage.style.display = 'block';
-                 return;
-            }
-
-            // initData'yı Arka Uç'a doğrulamaya gönder
-            fetch(`${BACKEND_URL}/api/auth`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ initData: initData }) 
-            })
-            .then(response => response.json())
-            .then(data => {
-                loadingScreen.style.display = 'none';
-                if (data.success) {
-                    currentUser = data.user;
-                    mainApp.style.display = 'block';
-                    setupSocket(); 
-                } else {
-                    errorMessage.textContent = 'Yetkilendirme Başarısız: ' + data.message;
-                    errorMessage.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                loadingScreen.style.display = 'none';
-                errorMessage.textContent = 'Ağ Hatası: Sunucuya (Render) ulaşılamadı. CORS veya domain kontrolü yapın.';
-                errorMessage.style.display = 'block';
-                console.error('Giriş Hata:', error);
-            });
-
-        } else {
-            loadingScreen.style.display = 'none';
-            errorMessage.style.display = 'block';
-        }
-    }
-    
-    // --- Socket.IO ve Online Durumu Yönetimi ---
-    function setupSocket() {
-        socket = io(BACKEND_URL);
-        
-        socket.on('connect', () => {
-            // Backend'e kimliğimizi bildir
-            socket.emit('setUserId', currentUser.id); 
-            
-            // Online/Offline Anahtarı olaylarını dinle
-            document.getElementById('online-switch').addEventListener('change', (e) => {
-                setOnlineStatus(e.target.checked);
-            });
-            
-            // Başlangıçta Online durumu (Backend'de de varsayılan true'dur)
-            setOnlineStatus(document.getElementById('online-switch').checked);
-            
-            // Profilleri yükle
-            loadProfiles();
-        });
-    }
-    
-    function setOnlineStatus(status) {
-        const statusLabel = document.getElementById('status-label');
-        const onlineSwitch = document.getElementById('online-switch');
-        
-        if (status) {
-            if(socket) socket.emit('setOnline');
-            statusLabel.textContent = 'ONLINE';
-            statusLabel.classList.replace('text-danger', 'text-success');
-            onlineSwitch.checked = true;
-        } else {
-            if(socket) socket.emit('setOffline');
-            statusLabel.textContent = 'OFFLINE (Görünmez)';
-            statusLabel.classList.replace('text-success', 'text-danger');
-            onlineSwitch.checked = false;
-        }
-        
-        // Durum değişince profilleri yeniden yükle (Online filtreli)
-        loadProfiles(); 
-    }
-
-    // --- Profilleri Yükleme ---
-    async function loadProfiles() {
-        if (!currentUser) return;
-        
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/profiles/${currentUser.id}`);
-            profiles = await response.json();
-            currentProfileIndex = 0;
-            renderProfile();
-            
-        } catch (error) {
-            document.getElementById('no-profiles').textContent = 'Profilleri yüklerken hata oluştu.';
-            document.getElementById('no-profiles').style.display = 'block';
-        }
-    }
-
-    // --- Profil Kartını Oluşturma ---
-    function renderProfile() {
-        const swipeArea = document.getElementById('swipe-area');
-        swipeArea.innerHTML = '';
-        
-        if (profiles.length === 0 || currentProfileIndex >= profiles.length) {
-            document.getElementById('no-profiles').style.display = 'block';
-            document.getElementById('like-btn').disabled = true;
-            document.getElementById('pass-btn').disabled = true;
-            return;
-        }
-
-        document.getElementById('no-profiles').style.display = 'none';
-        document.getElementById('like-btn').disabled = false;
-        document.getElementById('pass-btn').disabled = false;
-
-        const profile = profiles[currentProfileIndex];
-        const card = document.createElement('div');
-        card.className = 'profile-card';
-        card.style.backgroundImage = `url('${profile.photoUrl || 'https://via.placeholder.com/350x450?text=Telegram%20User'}')`;
-        card.innerHTML = `
-            <div class="profile-info">
-                <h3>${profile.firstName}</h3>
-                <p>${profile.bio || 'Hakkında bilgi yok.'}</p>
-            </div>
-        `;
-        swipeArea.appendChild(card);
-        
-        // Buton olaylarını ayarla
-        document.getElementById('like-btn').onclick = () => handleSwipe(profile.id, 'like', card);
-        document.getElementById('pass-btn').onclick = () => handleSwipe(profile.id, 'pass', card);
-    }
-    
-    // --- Kaydırma (Swipe) İşlemi ---
-    async function handleSwipe(targetId, action, cardElement) {
-        
-        const isLike = action === 'like';
-        
-        // Animasyon
-        cardElement.style.transform = isLike ? 'translateX(400px) rotate(10deg)' : 'translateX(-400px) rotate(-10deg)';
-        
-        // API İsteği
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/swipe/${currentUser.id}/${targetId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            });
-            const data = await response.json();
-
-            if (data.status === 'match') {
-                // Telegram bildirimi gönderildi.
-                Telegram.WebApp.showAlert(`🎉 EŞLEŞME! ${data.target} seni beğendi! Bildirim Telegram'a gitti.`);
-            }
-        } catch (error) {
-            console.error('Swipe hatası:', error);
-        }
-
-        // Bir sonraki profile geç
-        setTimeout(() => {
-            currentProfileIndex++;
-            renderProfile();
-            // Tüm profiller biterse yenisini yükle
-            if (currentProfileIndex >= profiles.length) loadProfiles(); 
-        }, 500); 
-    }
-</script>
-
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="client.js"></script>
 </body>
 </html>
