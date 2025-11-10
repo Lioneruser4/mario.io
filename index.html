@@ -3,27 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Birlikdə İzlə</title>
+    <title>Birlikdə İzlə (Lobi)</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <h1>Birlikdə İzlə Otağı</h1>
-
-    <div class="controls-area">
-        <div class="control-group">
-            <input type="text" id="roomId" placeholder="Otaq ID daxil edin...">
-            <button id="joinRoomBtn">Qoşul / Yarat</button>
+    <div id="lobby-screen">
+        <h1>Birlikdə İzlə Lobi</h1>
+        <div class="input-group">
+            <input type="text" id="username" placeholder="Adınızı daxil edin (örn: Elvin)">
+            <input type="text" id="roomIdInput" placeholder="Otaq Kodu (Boş buraxın, yeni yaratsın)">
         </div>
-
-        <div class="control-group">
-            <input type="text" id="videoUrl" placeholder="YouTube Linkini bura yapışdırın...">
-            <button id="loadVideoBtn">Videonu Yüklə</button>
-        </div>
+        <button id="enterRoomBtn">Odaya Daxil Ol / Yarat</button>
     </div>
 
-    <div id="player-container">
-        <div id="player"></div>
+    <div id="room-screen" class="hidden">
+        <h1>Otaq: <span id="roomCodeDisplay"></span></h1>
+        
+        <div class="room-info">
+            <div class="code-share">
+                <span id="roomCodeToCopy">Oda Kodu: XXXX</span>
+                <button id="copyCodeBtn">Kopyala</button>
+            </div>
+            
+            <div class="user-list-container">
+                <h3 class="users-title">Odadakılar:</h3>
+                <ul id="userList"></ul>
+            </div>
+        </div>
+
+        <div class="controls-area">
+            <div class="control-group">
+                <input type="text" id="videoUrl" placeholder="YouTube Linkini bura yapışdırın...">
+                <button id="loadVideoBtn">Videonu Yüklə</button>
+            </div>
+        </div>
+
+        <div id="player-container">
+            <div id="player"></div>
+        </div>
     </div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
