@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matter.js Sword Ball Duel</title>
+    <title>Matter.js Sword Ball Duel - Pro Edition</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
-        /* General Style and Mobile Responsiveness */
+        /* Base Styling */
         body {
             font-family: 'Arial', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh; /* Full viewport height */
+            min-height: 100vh;
             margin: 0;
             background-color: #2c3e50;
             color: #ecf0f1;
@@ -22,26 +22,26 @@
             box-sizing: border-box;
         }
 
-        /* Main Game Container and Responsive Square Rule */
+        /* Game Arena (Responsive Square) */
         #game-container {
             position: relative;
-            width: 90vmin; /* 90% of the smaller dimension (maintains square) */
+            width: 90vmin; 
             height: 90vmin;
             max-width: 800px; 
             max-height: 800px;
             border: 10px solid #3498db;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
             background-color: #3b5971;
             overflow: hidden;
             margin: 10px;
             flex-shrink: 0;
         }
 
-        /* Ball Photo Divs */
+        /* Ball Visual Div (Handles both Color and Photo) */
         .ball-photo-div {
             position: absolute;
-            width: 80px;
-            height: 80px;
+            /* Size controlled by JS (INITIAL_BALL_RADIUS * 2) */
             border-radius: 50%;
             background-size: cover;
             background-position: center;
@@ -52,9 +52,22 @@
             font-size: 40px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
             z-index: 5;
+            /* **FOTOĞRAF BOYUTU FIX** */
+            background-color: transparent; 
         }
         
-        /* SWORD VISUAL IMPROVEMENT (Circular Sword Emojis) */
+        /* Inner circle for emoji when no photo is uploaded */
+        .ball-emoji-display {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: inherit; /* Inherits initial color or stays transparent */
+        }
+
+        /* SWORD VISUALS */
         .sword-icon-container {
             position: absolute;
             top: 50%;
@@ -65,28 +78,23 @@
             display: none;
             pointer-events: none; 
             z-index: 10;
+            animation: sword-spin 1s linear infinite; /* Base Spin Animation */
         }
 
         .sword-icon {
             position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%) translateY(-50%); 
             font-size: 30px;
-            text-shadow: 0 0 8px #f1c40f, 0 0 5px #e67e22;
-            animation: sword-spin 1s linear infinite; 
-            transform-origin: 50% 150%; 
+            text-shadow: 0 0 0 #f1c40f, 0 0 5px #e67e22;
         }
 
-        /* Three Swords around the ball */
-        .sword-icon-container .sword-1 { transform: rotate(0deg) translate(0, -60px); }
-        .sword-icon-container .sword-2 { transform: rotate(120deg) translate(0, -60px); }
-        .sword-icon-container .sword-3 { transform: rotate(240deg) translate(0, -60px); }
+        /* Positioning the three swords around the center */
+        .sword-icon-container .sword-1 { transform: rotate(0deg) translate(0, -100%) rotate(0deg); }
+        .sword-icon-container .sword-2 { transform: rotate(120deg) translate(0, -100%) rotate(-120deg); }
+        .sword-icon-container .sword-3 { transform: rotate(240deg) translate(0, -100%) rotate(-240deg); }
         
-        /* Base Spin Animation */
         @keyframes sword-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
         /* Hit Effect */
@@ -104,7 +112,7 @@
             100% { transform: translate(1px, 1px) rotate(0deg); }
         }
 
-        /* Item Icon */
+        /* Item Icon (Sword Drop) */
         #item-emoji {
             position: absolute;
             font-size: 40px;
@@ -128,9 +136,11 @@
             width: 30%;
             font-size: 14px;
             text-align: center;
+            background-color: #1a2533;
+            border-radius: 5px;
         }
         
-        /* HEART HEALTH BAR */
+        /* HEART HEALTH DISPLAY */
         .health-display {
             display: flex;
             justify-content: center;
@@ -142,11 +152,12 @@
         .heart {
             font-size: 20px;
             margin: 0 2px;
+            color: #e74c3c; /* Full heart color */
             transition: opacity 0.3s;
         }
         
         .heart.lost {
-            opacity: 0.3;
+            color: #95a5a6; /* Lost heart color */
         }
 
         #customize-button {
@@ -163,14 +174,14 @@
             background-color: #e67e22;
         }
 
-        /* Modals and other UI */
+        /* Modals and other UI (Pro Look) */
         .modal {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
+            background-color: rgba(0, 0, 0, 0.9);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -178,33 +189,25 @@
         }
 
         .modal-content {
-            background-color: #3b5971;
+            background-color: #2c3e50;
             padding: 30px;
             border-radius: 10px;
             text-align: center;
             width: 80%;
             max-width: 500px;
-            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
-        }
-
-        /* ... (Rest of the modal styles from previous version, adapted for English) ... */
-        .player-setup {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 20px;
-        }
-
-        .player-setup > div {
-            width: 45%;
+            box-shadow: 0 0 30px rgba(52, 152, 219, 0.5);
+            border: 1px solid #3498db;
         }
 
         input[type="text"], button, .file-upload-label {
-            margin: 5px 0;
+            margin: 8px 0;
             padding: 10px;
             width: 100%;
             box-sizing: border-box;
             border-radius: 5px;
-            border: none;
+            border: 1px solid #95a5a6;
+            background-color: #ecf0f1;
+            color: #2c3e50;
         }
 
         .file-upload-label {
@@ -213,6 +216,7 @@
             color: white;
             cursor: pointer;
             text-align: center;
+            border: none;
         }
         
         .file-preview {
@@ -223,14 +227,22 @@
             margin: 10px auto;
             background-size: cover;
             background-position: center;
+            border: 2px solid #fff;
+        }
+
+        #start-custom-game-button {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            margin-top: 15px;
         }
 
         #start-custom-game-button:disabled {
-            background-color: #95a5a6;
+            background-color: #5d7c99;
             cursor: not-allowed;
         }
         
-        /* Matter.js Canvas hiding (Only CSS Divs are visible) */
+        /* Matter.js Canvas hiding */
         #game-container canvas {
             position: absolute;
             top: 0;
@@ -245,28 +257,27 @@
     <div class="info-panel">
         <div id="p1-health-status" class="player-status">
             <h3 id="p1-name-display">Player 1 Health: 5/5</h3>
-            <div id="p1-health" class="health-display">
-                </div>
+            <div id="p1-health" class="health-display"></div>
         </div>
         <button id="customize-button">New Game / Customize</button>
         <div id="p2-health-status" class="player-status">
             <h3 id="p2-name-display">Player 2 Health: 5/5</h3>
-            <div id="p2-health" class="health-display">
-                </div>
+            <div id="p2-health" class="health-display"></div>
         </div>
     </div>
 
     <div id="game-container">
-        <div id="ball1-photo" class="ball-photo-div" style="background-color: #FF5252;">
-            🔴
+        <div id="ball1-photo" class="ball-photo-div">
+            <div id="ball1-emoji" class="ball-emoji-display" style="background-color: #FF5252;">🔴</div>
             <div id="p1-sword-container" class="sword-icon-container">
                  <span class="sword-icon sword-1">⚔️</span>
                  <span class="sword-icon sword-2">⚔️</span>
                  <span class="sword-icon sword-3">⚔️</span>
             </div>
         </div>
-        <div id="ball2-photo" class="ball-photo-div" style="background-color: #2196F3;">
-            🔵
+        
+        <div id="ball2-photo" class="ball-photo-div">
+            <div id="ball2-emoji" class="ball-emoji-display" style="background-color: #2196F3;">🔵</div>
             <div id="p2-sword-container" class="sword-icon-container">
                 <span class="sword-icon sword-1">⚔️</span>
                 <span class="sword-icon sword-2">⚔️</span>
@@ -312,60 +323,54 @@
         // Matter.js Modules
         const { Engine, Render, Runner, Bodies, Composite, Events, Body, Vector } = Matter;
 
-        // --- GLOBAL CONSTANTS (SPEED ADJUSTMENT) ---
+        // --- GLOBAL CONSTANTS ---
         const MAX_HEALTH = 5;
-        const BASE_SPEED = 5; // Game speed reduced from 8 to 5
-        const KICK_MULTIPLIER = 2.5; // Kicked ball acceleration multiplier (increased slightly)
+        const BASE_SPEED = 4; // Reduced speed to 4
+        const KICK_DURATION = 500; // 0.5 seconds in milliseconds
+        const KICK_SPEED = 10; // Kicked speed
         const ITEM_RESPAWN_TIME = 3000;
         let INITIAL_BALL_RADIUS = 40; 
         let arenaWidth = 800;
         let arenaHeight = 800;
 
         // --- GLOBAL VARIABLES ---
-        let engine, render, runner, world;
+        let engine, runner, world, render;
         let ball1, ball2;
         let currentItem = null;
         let itemSpawnTimer = null;
         let isGameOver = true;
         
-        // --- SOUND FILES (FROM GITHUB) ---
+        // KICK TIMERS
+        let kickTimer1 = null;
+        let kickTimer2 = null;
+
+        // --- SOUND FILES (Local path assumption) ---
         const knifeSounds = [
-            'YOUR_GITHUB_PATH/knife1.mp3', // **LÜTFEN KENDİ YOLUNUZLA DEĞİŞTİRİN**
-            'YOUR_GITHUB_PATH/knife2.mp3', // **LÜTFEN KENDİ YOLUNUZLA DEĞİŞTİRİN**
-            'YOUR_GITHUB_PATH/knife3.mp3'  // **LÜTFEN KENDİ YOLUNUZLA DEĞİŞTİRİN**
+            'knife1.mp3', 
+            'knife2.mp3', 
+            'knife3.mp3'
         ];
-        // Örnek: 'https://raw.githubusercontent.com/username/repo/main/knife1.mp3'
 
         // HTML Elements and Player Info
         const gameContainer = document.getElementById('game-container');
-        const photo1Div = document.getElementById('ball1-photo');
-        const photo2Div = document.getElementById('ball2-photo');
-        const itemEmojiDiv = document.getElementById('item-emoji');
         const p1NameDisplay = document.getElementById('p1-name-display');
         const p2NameDisplay = document.getElementById('p2-name-display');
-        const setupModal = document.getElementById('setup-modal');
-        const gameOverModal = document.getElementById('game-over-modal');
-        const winnerText = document.getElementById('winner-text');
-        const winnerEmoji = document.getElementById('winner-emoji');
-        const customizeButton = document.getElementById('customize-button');
-        const startGameCustomButton = document.getElementById('start-custom-game-button');
-        const p1NameInput = document.getElementById('p1-name-input');
-        const p2NameInput = document.getElementById('p2-name-input');
-        
-        // New Health Bar Elements
+        const itemEmojiDiv = document.getElementById('item-emoji');
         const p1HealthDisplay = document.getElementById('p1-health');
         const p2HealthDisplay = document.getElementById('p2-health');
-
+        
+        // Player Info Object
         const playerInfo = {
             ball1: {
                 id: 'ball1',
                 name: 'Player 1',
                 health: MAX_HEALTH,
                 hasSword: false,
-                texture: '',
+                texture: null,
                 emoji: '🔴',
                 color: '#FF5252',
-                photoDiv: photo1Div,
+                photoDiv: document.getElementById('ball1-photo'),
+                emojiDiv: document.getElementById('ball1-emoji'),
                 nameDisplay: p1NameDisplay,
                 healthDisplay: p1HealthDisplay,
                 swordContainer: document.getElementById('p1-sword-container')
@@ -375,10 +380,11 @@
                 name: 'Player 2',
                 health: MAX_HEALTH,
                 hasSword: false,
-                texture: '',
+                texture: null,
                 emoji: '🔵',
                 color: '#2196F3',
-                photoDiv: photo2Div,
+                photoDiv: document.getElementById('ball2-photo'),
+                emojiDiv: document.getElementById('ball2-emoji'),
                 nameDisplay: p2NameDisplay,
                 healthDisplay: p2HealthDisplay,
                 swordContainer: document.getElementById('p2-sword-container')
@@ -390,13 +396,13 @@
             const randomIndex = Math.floor(Math.random() * knifeSounds.length);
             const audio = new Audio(knifeSounds[randomIndex]);
             audio.volume = 0.5;
-            audio.play().catch(e => console.error("Sound playback failed:", e));
+            audio.play().catch(e => console.error("Sound playback failed (Check file path):", e));
         }
 
+        // --- HEALTH AND VISUALS ---
 
-        // --- HEART HEALTH RENDER FUNCTION ---
         function renderHearts(player) {
-            player.healthDisplay.innerHTML = ''; // Clear existing hearts
+            player.healthDisplay.innerHTML = '';
             for (let i = 0; i < MAX_HEALTH; i++) {
                 const heart = document.createElement('span');
                 heart.className = 'heart';
@@ -419,14 +425,34 @@
             if (p2Health <= 0) endGame(p1);
         }
 
-        // --- RESPONSIVE AND ARENA MANAGEMENT ---
+        // FIX: Photo size matching ball size and hiding color top
+        function updateBallVisuals(player) {
+            const ballDiameter = INITIAL_BALL_RADIUS * 2;
+            player.photoDiv.style.width = `${ballDiameter}px`;
+            player.photoDiv.style.height = `${ballDiameter}px`;
+            
+            if (player.texture) {
+                // If texture exists, apply it to the main div and hide the inner emoji div
+                player.photoDiv.style.backgroundImage = `url(${player.texture})`;
+                player.emojiDiv.style.display = 'none';
+            } else {
+                // If no texture, hide background image and show the colored emoji div
+                player.photoDiv.style.backgroundImage = 'none';
+                player.emojiDiv.style.display = 'flex';
+                player.emojiDiv.style.backgroundColor = player.color;
+            }
+        }
+
+        // --- ARENA AND INITIALIZATION ---
+
         function updateArenaSize() {
+            // ... (Same updateArenaSize logic) ...
             const container = gameContainer;
             const size = Math.min(container.clientWidth, container.clientHeight);
             
             arenaWidth = size;
             arenaHeight = size;
-            INITIAL_BALL_RADIUS = size * 0.05; // 5% radius
+            INITIAL_BALL_RADIUS = size * 0.05; 
             
             if (render) {
                 render.canvas.width = arenaWidth;
@@ -436,11 +462,8 @@
                 Render.setPixelRatio(render, window.devicePixelRatio);
             }
 
-            const ballDiameter = INITIAL_BALL_RADIUS * 2;
-            photo1Div.style.width = `${ballDiameter}px`;
-            photo1Div.style.height = `${ballDiameter}px`;
-            photo2Div.style.width = `${ballDiameter}px`;
-            photo2Div.style.height = `${ballDiameter}px`;
+            updateBallVisuals(playerInfo.ball1);
+            updateBallVisuals(playerInfo.ball2);
             
             if (ball1 && ball2) {
                 Body.set(ball1, 'circleRadius', INITIAL_BALL_RADIUS);
@@ -451,6 +474,7 @@
         }
 
         function setupWalls() {
+            // ... (Same setupWalls logic) ...
             if (!world) return;
             Composite.allBodies(world).forEach(body => {
                 if (body.label === 'wall' || body.label === 'sword') {
@@ -470,7 +494,8 @@
         }
 
         function initializeGame() {
-            if (!engine) {
+            // ... (Same initialization logic) ...
+             if (!engine) {
                 engine = Engine.create();
                 world = engine.world;
                 world.gravity.y = 0;
@@ -548,55 +573,44 @@
             setTimeout(spawnItem, 1000);
         }
 
-        // Fix: Ensure photo only shows, without underlying color
-        function updateBallVisuals(player) {
-            if (player.texture) {
-                player.photoDiv.style.backgroundImage = `url(${player.texture})`;
-                player.photoDiv.textContent = '';
-                player.photoDiv.style.backgroundColor = 'transparent'; // FIX: Remove colored background
+        // --- GAME LOOP & KICK MANAGEMENT ---
+
+        function applyKick(ball, duration) {
+            const currentVelocity = ball.velocity;
+            const currentSpeed = Vector.magnitude(currentVelocity);
+
+            // Apply kick speed
+            if (currentSpeed > 0) {
+                const newVelocity = Vector.mult(Vector.normalise(currentVelocity), KICK_SPEED);
+                Body.setVelocity(ball, newVelocity);
+            }
+            
+            // Set timer to reset speed after duration
+            const player = (ball === ball1) ? playerInfo.ball1 : playerInfo.ball2;
+            if (player.id === 'ball1') {
+                clearTimeout(kickTimer1);
+                kickTimer1 = setTimeout(() => {
+                    resetSpeed(ball);
+                }, duration);
             } else {
-                player.photoDiv.style.backgroundImage = 'none';
-                player.photoDiv.style.backgroundColor = player.color;
-                player.photoDiv.textContent = player.emoji;
-            }
-        }
-
-        // Responsive handling
-        const resizeObserver = new ResizeObserver(entries => {
-            if (isGameOver) return;
-            
-            const oldArenaWidth = arenaWidth;
-            const oldArenaHeight = arenaHeight;
-            
-            updateArenaSize();
-            
-            if (ball1 && ball2 && oldArenaWidth > 0 && oldArenaHeight > 0) {
-                const scaleX = arenaWidth / oldArenaWidth;
-                const scaleY = arenaHeight / oldArenaHeight;
-                
-                Body.setPosition(ball1, { x: ball1.position.x * scaleX, y: ball1.position.y * scaleY });
-                Body.setPosition(ball2, { x: ball2.position.x * scaleX, y: ball2.position.y * scaleY });
-            }
-        });
-        resizeObserver.observe(gameContainer);
-
-
-        // --- GAME LOGIC FUNCTIONS ---
-        function updatePhotoPosition(body, player) {
-            if (body) {
-                player.photoDiv.style.left = `${body.position.x - INITIAL_BALL_RADIUS}px`;
-                player.photoDiv.style.top = `${body.position.y - INITIAL_BALL_RADIUS}px`;
-                Body.setAngularVelocity(body, 0); 
-                
-                if (player.hasSword) {
-                    player.swordContainer.style.display = 'block';
-                } else {
-                    player.swordContainer.style.display = 'none';
-                }
+                clearTimeout(kickTimer2);
+                kickTimer2 = setTimeout(() => {
+                    resetSpeed(ball);
+                }, duration);
             }
         }
         
-        // Speed and Boundary Control (Updated)
+        function resetSpeed(ball) {
+             const currentVelocity = ball.velocity;
+             const currentSpeed = Vector.magnitude(currentVelocity);
+             
+             if (currentSpeed > BASE_SPEED) {
+                const newVelocity = Vector.mult(Vector.normalise(currentVelocity), BASE_SPEED);
+                Body.setVelocity(ball, newVelocity);
+             }
+        }
+
+        // Game Loop Update
         const afterUpdateHandler = function() {
             if (isGameOver || !ball1 || !ball2) return; 
 
@@ -605,56 +619,52 @@
                 itemEmojiDiv.style.top = `${currentItem.position.y}px`;
             }
 
-            updatePhotoPosition(ball1, playerInfo.ball1);
-            updatePhotoPosition(ball2, playerInfo.ball2);
-
-            const checkBallBoundsAndSpeed = (ball) => {
-                const wallThickness = 20;
-                const halfBall = INITIAL_BALL_RADIUS;
-                let newX = ball.position.x;
-                let newY = ball.position.y;
-                let velocity = { ...ball.velocity };
-
-                // Boundary Control
-                const minX = wallThickness + halfBall;
-                const maxX = arenaWidth - wallThickness - halfBall;
-                const minY = wallThickness + halfBall;
-                const maxY = arenaHeight - wallThickness - halfBall;
-
-                if (newX < minX) { newX = minX; velocity.x = Math.abs(velocity.x); } 
-                else if (newX > maxX) { newX = maxX; velocity.x = -Math.abs(velocity.x); }
-
-                if (newY < minY) { newY = minY; velocity.y = Math.abs(velocity.y); } 
-                else if (newY > maxY) { newY = maxY; velocity.y = -Math.abs(velocity.y); }
-                
-                if (newX !== ball.position.x || newY !== ball.position.y) {
-                    Body.setPosition(ball, { x: newX, y: newY });
+            // Update photo positions
+            const updateBallDisplay = (ball, player) => {
+                if (ball) {
+                    player.photoDiv.style.left = `${ball.position.x - INITIAL_BALL_RADIUS}px`;
+                    player.photoDiv.style.top = `${ball.position.y - INITIAL_BALL_RADIUS}px`;
+                    player.swordContainer.style.display = player.hasSword ? 'block' : 'none';
+                    Body.setAngularVelocity(ball, 0); 
                 }
-                
-                // SPEED CONTROL (Maintain speed around BASE_SPEED, or Kicked speed)
-                const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-                const targetSpeed = Math.max(BASE_SPEED, currentSpeed); // Use current speed if higher than base (e.g., after a kick)
-                
-                if (currentSpeed !== 0 && currentSpeed !== BASE_SPEED) {
-                    // Only damp or adjust if significantly higher than KICK_MULTIPLIER * BASE_SPEED 
-                    // or if it dropped below BASE_SPEED.
-                    const maxSpeedLimit = BASE_SPEED * KICK_MULTIPLIER * 1.5; 
-                    if (currentSpeed > maxSpeedLimit || currentSpeed < BASE_SPEED * 0.9) {
-                        const scaleFactor = BASE_SPEED / currentSpeed;
-                        velocity.x *= scaleFactor;
-                        velocity.y *= scaleFactor;
-                    }
-                }
-
-                Body.setVelocity(ball, velocity);
-                Body.setAngularVelocity(ball, 0); 
             };
 
-            checkBallBoundsAndSpeed(ball1);
-            checkBallBoundsAndSpeed(ball2);
+            updateBallDisplay(ball1, playerInfo.ball1);
+            updateBallDisplay(ball2, playerInfo.ball2);
+
+            // Apply Speed Dampening (To return to BASE_SPEED after kick/impact)
+            const checkSpeed = (ball) => {
+                const currentVelocity = ball.velocity;
+                const currentSpeed = Vector.magnitude(currentVelocity);
+                
+                // If speed is much higher than BASE_SPEED and the kick timer is finished, reduce it.
+                const player = (ball === ball1) ? playerInfo.ball1 : playerInfo.ball2;
+                const isKicked = (player.id === 'ball1' && kickTimer1 !== null) || (player.id === 'ball2' && kickTimer2 !== null);
+                
+                if (!isKicked && currentSpeed > BASE_SPEED * 1.1) {
+                    // Gradual dampening back to BASE_SPEED
+                    const dampeningFactor = (BASE_SPEED * 1.05) / currentSpeed;
+                    const newVelocity = Vector.mult(currentVelocity, dampeningFactor);
+                    Body.setVelocity(ball, newVelocity);
+                } else if (currentSpeed < BASE_SPEED * 0.95 && currentSpeed > 0) {
+                     // Minor acceleration back to BASE_SPEED if too slow
+                    const boostFactor = (BASE_SPEED) / currentSpeed;
+                    const newVelocity = Vector.mult(currentVelocity, boostFactor);
+                    Body.setVelocity(ball, newVelocity);
+                }
+                
+                // Keep speed capped at KICK_SPEED for safety
+                if (currentSpeed > KICK_SPEED) {
+                    const cappedVelocity = Vector.mult(Vector.normalise(currentVelocity), KICK_SPEED);
+                    Body.setVelocity(ball, cappedVelocity);
+                }
+            };
+
+            checkSpeed(ball1);
+            checkSpeed(ball2);
         };
         
-        // Collision Logic (Sword Damage and KICK)
+        // --- COLLISION LOGIC ---
         const collisionStartHandler = function(event) {
             if (isGameOver) return;
 
@@ -665,8 +675,9 @@
                 const isItemCollision = labels.includes('sword');
                 const isBallCollision = labels.includes('ball1') && labels.includes('ball2');
 
-                // 1. Item Pickup
+                // 1. Item Pickup (Sword)
                 if (isItemCollision && (labels.includes('ball1') || labels.includes('ball2'))) {
+                    // FIX: Sword was correctly picked up before. The issue was dynamic.
                     const takerBall = pair.bodyA.label.startsWith('ball') ? pair.bodyA : pair.bodyB;
                     
                     playerInfo.ball1.hasSword = (takerBall === ball1);
@@ -686,7 +697,6 @@
                     let damageDealt = false;
                     let damagedPlayer = null;
                     let damagedBall = null;
-                    let attackingBall = null;
 
                     if (p1.hasSword && !p2.hasSword) {
                         p2.health--;
@@ -694,14 +704,12 @@
                         damageDealt = true;
                         damagedPlayer = p2;
                         damagedBall = ball2;
-                        attackingBall = ball1;
                     } else if (p2.hasSword && !p1.hasSword) {
                         p1.health--;
                         p2.hasSword = false;
                         damageDealt = true;
                         damagedPlayer = p1;
                         damagedBall = ball1;
-                        attackingBall = ball2;
                     } else if (p1.hasSword && p2.hasSword) {
                         p1.hasSword = false;
                         p2.hasSword = false;
@@ -715,15 +723,8 @@
                         damagedPlayer.photoDiv.classList.add('hit-effect');
                         removeHitEffect(damagedPlayer);
 
-                        // KICK EFFECT (Speed up the damaged ball)
-                        const currentVelocity = damagedBall.velocity;
-                        const currentSpeed = Vector.magnitude(currentVelocity);
-
-                        if (currentSpeed > 0) {
-                            const newSpeed = BASE_SPEED * KICK_MULTIPLIER;
-                            const newVelocity = Vector.mult(Vector.normalise(currentVelocity), newSpeed);
-                            Body.setVelocity(damagedBall, newVelocity);
-                        }
+                        // KICK EFFECT (Apply temporary speed up)
+                        applyKick(damagedBall, KICK_DURATION);
                     }
                 }
             });
@@ -738,8 +739,9 @@
         function spawnItem() {
             if (isGameOver) return;
             const size = 15;
-            const x = Math.random() * (arenaWidth - 100) + 50;
-            const y = Math.random() * (arenaHeight - 100) + 50;
+            // Spawn closer to center to keep it accessible
+            const x = Math.random() * (arenaWidth - 200) + 100;
+            const y = Math.random() * (arenaHeight - 200) + 100;
             
             currentItem = Bodies.circle(x, y, size, { 
                 isStatic: true, 
@@ -758,10 +760,16 @@
             isGameOver = true;
             Runner.stop(runner);
             clearTimeout(itemSpawnTimer);
+            clearTimeout(kickTimer1);
+            clearTimeout(kickTimer2);
+
+            document.getElementById('p1-sword-container').style.display = 'none';
+            document.getElementById('p2-sword-container').style.display = 'none';
+
 
             winnerText.textContent = `${winner.name} Wins!`;
             winnerEmoji.textContent = winner.emoji;
-            gameOverModal.style.display = 'flex';
+            document.getElementById('game-over-modal').style.display = 'flex';
         }
 
 
@@ -781,45 +789,56 @@
         }
         
         function checkSetupComplete() {
-            const p1Name = p1NameInput.value.trim();
-            const p2Name = p2NameInput.value.trim();
+            const p1Name = document.getElementById('p1-name-input').value.trim();
+            const p2Name = document.getElementById('p2-name-input').value.trim();
             
             if (p1Name && p2Name) {
-                startGameCustomButton.disabled = false;
+                document.getElementById('start-custom-game-button').disabled = false;
             } else {
-                startGameCustomButton.disabled = true;
+                document.getElementById('start-custom-game-button').disabled = true;
             }
         }
 
         function setupGameAndStart() {
-            playerInfo.ball1.name = p1NameInput.value.trim() || 'Player 1';
-            playerInfo.ball2.name = p2NameInput.value.trim() || 'Player 2';
+            playerInfo.ball1.name = document.getElementById('p1-name-input').value.trim() || 'Player 1';
+            playerInfo.ball2.name = document.getElementById('p2-name-input').value.trim() || 'Player 2';
             
-            // Set visuals based on uploaded textures
-            // Texture is already set in handleFileChange
-            
-            setupModal.style.display = 'none';
+            document.getElementById('setup-modal').style.display = 'none';
             initializeGame();
         }
 
         // --- EVENT LISTENERS ---
-        p1NameInput.addEventListener('input', checkSetupComplete);
-        p2NameInput.addEventListener('input', checkSetupComplete);
+        document.getElementById('p1-name-input').addEventListener('input', checkSetupComplete);
+        document.getElementById('p2-name-input').addEventListener('input', checkSetupComplete);
         document.getElementById('p1-file').addEventListener('change', (e) => handleFileChange(e, playerInfo.ball1));
         document.getElementById('p2-file').addEventListener('change', (e) => handleFileChange(e, playerInfo.ball2));
-        startGameCustomButton.addEventListener('click', setupGameAndStart);
-        customizeButton.addEventListener('click', () => setupModal.style.display = 'flex');
+        document.getElementById('start-custom-game-button').addEventListener('click', setupGameAndStart);
+        document.getElementById('customize-button').addEventListener('click', () => document.getElementById('setup-modal').style.display = 'flex');
         document.getElementById('restart-button').addEventListener('click', () => {
-            gameOverModal.style.display = 'none';
+            document.getElementById('game-over-modal').style.display = 'none';
             initializeGame();
         });
         document.getElementById('new-game-button').addEventListener('click', () => {
-            gameOverModal.style.display = 'none';
-            setupModal.style.display = 'flex';
+            document.getElementById('game-over-modal').style.display = 'none';
+            document.getElementById('setup-modal').style.display = 'flex';
         });
 
-        // Initial setup check
+        // Initial setup check and arena observation
         checkSetupComplete(); 
+        const resizeObserver = new ResizeObserver(entries => {
+            if (isGameOver) return;
+            const oldArenaWidth = arenaWidth;
+            const oldArenaHeight = arenaHeight;
+            updateArenaSize();
+            // Reposition balls proportionally on resize
+            if (ball1 && ball2 && oldArenaWidth > 0 && oldArenaHeight > 0) {
+                const scaleX = arenaWidth / oldArenaWidth;
+                const scaleY = arenaHeight / oldArenaHeight;
+                Body.setPosition(ball1, { x: ball1.position.x * scaleX, y: ball1.position.y * scaleY });
+                Body.setPosition(ball2, { x: ball2.position.x * scaleX, y: ball2.position.y * scaleY });
+            }
+        });
+        resizeObserver.observe(gameContainer);
     </script>
 </body>
 </html>
