@@ -1,14 +1,13 @@
-const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Events, Body, Common } = Matter;
 
 // --- AYARLAR ---
 const arenaWidth = 1000;
 const arenaHeight = 750;
-const ballRadius = 60; // Topları daha da büyüttük
+const ballRadius = 60; 
 const maxHealth = 3; 
 const itemSize = 40;
 const itemRespawnTime = 3000; 
-const randomForceMagnitude = 0.015;
-const initialSpeed = 8;
+const MAX_SPEED = 10; // ! YENİ: Topların ulaşabileceği maksimum ve sabit hız
 let isGameOver = false;
 
 // --- HTML ELEMANLARI ---
@@ -29,8 +28,9 @@ const restartButton = document.getElementById('restart-button');
 // --- MATTER.JS DEĞİŞKENLERİ ---
 const engine = Engine.create();
 const world = engine.world;
-world.gravity.y = 0.0000001; 
-world.gravity.x = 0.0000001;
+// Yer çekimini ihmal et
+world.gravity.y = 0; 
+world.gravity.x = 0;
 let runner; 
 
 const gameContainer = document.getElementById('game-container');
@@ -66,7 +66,6 @@ const playerInfo = {
 // --- YARDIMCI FONKSİYONLAR ---
 
 function updateHealthBar(player, health) {
-    // ... (Aynı kalır) ...
     const healthPercentage = (health / maxHealth) * 100;
     player.healthBar.style.width = `${healthPercentage}%`;
     
@@ -80,11 +79,10 @@ function updateHealthBar(player, health) {
 }
 
 function updateEmojiPosition(body, emojiDiv) {
-    // ... (Aynı kalır) ...
     if (body) {
         emojiDiv.style.left = `${body.position.x}px`;
         emojiDiv.style.top = `${body.position.y}px`;
-        Body.setAngularVelocity(body, 0); // Dönmeyi engelle
+        Body.setAngularVelocity(body, 0); 
 
         const player = body === ball1 ? playerInfo.ball1 : playerInfo.ball2;
         if (player.hasSword) {
@@ -97,23 +95,24 @@ function updateEmojiPosition(body, emojiDiv) {
 }
 
 function endGame(winnerPlayer) {
-    // ... (Aynı kalır) ...
     if (isGameOver) return;
     isGameOver = true;
     
-    Runner.stop(runner);
+    Runner.stop(runner); 
 
     const winnerName = winnerPlayer.name;
-    const winnerEmojiCode = winnerPlayer.texture ? '' : '🏆'; // Fotoğraf varsa emoji gösterme
+    const winnerEmojiCode = winnerPlayer.texture ? '' : '🏆'; 
 
     winnerText.textContent = `${winnerName} KAZANDI!`;
     winnerEmoji.textContent = winnerEmojiCode;
-    // Fotoğraf varsa moda kapak fotoğrafı yap
+    
     if (winnerPlayer.texture) {
         winnerEmoji.style.backgroundImage = `url(${winnerPlayer.texture})`;
         winnerEmoji.style.borderRadius = '50%';
         winnerEmoji.style.backgroundSize = 'cover';
-        winnerEmoji.textContent = ''; // Emoji metnini sil
+        winnerEmoji.textContent = ''; 
+    } else {
+         winnerEmoji.style.backgroundImage = 'none';
     }
 
     gameOverModal.style.display = 'flex';
@@ -144,25 +143,25 @@ function setupFileReader(fileInput, previewDiv, player) {
             reader.readAsDataURL(file);
         }
     });
-    // İsim girme kontrolü
-    fileInput.previousElementSibling.previousElementSibling.addEventListener('input', checkCanStart);
 }
 
+// İsim ve dosya girişlerini kontrol etme
 setupFileReader(p1FileInput, p1Preview, playerInfo.ball1);
 setupFileReader(p2FileInput, p2Preview, playerInfo.ball2);
 p1NameInput.addEventListener('input', checkCanStart);
 p2NameInput.addEventListener('input', checkCanStart);
+
+// Matter.js'in varsayılan doku boyutunu 256x256 olarak kabul ederiz.
+// Fotoğrafı tam kaplaması için ölçeklendirme 1'e ayarlanır.
+const spriteScale = (2 * ballRadius) / 256; 
 
 function startGame() {
     // İsimleri al ve kaydet
     playerInfo.ball1.name = p1NameInput.value.trim() || 'Player 1';
     playerInfo.ball2.name = p2NameInput.value.trim() || 'Player 2';
     
-    // Kurulum modalını gizle
     setupModal.style.display = 'none';
     
-    // Oyunu başlat
-
     // Render Kurulumu
     const render = Render.create({
         element: gameContainer,
@@ -178,7 +177,7 @@ function startGame() {
     runner = Runner.create();
     Runner.run(runner, engine);
 
-    // Duvarlar (Kalan kısmı)
+    // Duvarlar
     const wallThickness = 20;
     Composite.add(world, [
         Bodies.rectangle(arenaWidth / 2, wallThickness / 2, arenaWidth, wallThickness, { isStatic: true, label: 'wall', render: { fillStyle: '#333' } }),
@@ -191,7 +190,8 @@ function startGame() {
     const ballOptions = {
         restitution: 1.0,
         friction: 0.0,
-        frictionAir: 0.001,
+        // ! DÜZELTME 2: Hızı korumak için hava sürtünmesini sıfırla
+        frictionAir: 0.0, 
         density: 0.001,
         inertia: Infinity,
         angularVelocity: 0,
@@ -202,10 +202,11 @@ function startGame() {
         ...ballOptions, 
         label: 'ball1',
         render: {
+            // ! DÜZELTME 1: Sprite ayarlarını basitleştirerek fotoğrafın gözükmesini sağla
             sprite: {
                 texture: playerInfo.ball1.texture,
-                xScale: 2 * ballRadius / 256, // Fotoğrafı top boyutuna göre ölçeklendir
-                yScale: 2 * ballRadius / 256
+                xScale: spriteScale, 
+                yScale: spriteScale
             }
         }
     });
@@ -216,8 +217,8 @@ function startGame() {
         render: {
             sprite: {
                 texture: playerInfo.ball2.texture,
-                xScale: 2 * ballRadius / 256,
-                yScale: 2 * ballRadius / 256
+                xScale: spriteScale,
+                yScale: spriteScale
             }
         }
     });
@@ -225,8 +226,8 @@ function startGame() {
     Composite.add(world, [ball1, ball2]);
     
     // Başlangıç Hızı
-    Body.setVelocity(ball1, { x: initialSpeed, y: initialSpeed * (Math.random() > 0.5 ? 1 : -1) });
-    Body.setVelocity(ball2, { x: -initialSpeed, y: initialSpeed * (Math.random() > 0.5 ? 1 : -1) });
+    Body.setVelocity(ball1, { x: MAX_SPEED, y: MAX_SPEED * (Math.random() > 0.5 ? 1 : -1) });
+    Body.setVelocity(ball2, { x: -MAX_SPEED, y: MAX_SPEED * (Math.random() > 0.5 ? 1 : -1) });
 
     // Can ve İsimleri Güncelle
     updateHealthBar(playerInfo.ball1, maxHealth);
@@ -241,10 +242,34 @@ function startGame() {
 startGameButton.addEventListener('click', startGame);
 restartButton.addEventListener('click', () => { location.reload(); });
 
+// --- ÖĞE SİSTEMİ ---
+let currentItem = null;
+let itemSpawnTimer = null;
+const itemEmojiDiv = document.getElementById('item-emoji');
 
-// --- EVENT HANDLERS (Oyun başladıktan sonra aktifleşir) ---
+function spawnItem() {
+    const x = Math.random() * (arenaWidth - wallThickness * 4) + wallThickness * 2;
+    const y = Math.random() * (arenaHeight - wallThickness * 4) + wallThickness * 2;
 
-// Topların hareketi ve vuruş efekti
+    const currentItemType = Math.random() < 0.5 ? 'sword' : 'bomb';
+    const emoji = currentItemType === 'sword' ? '⚔️' : '💣';
+
+    currentItem = Bodies.circle(x, y, itemSize / 2, { 
+        isStatic: true, 
+        render: { fillStyle: 'transparent' }, 
+        label: currentItemType
+    });
+
+    Composite.add(world, currentItem);
+    itemEmojiDiv.textContent = emoji;
+    itemEmojiDiv.style.display = 'block';
+    
+    clearTimeout(itemSpawnTimer);
+}
+
+// --- EVENT HANDLERS ---
+
+// Topların sabit hızda kalmasını sağlama ve Vuruş Efekti
 const afterUpdateHandler = function() {
     if (isGameOver) return; 
 
@@ -256,29 +281,23 @@ const afterUpdateHandler = function() {
     updateEmojiPosition(ball1, playerInfo.ball1.emoji);
     updateEmojiPosition(ball2, playerInfo.ball2.emoji);
 
-    // Rastgele kuvvet mantığı aynı kalır
-    const minVelocitySquared = 0.5; 
-    const maxVelocitySquared = 50; 
-
-    const applyRandomForce = (ball) => {
-        const currentVelocitySquared = ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y;
+    const checkSpeed = (ball) => {
+        const speed = Math.sqrt(ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y);
         
-        if (currentVelocitySquared < minVelocitySquared) {
-            Body.applyForce(ball, ball.position, { 
-                x: (Math.random() - 0.5) * randomForceMagnitude * 2, 
-                y: (Math.random() - 0.5) * randomForceMagnitude * 2
+        // ! KRİTİK DÜZELTME: Hız eşiğin altına düşerse tekrar hızlandır
+        if (speed < MAX_SPEED) {
+            const scaleFactor = MAX_SPEED / speed;
+            Body.setVelocity(ball, { 
+                x: ball.velocity.x * scaleFactor, 
+                y: ball.velocity.y * scaleFactor 
             });
         }
         
-        if (currentVelocitySquared > maxVelocitySquared) {
-             const factor = Math.sqrt(maxVelocitySquared / currentVelocitySquared);
-             Body.setVelocity(ball, { x: ball.velocity.x * factor, y: ball.velocity.y * factor });
-        }
         Body.setAngularVelocity(ball, 0);
     };
 
-    applyRandomForce(ball1);
-    applyRandomForce(ball2);
+    checkSpeed(ball1);
+    checkSpeed(ball2);
 };
 
 // Vuruş efekti kaldırma
@@ -299,7 +318,6 @@ const collisionStartHandler = function(event) {
         const isItemCollision = labels.includes('sword') || labels.includes('bomb');
         const isBallCollision = labels.includes('ball1') && labels.includes('ball2');
 
-        // ... (Öğe Alma Mantığı aynı kalır) ...
         if (isItemCollision && (labels.includes('ball1') || labels.includes('ball2'))) {
             const itemBody = pair.bodyA.label === 'sword' || pair.bodyA.label === 'bomb' ? pair.bodyA : pair.bodyB;
             const takerBall = pair.bodyA.label.startsWith('ball') ? pair.bodyA : pair.bodyB;
@@ -312,7 +330,7 @@ const collisionStartHandler = function(event) {
             } else if (itemBody.label === 'bomb') {
                 player.health--;
                 updateHealthBar(player, player.health);
-                player.emoji.classList.add('hit-effect'); // Hasar Efekti
+                player.emoji.classList.add('hit-effect'); 
                 removeHitEffect(player);
 
                 if (player.hasSword) {
@@ -327,7 +345,6 @@ const collisionStartHandler = function(event) {
             itemSpawnTimer = setTimeout(spawnItem, itemRespawnTime);
         }
 
-        // 2. Topların Birbirine Çarpışması
         if (isBallCollision) {
             const p1 = playerInfo.ball1;
             const p2 = playerInfo.ball2;
@@ -359,7 +376,6 @@ const collisionStartHandler = function(event) {
                 updateHealthBar(p1, p1.health);
                 updateHealthBar(p2, p2.health);
                 
-                // Vuruş Efekti Uygula
                 damagedPlayer.emoji.classList.add('hit-effect'); 
                 removeHitEffect(damagedPlayer);
 
