@@ -202,7 +202,7 @@ function initializeGame() {
     
     // Event listener'ları ekle
     Events.on(engine, 'afterUpdate', afterUpdateHandler);
-    Events.on(engine, 'collisionStart', collisionStartHandler);
+    Events.on(engine, 'collisionStart', collisionHandler);
     
     // Ekran boyutunu güncelle
     updateArenaSize();
@@ -256,11 +256,11 @@ function initializeGame() {
     
     // Topların oluşturulması
     const ballOptions = {
-        restitution: 0.9,
-        friction: 0.005,
-        frictionAir: 0.01,
-        density: 0.5,
-        inertia: Infinity,
+        restitution: 1, // Mükemmel sekme
+        friction: 0, // Sürtünme yok
+        frictionAir: 0, // Hava direnci yok
+        density: 0.1, // Düşük yoğunluk
+        inertia: Infinity, // Dönme ataleti
         render: { 
             fillStyle: 'transparent',
             strokeStyle: 'transparent'
@@ -272,36 +272,44 @@ function initializeGame() {
         }
     };
 
-    // Topları oluştur
+    // Topları oluştur ve rastgele hız ver
     ball1 = Bodies.circle(
-        arenaWidth / 4, 
+        arenaWidth / 3, 
         arenaHeight / 2, 
         INITIAL_BALL_RADIUS, 
         { 
             ...ballOptions, 
             label: 'ball1',
-            mass: 10,
-            inverseMass: 1/10
+            mass: 1,
+            inverseMass: 1
         }
     );
 
     ball2 = Bodies.circle(
-        arenaWidth * 3 / 4, 
+        arenaWidth * 2 / 3, 
         arenaHeight / 2, 
         INITIAL_BALL_RADIUS, 
         { 
             ...ballOptions, 
             label: 'ball2',
-            mass: 10,
-            inverseMass: 1/10
+            mass: 1,
+            inverseMass: 1
         }
     );
+    
+    // Toplara başlangıç hızı ver
+    const speed = 5 + Math.random() * 3;
+    Body.setVelocity(ball1, { x: speed, y: speed * (Math.random() > 0.5 ? 1 : -1) });
+    Body.setVelocity(ball2, { x: -speed, y: speed * (Math.random() > 0.5 ? 1 : -1) });
 
     // Topları dünyaya ekle
     Composite.add(world, [ball1, ball2]);
     
     // Fizik motorunu başlat
-    Engine.update(engine);
+    if (!gameState.runner) {
+        gameState.runner = Runner.create();
+        Runner.run(gameState.runner, engine);
+    }
     
     // CSS Fotoğraflarını Ayarla
     // ! DÜZELTME 2: Fotoğraf yolları yoksa div'i temizle
@@ -309,20 +317,20 @@ function initializeGame() {
     playerInfo.ball2.photoDiv.style.backgroundImage = playerInfo.ball2.texture ? `url(${playerInfo.ball2.texture})` : 'none';
 
 
-    // Başlangıç Hızı (daha yüksek hız)
-    const speed = MAX_SPEED * 2;
+    // Toplara rastgele başlangıç hızları ver
+    const speed = 5 + Math.random() * 3; // 5-8 arası hız
+    const angle1 = Math.random() * Math.PI * 2; // Rastgele açı
+    const angle2 = Math.PI + Math.random() * Math.PI; // Karşı yönde rastgele açı
+    
     Body.setVelocity(ball1, { 
-        x: speed, 
-        y: speed * (Math.random() > 0.5 ? 1 : -0.5) 
-    });
-    Body.setVelocity(ball2, { 
-        x: -speed, 
-        y: speed * (Math.random() > 0.5 ? 1 : -0.5) 
+        x: Math.cos(angle1) * speed, 
+        y: Math.sin(angle1) * speed 
     });
     
-    // Açısal hızı sıfırla
-    Body.setAngularVelocity(ball1, 0);
-    Body.setAngularVelocity(ball2, 0);
+    Body.setVelocity(ball2, { 
+        x: Math.cos(angle2) * speed, 
+        y: Math.sin(angle2) * speed 
+    });
 
     // Can ve İsimleri Güncelle
     updateHealthBar(playerInfo.ball1, MAX_HEALTH);
