@@ -1,10 +1,9 @@
 const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
 
 // --- AYARLAR ---
-// Başlangıçta 900x900 kare kabul edilecek, ancak JS ile güncellenecek
-let arenaWidth = 900; 
-let arenaHeight = 900;
-const INITIAL_BALL_RADIUS = 60;
+let arenaWidth = 0; 
+let arenaHeight = 0;
+let INITIAL_BALL_RADIUS = 0;
 const MAX_HEALTH = 5; 
 const itemSize = 40;
 const itemRespawnTime = 3000;
@@ -47,16 +46,53 @@ let ball1, ball2;
 
 // --- OYUNCU BİLGİLERİ ---
 const playerInfo = {
-    // ! DÜZELTME: Varsayılan değerler boş string olmalı ki, fotoğraf eklenince otomatik güncellensin.
-    ball1: { health: MAX_HEALTH, hasSword: false, photoDiv: photo1Div, swordIcon: document.getElementById('p1-sword'), healthBar: document.getElementById('p1-health').querySelector('.health-bar'), nameDisplay: p1NameDisplay, name: 'Oyuncu 1', texture: '' }, 
-    ball2: { health: MAX_HEALTH, hasSword: false, photoDiv: photo2Div, swordIcon: document.getElementById('p2-sword'), healthBar: document.getElementById('p2-health').querySelector('.health-bar'), nameDisplay: p2NameDisplay, name: 'Oyuncu 2', texture: '' } 
+    ball1: { 
+        health: MAX_HEALTH, 
+        hasSword: false, 
+        photoDiv: photo1Div, 
+        swordIcon: document.getElementById('p1-sword'), 
+        healthBar: document.getElementById('p1-health').querySelector('.health-bar'), 
+        nameDisplay: p1NameDisplay, 
+        name: 'Oyuncu 1', 
+        texture: '',
+        emoji: '🔴',
+        color: getRandomColor()
+    }, 
+    ball2: { 
+        health: MAX_HEALTH, 
+        hasSword: false, 
+        photoDiv: photo2Div, 
+        swordIcon: document.getElementById('p2-sword'), 
+        healthBar: document.getElementById('p2-health').querySelector('.health-bar'), 
+        nameDisplay: p2NameDisplay, 
+        name: 'Oyuncu 2', 
+        texture: '',
+        emoji: '🔵',
+        color: getRandomColor()
+    } 
 };
+
+function getRandomColor() {
+    const letters = '0123456789ABCDEF';
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+}
 
 // --- RESPONSIVE VE ARENA YÖNETİMİ ---
 
 function updateArenaSize() {
-    arenaWidth = gameContainer.clientWidth;
-    arenaHeight = gameContainer.clientHeight;
+    const container = document.getElementById('game-container');
+    const size = Math.min(container.clientWidth, container.clientHeight);
+    
+    // Arena boyutlarını güncelle
+    arenaWidth = size;
+    arenaHeight = size;
+    
+    // Top yarıçapını ekran boyutuna göre ayarla
+    INITIAL_BALL_RADIUS = size * 0.08; // Ekran boyutunun %8'i kadar yarıçap
     
     // Render ve Canvas boyutunu güncelle
     if (render) {
@@ -67,6 +103,19 @@ function updateArenaSize() {
         render.options.height = arenaHeight;
         Render.run(render);
     }
+    
+    // Top boyutlarını güncelle
+    if (ball1 && ball2) {
+        Body.set(ball1, {
+            circleRadius: INITIAL_BALL_RADIUS
+        });
+        Body.set(ball2, {
+            circleRadius: INITIAL_BALL_RADIUS
+        });
+    }
+    
+    // Duvarları yeniden oluştur
+    setupWalls();
 }
 
 function setupWalls() {
@@ -95,6 +144,9 @@ function initializeGame() {
         Events.on(engine, 'afterUpdate', afterUpdateHandler);
         Events.on(engine, 'collisionStart', collisionStartHandler);
     }
+    
+    // Ekran boyutunu güncelle
+    updateArenaSize();
     
     // Render yoksa oluştur
     if (!render) {
@@ -163,16 +215,27 @@ function initializeGame() {
     // Can ve İsimleri Güncelle
     updateHealthBar(playerInfo.ball1, MAX_HEALTH);
     updateHealthBar(playerInfo.ball2, MAX_HEALTH);
+    
+    // Top boyutlarını güncelle
+    if (ball1 && ball2) {
+        Body.set(ball1, {
+            circleRadius: INITIAL_BALL_RADIUS
+        });
+        Body.set(ball2, {
+            circleRadius: INITIAL_BALL_RADIUS
+        });
+    }
 
     // Eşya Sistemi
     setTimeout(spawnItem, 1000);
 }
 
 // Pencere boyutu değiştiğinde arenamızın boyutunu güncelle
-window.addEventListener('resize', () => {
-    updateArenaSize();
-    setupWalls();
-});
+const resizeObserver = new ResizeObserver(updateArenaSize);
+resizeObserver.observe(document.getElementById('game-container'));
+
+// İlk yüklemede boyutları ayarla
+window.addEventListener('load', updateArenaSize);
 
 // --- OYUN MANTIK FONKSİYONLARI (Değişmedi) ---
 
@@ -219,16 +282,25 @@ function endGame(winnerPlayer) {
     if (runner) Runner.stop(runner); 
 
     const winnerName = winnerPlayer.name;
-    const winnerEmojiCode = winnerPlayer.texture ? '' : '🏆'; 
-
-    winnerText.textContent = `${winnerName} KAZANDI!`;
-    winnerEmoji.textContent = winnerEmojiCode;
     
-    // Fotoğrafı kazanan modalına yerleştir
-    winnerEmoji.style.backgroundImage = `url(${winnerPlayer.texture})`;
-    winnerEmoji.style.borderRadius = '50%';
-    winnerEmoji.style.backgroundSize = 'cover';
-    winnerEmoji.textContent = ''; 
+    winnerText.textContent = `${winnerName} KAZANDI!`;
+    
+    // Kazananın görselini ayarla
+    if (winnerPlayer.texture) {
+        winnerEmoji.style.backgroundImage = `url(${winnerPlayer.texture})`;
+        winnerEmoji.style.borderRadius = '50%';
+        winnerEmoji.style.backgroundSize = 'cover';
+        winnerEmoji.textContent = '';
+    } else {
+        winnerEmoji.style.backgroundImage = 'none';
+        winnerEmoji.style.backgroundColor = winnerPlayer.color;
+        winnerEmoji.style.borderRadius = '50%';
+        winnerEmoji.style.display = 'flex';
+        winnerEmoji.style.justifyContent = 'center';
+        winnerEmoji.style.alignItems = 'center';
+        winnerEmoji.style.fontSize = '60px';
+        winnerEmoji.textContent = winnerPlayer.emoji;
+    }
 
     gameOverModal.style.display = 'flex';
     
@@ -376,9 +448,9 @@ function setupFileReader(fileInput, previewDiv, player) {
 }
 
 function checkCanStartCustom() {
-    // Fotoğraf seçimi için sadece arka planın ayarlanmış olup olmadığına bakmak yeterli.
-    const p1Ready = p1NameInput.value.trim() !== '' && p1Preview.style.backgroundImage !== 'none' && p1Preview.style.backgroundImage !== '';
-    const p2Ready = p2NameInput.value.trim() !== '' && p2Preview.style.backgroundImage !== 'none' && p2Preview.style.backgroundImage !== '';
+    // Sadece isimlerin dolu olması yeterli
+    const p1Ready = p1NameInput.value.trim() !== '';
+    const p2Ready = p2NameInput.value.trim() !== '';
     startGameCustomButton.disabled = !(p1Ready && p2Ready);
 }
 
@@ -395,10 +467,75 @@ customizeButton.addEventListener('click', () => {
     // Modal açıldığında Runner'ı durdur
     if (runner) Runner.stop(runner); 
     setupModal.style.display = 'flex';
+    
+    // Mevcut oyuncu bilgilerini form alanlarına yükle
+    p1NameInput.value = playerInfo.ball1.name;
+    p2NameInput.value = playerInfo.ball2.name;
+    
+    // Önizlemeleri sıfırla
+    p1Preview.style.backgroundImage = playerInfo.ball1.texture ? `url(${playerInfo.ball1.texture})` : 'none';
+    p2Preview.style.backgroundImage = playerInfo.ball2.texture ? `url(${playerInfo.ball2.texture})` : 'none';
+    
+    // Başlat butonunu kontrol et
+    checkCanStartCustom();
 });
 
 // 2. Özelleştirilmiş Oyunu Başlat
 startGameCustomButton.addEventListener('click', () => {
+    // Modalı kapat
+    setupModal.style.display = 'none';
+    
+    // Oyun alanını temizle
+    gameOverModal.style.display = 'none';
+    
+    // Oyuncu isimlerini güncelle
+    playerInfo.ball1.name = p1NameInput.value.trim() || 'Oyuncu 1';
+    playerInfo.ball2.name = p2NameInput.value.trim() || 'Oyuncu 2';
+    
+    // Eğer fotoğraf seçilmediyse rastgele renk ata
+    if (!playerInfo.ball1.texture) {
+        playerInfo.ball1.color = getRandomColor();
+        playerInfo.ball1.photoDiv.style.backgroundColor = playerInfo.ball1.color;
+        playerInfo.ball1.photoDiv.textContent = playerInfo.ball1.emoji;
+        playerInfo.ball1.photoDiv.style.display = 'flex';
+        playerInfo.ball1.photoDiv.style.justifyContent = 'center';
+        playerInfo.ball1.photoDiv.style.alignItems = 'center';
+        playerInfo.ball1.photoDiv.style.fontSize = '60px';
+    }
+    
+    if (!playerInfo.ball2.texture) {
+        playerInfo.ball2.color = getRandomColor();
+        playerInfo.ball2.photoDiv.style.backgroundColor = playerInfo.ball2.color;
+        playerInfo.ball2.photoDiv.textContent = playerInfo.ball2.emoji;
+        playerInfo.ball2.photoDiv.style.display = 'flex';
+        playerInfo.ball2.photoDiv.style.justifyContent = 'center';
+        playerInfo.ball2.photoDiv.style.alignItems = 'center';
+        playerInfo.ball2.photoDiv.style.fontSize = '60px';
+    }
+    // Oyuncu isimlerini güncelle
+    playerInfo.ball1.name = p1NameInput.value.trim() || 'Oyuncu 1';
+    playerInfo.ball2.name = p2NameInput.value.trim() || 'Oyuncu 2';
+    
+    // Eğer fotoğraf seçilmediyse rastgele renk ata
+    if (!playerInfo.ball1.texture) {
+        playerInfo.ball1.color = getRandomColor();
+        playerInfo.ball1.photoDiv.style.backgroundColor = playerInfo.ball1.color;
+        playerInfo.ball1.photoDiv.textContent = playerInfo.ball1.emoji;
+        playerInfo.ball1.photoDiv.style.display = 'flex';
+        playerInfo.ball1.photoDiv.style.justifyContent = 'center';
+        playerInfo.ball1.photoDiv.style.alignItems = 'center';
+        playerInfo.ball1.photoDiv.style.fontSize = '60px';
+    }
+    
+    if (!playerInfo.ball2.texture) {
+        playerInfo.ball2.color = getRandomColor();
+        playerInfo.ball2.photoDiv.style.backgroundColor = playerInfo.ball2.color;
+        playerInfo.ball2.photoDiv.textContent = playerInfo.ball2.emoji;
+        playerInfo.ball2.photoDiv.style.display = 'flex';
+        playerInfo.ball2.photoDiv.style.justifyContent = 'center';
+        playerInfo.ball2.photoDiv.style.alignItems = 'center';
+        playerInfo.ball2.photoDiv.style.fontSize = '60px';
+    }
     // Yeni ayarları global playerInfo'ya uygula
     playerInfo.ball1.name = p1NameInput.value.trim();
     playerInfo.ball2.name = p2NameInput.value.trim();
@@ -422,9 +559,35 @@ restartButton.addEventListener('click', () => {
 // 4. Oyun Bitti: Yeni Oyun Kur (Özelleştirme modalını aç)
 newGameButton.addEventListener('click', () => {
     gameOverModal.style.display = 'none';
-    customizeButton.click(); 
+    setupModal.style.display = 'flex';
 });
 
+// Oyunu sıfırla ve yeni oyun başlat
+function resetGame() {
+    // Oyun durumunu sıfırla
+    isGameOver = false;
+    gameOverModal.style.display = 'none';
+    
+    // Oyuncu bilgilerini sıfırla
+    playerInfo.ball1.health = MAX_HEALTH;
+    playerInfo.ball2.health = MAX_HEALTH;
+    playerInfo.ball1.hasSword = false;
+    playerInfo.ball2.hasSword = false;
+    
+    // Oyunu başlat
+    initializeGame();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Yeni oyun butonu
+    document.getElementById('new-game-button').addEventListener('click', () => {
+        gameOverModal.style.display = 'none';
+        setupModal.style.display = 'flex';
+    });
+    
+    // Tekrar oyna butonu
+    document.getElementById('restart-button').addEventListener('click', resetGame);
+});
 
 // --- Başlangıç ---
 // Sayfa yüklendiğinde varsayılan ayarlar ile oyunu başlat
