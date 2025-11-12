@@ -1,141 +1,48 @@
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #121212;
-    color: #f0f0f0;
     margin: 0;
-    padding: 20px;
+    overflow: hidden; /* Kaydırma çubuklarını gizle */
     display: flex;
     flex-direction: column;
+    justify-content: center;
     align-items: center;
+    min-height: 100vh;
+    background-color: #222;
+    color: #eee;
+    font-family: Arial, sans-serif;
 }
 
 h1 {
-    color: #e91e63;
-    margin-bottom: 30px;
-}
-
-.hidden {
-    display: none !important;
-}
-
-/* LOBBY STYLES */
-#lobby-screen {
-    background-color: #1e1e1e;
-    padding: 40px;
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    width: 100%;
-    max-width: 400px;
-}
-
-.input-group input {
-    width: 100%;
-    margin-bottom: 10px;
-}
-
-#enterRoomBtn {
-    background-color: #4CAF50;
-    border-radius: 5px;
-}
-
-/* ROOM STYLES */
-#room-screen {
-    width: 100%;
-    max-width: 800px;
-}
-
-.room-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
     margin-bottom: 20px;
-    padding: 10px;
-    border: 1px solid #333;
-    border-radius: 5px;
-}
-
-.code-share {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-#roomCodeToCopy {
-    font-size: 1.2em;
-    font-weight: bold;
     color: #4CAF50;
 }
 
-.user-list-container {
-    background-color: #222;
-    padding: 10px;
-    border-radius: 5px;
-    min-width: 150px;
+#game-container {
+    position: relative;
+    border: 2px solid #555;
+    background-color: #333;
+    /* Canvas boyutu script.js içinde ayarlanacak, bu sadece kapsayıcı */
 }
 
-.users-title {
-    margin-top: 0;
-    color: #aaa;
-    font-size: 0.9em;
+canvas {
+    display: block; /* Canvas altındaki boşluğu kaldır */
+    background-color: transparent; /* Matter.js canvas'ının arkaplanını şeffaf yap */
 }
 
-#userList {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
+.ball-emoji {
+    position: absolute;
+    font-size: 30px; /* Emojinin boyutu */
+    pointer-events: none; /* Emojiye tıklamayı engelle */
+    transform: translate(-50%, -50%); /* Merkezi kendi etrafında ortala */
+    user-select: none; /* Seçmeyi engelle */
+    z-index: 10; /* Canvas'ın üzerinde görünmesini sağla */
 }
 
-#userList li {
-    padding: 3px 0;
-    color: #fff;
-}
-
-.controls-area {
-    display: flex;
-    gap: 15px;
-    margin-bottom: 20px;
-    width: 100%;
-}
-
-.control-group {
-    flex: 1;
-    display: flex;
-}
-
-input[type="text"] {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid #333;
-    background-color: #222;
-    color: #fff;
-    border-radius: 5px 0 0 5px;
-}
-
-button {
-    padding: 10px 15px;
-    border: none;
-    background-color: #e91e63;
-    color: white;
-    cursor: pointer;
-    border-radius: 0 5px 5px 0;
-    font-weight: bold;
-}
-
-button:hover {
-    opacity: 0.8;
-}
-
-#player-container {
-    width: 100%;
-    max-width: 800px;
-    aspect-ratio: 16 / 9;
-    background-color: #000;
-}
-
-#player {
-    width: 100%;
-    height: 100%;
+.sword-emoji {
+    position: absolute;
+    font-size: 40px; /* Kılıç emojisinin boyutu */
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    user-select: none;
+    z-index: 11; /* En üstte görünsün */
+    display: none; /* Başlangıçta gizli, script.js gösterecek */
 }
