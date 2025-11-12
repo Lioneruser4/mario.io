@@ -6,14 +6,14 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #1f1c2c, #928dab); /* Gradient Arkaplan */
+    background: linear-gradient(135deg, #1f1c2c, #928dab);
     color: #eee;
     font-family: 'Roboto', sans-serif;
 }
 
 #game-container {
     position: relative;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7); /* Daha belirgin gölge */
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
     border-radius: 10px;
     overflow: hidden;
     background-color: #00000030;
@@ -24,17 +24,27 @@ canvas {
     background-color: transparent;
 }
 
-/* EMOJİ STİLİ (Toplar ve Öğeler) */
+/* EMOJİ STİLİ */
 .ball-emoji {
     position: absolute;
-    font-size: 35px; 
+    font-size: 40px; 
     pointer-events: none;
-    /* translate(-50%, -50%) merkezi ortalar */
     transform: translate(-50%, -50%); 
     user-select: none;
     z-index: 10;
-    /* Toplar dönerken emojilerin stabil kalması için */
     will-change: transform; 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+}
+
+.sword-icon {
+    position: absolute;
+    font-size: 50px; 
+    top: -25px; 
+    right: -25px; 
+    transition: transform 0.1s ease-out;
+    pointer-events: none;
 }
 
 .item-emoji {
@@ -45,10 +55,9 @@ canvas {
     user-select: none;
     z-index: 11;
     display: none;
-    transition: transform 0.1s ease-out; 
 }
 
-/* STATUS BAR STİLİ (Profesyonel) */
+/* STATUS BAR STİLİ */
 #status-bar {
     position: absolute;
     top: 0;
@@ -62,18 +71,17 @@ canvas {
     box-sizing: border-box;
 }
 
+/* ... (health-bar ve player-status stilleri aynı kalır) ... */
 .player-status {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
-
 .player-name {
     font-size: 14px;
     margin-bottom: 5px;
     color: #fff;
 }
-
 .health-bar-container {
     width: 150px;
     height: 15px;
@@ -82,14 +90,75 @@ canvas {
     border-radius: 7px;
     overflow: hidden;
 }
-
 .health-bar {
     height: 100%;
     width: 100%;
-    background-color: #4CAF50; /* Yeşil */
+    background-color: #4CAF50;
     transition: width 0.5s ease-in-out, background-color 0.5s;
 }
-
 .low-health {
-    background-color: #F44336; /* Kırmızı */
+    background-color: #F44336;
+}
+
+/* YENİ MODAL STİLLERİ */
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8); /* Arka planı karart */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100; /* En üstte olmalı */
+}
+
+.modal-content {
+    background: linear-gradient(145deg, #2c3e50, #34495e);
+    padding: 40px 60px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(255, 255, 255, 0.2);
+    animation: fadeIn 0.5s ease-out;
+}
+
+#winner-text {
+    font-size: 32px;
+    color: #4CAF50; /* Yeşil */
+    margin-bottom: 10px;
+}
+
+.winner-emoji-display {
+    font-size: 80px;
+    margin: 20px 0;
+    animation: pulse 1.5s infinite;
+}
+
+#restart-button {
+    padding: 10px 25px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #fff;
+    background-color: #E74C3C; /* Kırmızı düğme */
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+#restart-button:hover {
+    background-color: #C0392B;
+    transform: scale(1.05);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
 }
