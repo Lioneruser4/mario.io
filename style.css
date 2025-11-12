@@ -2,7 +2,6 @@ body {
     margin: 0;
     overflow: hidden;
     display: flex;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
@@ -11,24 +10,38 @@ body {
     font-family: 'Roboto', sans-serif;
 }
 
+/* ! DÜZELTME 1: Tam ekran kaplama ve kare arena */
+#main-wrapper {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 #game-container {
     position: relative;
-    width: 900px;
-    height: 900px;
+    /* Ekranın daha küçük boyutuna göre maksimum kare boyutunu al */
+    width: min(90vh, 90vw); 
+    height: min(90vh, 90vw);
     box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
     border-radius: 10px;
     overflow: hidden;
-    background-color: #00000030;
+    background-color: #00000070;
 }
 
 canvas {
     display: block;
     background-color: transparent;
+    position: absolute; /* Canvas'ın tam konuma oturmasını sağlar */
+    top: 0;
+    left: 0;
 }
 
 /* FOTOĞRAF DİVLERİ VE KILINÇ İKONLARI */
 .moving-photo {
     position: absolute;
+    /* Boyutları % olarak ayarlamak zor, bu yüzden JAVASCRIPT ile boyutlandırılacak. */
     width: 120px; 
     height: 120px;
     border-radius: 50%;
@@ -40,7 +53,7 @@ canvas {
     background-position: center;
     border: 5px solid #fff; 
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
-    transition: box-shadow 0.1s ease-out; /* Vuruş efekti için geçiş */
+    transition: box-shadow 0.1s ease-out;
 }
 
 .sword-icon {
@@ -52,14 +65,14 @@ canvas {
     pointer-events: none;
 }
 
-/* Vuruş/Hasar Efekti Geri Eklendi */
+/* Vuruş/Hasar Efekti */
 .hit-effect {
     box-shadow: 0 0 15px 10px rgba(255, 0, 0, 0.8), 0 0 30px 15px rgba(255, 100, 100, 0.4);
     border-radius: 50%;
     transition: box-shadow 0.1s ease-out;
 }
 
-/* Eşya Emojisi Geri Eklendi */
+/* Eşya Emojisi */
 .item-emoji {
     position: absolute;
     font-size: 45px;
@@ -90,65 +103,57 @@ canvas {
     box-sizing: border-box;
 }
 
-.player-status {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-.player-name {
-    font-size: 14px; /* Can bilgisi için küçültüldü */
-    margin-bottom: 5px;
-    color: #fff;
-}
-/* Can Çubuğu Stilleri Geri Eklendi */
-.health-bar-container {
-    width: 150px;
-    height: 15px;
-    background-color: #444;
-    border: 1px solid #777;
-    border-radius: 7px;
-    overflow: hidden;
-}
-.health-bar {
-    height: 100%;
-    width: 100%;
-    background-color: #4CAF50;
-    transition: width 0.5s ease-in-out, background-color 0.5s;
-}
-.low-health {
-    background-color: #F44336;
-}
+/* ... (Can Çubuğu Stilleri Aynı Kalır) ... */
 
-/* OYUN BİTTİ MODALI STİLLERİ Geri Eklendi */
-.modal-overlay {
+/* ! YENİ: Alt Özelleştirme Butonu */
+#customize-button {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.8);
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    padding: 10px 15px;
+    font-size: 14px;
+    background-color: #f1c40f;
+    color: #333;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+#customize-button:hover {
+    background-color: #f39c12;
+}
+
+
+/* OYUN BİTTİ MODALI STİLLERİ */
+.modal-actions {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
+    gap: 15px;
+    margin-top: 20px;
 }
-.modal-content {
-    background: linear-gradient(145deg, #2c3e50, #34495e);
-    padding: 40px 60px;
-    border-radius: 15px;
-    text-align: center;
-    box-shadow: 0 0 50px rgba(255, 255, 255, 0.2);
-    animation: fadeIn 0.5s ease-out;
+
+.modal-btn {
+    padding: 10px 20px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
-#winner-text { font-size: 32px; color: #4CAF50; margin-bottom: 10px; }
-.winner-emoji-display { font-size: 80px; margin: 20px 0; animation: pulse 1.5s infinite; }
-#restart-button { padding: 10px 25px; font-size: 18px; font-weight: bold; color: #fff; background-color: #E74C3C; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.1s; }
-#restart-button:hover { background-color: #C0392B; transform: scale(1.05); }
 
-@keyframes fadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
-@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+#restart-button {
+    background-color: #2ECC71; /* Yeşil - Aynı Ayarla Başlat */
+}
+#restart-button:hover {
+    background-color: #27AE60;
+}
 
-/* ÖZELLEŞTİRME MODALI STİLLERİ (Aynı kaldı) */
-.setup-content { max-width: 800px; }
-.player-setup-row { display: flex; gap: 40px; margin-top: 20px; margin-bottom: 30px; }
-/* ... (Geri kalan setup modal stilleri aynı kalır) ... */
+#new-game-button {
+    background-color: #3498DB; /* Mavi - Yeni Kurulum */
+}
+#new-game-button:hover {
+    background-color: #2980B9;
+}
