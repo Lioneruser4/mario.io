@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arena Savaşı Kapışması - PRO Özelleştirme</title>
+    <title>Arena Kapışması - Canlı Fotoğraf Versiyonu</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet">
 </head>
@@ -12,22 +12,23 @@
         
         <div id="status-bar">
             <div id="player1-status" class="player-status">
-                <span id="p1-name-display" class="player-name">Player 1 (🇹🇷) Can: 3/3</span>
+                <span id="p1-name-display" class="player-name">Player 1 Can: 3/3</span>
                 <div id="p1-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
             </div>
             <div id="player2-status" class="player-status">
-                <span id="p2-name-display" class="player-name">Player 2 (⚽) Can: 3/3</span>
+                <span id="p2-name-display" class="player-name">Player 2 Can: 3/3</span>
                 <div id="p2-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
             </div>
         </div>
 
-        <div id="ball1-emoji" class="ball-emoji">
-            <span id="p1-sword" class="sword-icon" style="display:none;">⚔️</span>
+        <div id="ball1-photo" class="moving-photo">
+             <span id="p1-sword" class="sword-icon" style="display:none;">⚔️</span>
         </div>
-        <div id="ball2-emoji" class="ball-emoji">
-            <span id="p2-sword" class="sword-icon" style="display:none;">⚔️</span>
+        <div id="ball2-photo" class="moving-photo">
+             <span id="p2-sword" class="sword-icon" style="display:none;">⚔️</span>
         </div>
         <div id="item-emoji" class="item-emoji"></div>
+        
     </div>
 
     <div id="game-over-modal" class="modal-overlay" style="display:none;">
@@ -44,7 +45,7 @@
             
             <div class="player-setup-row">
                 <div class="player-setup-box">
-                    <h3>Oyuncu 1 (Kırmızı)</h3>
+                    <h3>Oyuncu 1</h3>
                     <input type="text" id="p1-name-input" placeholder="İsim Gir" maxlength="15">
                     <label for="p1-file" class="file-label">
                         Fotoğraf Ekle
@@ -54,7 +55,7 @@
                 </div>
 
                 <div class="player-setup-box">
-                    <h3>Oyuncu 2 (Mavi)</h3>
+                    <h3>Oyuncu 2</h3>
                     <input type="text" id="p2-name-input" placeholder="İsim Gir" maxlength="15">
                     <label for="p2-file" class="file-label">
                         Fotoğraf Ekle
