@@ -3,121 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çarpışan Toplar: Kılıç Düellosu</title>
+    <title>Matter.js Kılıçlı Top Düellosu</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
+        /* Genel Stil */
         body {
-            margin: 0;
-            padding: 0;
-            background-color: #1a1a2e;
-            color: #fff;
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
-            min-height: 100vh;
-        }
-        #main-content {
-            display: flex;
-            flex-direction: column;
             align-items: center;
-            gap: 20px;
-            width: 90%;
-            max-width: 900px;
-            padding: 20px;
-            background: #2a2a44;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            min-height: 100vh;
+            margin: 0;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            flex-direction: column;
+            overflow: hidden; /* Dışarı taşan top divlerini gizle */
         }
+
+        /* Ana Oyun Konteyneri */
         #game-container {
-            width: 100%;
-            padding-top: 100%; /* Kare alan oluşturmak için */
             position: relative;
-            background-color: #0d0d1b;
-            border: 5px solid #4a4a70;
-            border-radius: 5px;
+            width: 800px;
+            height: 800px;
+            border: 10px solid #3498db;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            background-color: #3b5971;
             overflow: hidden;
         }
-        #game-container canvas {
+
+        /* Top Fotoğraf Divleri (Matter.js toplarını kaplar) */
+        .ball-photo-div {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-        .ui-panel {
+            width: 80px; /* CONFIG.ballRadius * 2 */
+            height: 80px; /* CONFIG.ballRadius * 2 */
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            transition: transform 0.05s ease-out; /* Hafif vuruş animasyonu için */
             display: flex;
-            justify-content: space-between;
-            width: 100%;
-            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
-        .player-info {
-            flex-grow: 1;
-            background: #3c3c6e;
+        
+        /* Kılıç İkonu */
+        .sword-icon {
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            font-size: 30px;
+            transform-origin: 50% 100%;
+            display: none;
+            text-shadow: 0 0 5px #f1c40f;
+        }
+
+        /* Vurulma Efekti */
+        .hit-effect {
+            animation: hit-shake 0.3s ease-in-out;
+            box-shadow: 0 0 20px 5px #e74c3c;
+        }
+
+        @keyframes hit-shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            20% { transform: translate(-3px, 0px) rotate(-2deg); }
+            40% { transform: translate(3px, 1px) rotate(2deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            80% { transform: translate(1px, -1px) rotate(2deg); }
+            100% { transform: translate(1px, 1px) rotate(0deg); }
+        }
+
+        /* Eşya İkonu */
+        #item-emoji {
+            position: absolute;
+            font-size: 40px;
+            transform: translate(-50%, -50%);
+            display: none;
+            z-index: 10;
+        }
+
+        /* Bilgi Paneli */
+        .info-panel {
+            width: 800px;
+            max-width: 100%;
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        .player-status {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             padding: 10px;
             border-radius: 8px;
-            text-align: center;
-            position: relative;
+            background-color: #34495e;
+            width: 45%;
         }
+
         .health-bar-container {
-            height: 15px;
-            background-color: #4a4a70;
-            border-radius: 7px;
+            width: 90%;
+            background-color: #c0392b;
+            border-radius: 5px;
             overflow: hidden;
             margin-top: 5px;
         }
+
         .health-bar {
-            height: 100%;
-            width: 100%;
-            background-color: #4CAF50;
-            transition: width 0.3s ease-out, background-color 0.3s;
+            height: 15px;
+            background-color: #27ae60;
+            transition: width 0.3s ease-in-out;
         }
-        .low-health {
-            background-color: #FF5252;
+
+        .health-bar.low-health {
+            background-color: #f1c40f;
         }
-        .player-ball {
-            position: absolute;
-            width: 80px; /* Boyut JS ile ayarlanacak, bu sadece varsayılan */
-            height: 80px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            transition: opacity 0.1s;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
-        }
-        .hit-effect {
-            animation: shake 0.2s;
-            border: 4px solid red;
-        }
-        @keyframes shake {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            25% { transform: translate(-48%, -52%) rotate(1deg); }
-            50% { transform: translate(-52%, -48%) rotate(-1deg); }
-            75% { transform: translate(-48%, -52%) rotate(1deg); }
-            100% { transform: translate(-50%, -50%) rotate(0deg); }
-        }
-        .sword-icon {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            font-size: 30px;
-            transform: rotate(15deg);
-            transition: transform 0.1s;
-            display: none;
-        }
-        #item-emoji {
-            position: absolute;
-            font-size: 30px;
-            pointer-events: none;
-            transform: translate(-50%, -50%);
-            display: none;
-        }
+        
         /* Modal Stilleri */
         .modal {
             position: fixed;
@@ -125,215 +126,254 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background-color: rgba(0, 0, 0, 0.8);
             display: flex;
             justify-content: center;
             align-items: center;
             z-index: 100;
         }
+
         .modal-content {
-            background: #2a2a44;
+            background-color: #34495e;
             padding: 30px;
             border-radius: 10px;
             text-align: center;
-            max-width: 400px;
-            width: 90%;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
         }
-        .modal-content h2 {
-            margin-top: 0;
-            color: #FFC107;
-        }
+
         .player-setup {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
             margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #4a4a70;
-            border-radius: 5px;
         }
-        .player-preview {
+
+        .player-setup div {
+            flex: 1;
+        }
+
+        input[type="text"], input[type="file"] {
+            padding: 10px;
+            margin: 5px 0 15px;
+            border: none;
+            border-radius: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .file-upload-label {
+            display: block;
+            background-color: #2980b9;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .file-preview {
             width: 80px;
             height: 80px;
             border-radius: 50%;
-            background-color: #555;
+            background-color: #7f8c8d;
+            background-size: cover;
+            background-position: center;
             margin: 10px auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 30px;
-            border: 3px solid #fff;
+            border: 3px solid white;
         }
-        .modal button {
+
+        button {
             padding: 10px 20px;
             margin: 5px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.2s;
-        }
-        #start-custom-game-button {
-            background-color: #4CAF50;
+            background-color: #2ecc71;
             color: white;
+            font-size: 16px;
+            transition: background-color 0.3s;
         }
-        #start-custom-game-button:disabled {
-            background-color: #666;
+
+        button:hover:not(:disabled) {
+            background-color: #27ae60;
+        }
+
+        button:disabled {
+            background-color: #7f8c8d;
             cursor: not-allowed;
         }
-        #restart-button, #new-game-button {
-            background-color: #FFC107;
-            color: #1a1a2e;
+
+        /* Oyun Sonu Modal */
+        #game-over-modal .modal-content {
+            padding: 50px;
+        }
+        
+        #game-over-modal h2 {
+            font-size: 30px;
+            margin-bottom: 20px;
+            color: #f1c40f;
+        }
+
+        #winner-emoji {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 20px auto;
+        }
+        
+        /* Matter.js Canvas gizleme */
+        #game-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1; /* Alttaki photo div'in arkasında kalması için */
+            display: none !important; /* Topların varsayılan Matter.js render'ını gizle */
         }
     </style>
 </head>
 <body>
 
-    <div id="main-content">
-        <h1>⚔️ Çarpışan Toplar Düellosu ⚔️</h1>
-        
-        <div class="ui-panel">
-            <div id="p1-info" class="player-info">
-                <h3 id="p1-name-display">Oyuncu 1 Can: 5/5</h3>
-                <div class="health-bar-container">
-                    <div id="p1-health" class="health-bar"></div>
-                </div>
-                <span id="p1-sword" class="sword-icon" style="color: #FFC107;">⚔️</span>
-            </div>
-            
-            <div id="p2-info" class="player-info">
-                <h3 id="p2-name-display">Oyuncu 2 Can: 5/5</h3>
-                <div class="health-bar-container">
-                    <div id="p2-health" class="health-bar"></div>
-                </div>
-                <span id="p2-sword" class="sword-icon" style="color: #FFC107;">⚔️</span>
+    <div class="info-panel">
+        <div id="p1-health" class="player-status">
+            <h3 id="p1-name-display">Oyuncu 1 Can: 5/5</h3>
+            <div class="health-bar-container">
+                <div class="health-bar" style="width: 100%;"></div>
             </div>
         </div>
+        <button id="customize-button">Yeni Oyun Kur/Özelleştir</button>
+        <div id="p2-health" class="player-status">
+            <h3 id="p2-name-display">Oyuncu 2 Can: 5/5</h3>
+            <div class="health-bar-container">
+                <div class="health-bar" style="width: 100%;"></div>
+            </div>
+        </div>
+    </div>
 
-        <div id="game-container">
-            <div id="ball1-photo" class="player-ball">🔴</div>
-            <div id="ball2-photo" class="player-ball">🔵</div>
-            <div id="item-emoji"></div>
+    <div id="game-container">
+        <div id="ball1-photo" class="ball-photo-div" style="background-color: #FF5252;">
+            🔴
+            <span id="p1-sword" class="sword-icon">⚔️</span>
         </div>
-        
-        <button id="customize-button" style="background-color: #2196F3; color: white; padding: 10px 30px; border-radius: 5px;">
-            Oyunu Başlat / Özelleştir
-        </button>
+        <div id="ball2-photo" class="ball-photo-div" style="background-color: #2196F3;">
+            🔵
+            <span id="p2-sword" class="sword-icon">⚔️</span>
+        </div>
+        <div id="item-emoji">⚔️</div>
+    </div>
+
+    <div id="setup-modal" class="modal" style="display: flex;">
+        <div class="modal-content">
+            <h2>Oyunu Özelleştir</h2>
+            <div class="player-setup">
+                <div>
+                    <h3>Oyuncu 1 (🔴)</h3>
+                    <input type="text" id="p1-name-input" placeholder="İsim Girin (örn: Kaptan)">
+                    <input type="file" id="p1-file" accept="image/*" style="display: none;">
+                    <label for="p1-file" class="file-upload-label">Fotoğraf Yükle</label>
+                    <div id="p1-preview" class="file-preview"></div>
+                </div>
+                <div>
+                    <h3>Oyuncu 2 (🔵)</h3>
+                    <input type="text" id="p2-name-input" placeholder="İsim Girin (örn: Demir Adam)">
+                    <input type="file" id="p2-file" accept="image/*" style="display: none;">
+                    <label for="p2-file" class="file-upload-label">Fotoğraf Yükle</label>
+                    <div id="p2-preview" class="file-preview"></div>
+                </div>
+            </div>
+            <button id="start-custom-game-button" disabled>Oyunu Başlat</button>
+        </div>
     </div>
 
     <div id="game-over-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h2 id="winner-text">OYUNCU KAZANDI!</h2>
-            <div id="winner-emoji" class="player-preview" style="font-size: 60px;">🏆</div>
+            <h2 id="winner-text"></h2>
+            <div id="winner-emoji"></div>
             <button id="restart-button">Tekrar Oyna (Aynı Ayarlar)</button>
             <button id="new-game-button">Yeni Oyun Kur</button>
         </div>
     </div>
 
-    <div id="setup-modal" class="modal">
-        <div class="modal-content">
-            <h2>Oyuncu Ayarları</h2>
-            
-            <div class="player-setup">
-                <label for="p1-name-input">Oyuncu 1 Adı:</label>
-                <input type="text" id="p1-name-input" value="Oyuncu 1" maxlength="15" style="color:#000; margin-bottom:10px; padding:5px; width: 100%;">
-                <div id="p1-preview" class="player-preview" style="background-color: #FF5252;">🔴</div>
-                <input type="file" id="p1-file" accept="image/*" style="margin-top: 10px;">
-            </div>
-            
-            <div class="player-setup">
-                <label for="p2-name-input">Oyuncu 2 Adı:</label>
-                <input type="text" id="p2-name-input" value="Oyuncu 2" maxlength="15" style="color:#000; margin-bottom:10px; padding:5px; width: 100%;">
-                <div id="p2-preview" class="player-preview" style="background-color: #2196F3;">🔵</div>
-                <input type="file" id="p2-file" accept="image/*" style="margin-top: 10px;">
-            </div>
-            
-            <button id="start-custom-game-button">Oyunu Başlat</button>
-        </div>
-    </div>
-
     <script>
-        // Matter.js modüllerini kısalt
+        // Matter.js Modülleri
         const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
 
-        // --- GLOBAL DEĞİŞKENLERİ KAPSAMA ALINDI (Düzeltme 1) ---
+        // --- GLOBAL SABİTLER (Kodunuzdaki eksikleri tamamlamak için) ---
+        const MAX_HEALTH = 5;
+        const MAX_SPEED = 8;
+        const ITEM_RESPAWN_TIME = 3000;
+        let INITIAL_BALL_RADIUS = 40; 
+        let arenaWidth = 800;
+        let arenaHeight = 800;
+
+        // --- GLOBAL DEĞİŞKENLER (Kodunuzdaki eksikleri tamamlamak için) ---
+        let engine, render, runner, world;
+        let ball1, ball2;
+        let currentItem = null;
+        let itemSpawnTimer = null;
+        let isGameOver = true;
+        
+        // HTML Elementleri
+        const gameContainer = document.getElementById('game-container');
+        const photo1Div = document.getElementById('ball1-photo');
+        const photo2Div = document.getElementById('ball2-photo');
+        const itemEmojiDiv = document.getElementById('item-emoji');
+        const p1NameDisplay = document.getElementById('p1-name-display');
+        const p2NameDisplay = document.getElementById('p2-name-display');
+        const setupModal = document.getElementById('setup-modal');
+        const gameOverModal = document.getElementById('game-over-modal');
+        const winnerText = document.getElementById('winner-text');
+        const winnerEmoji = document.getElementById('winner-emoji');
+        const customizeButton = document.getElementById('customize-button');
+        const startGameCustomButton = document.getElementById('start-custom-game-button');
+        const restartButton = document.getElementById('restart-button');
+        const newGameButton = document.getElementById('new-game-button');
+        const p1NameInput = document.getElementById('p1-name-input');
+        const p2NameInput = document.getElementById('p2-name-input');
+        const p1Preview = document.getElementById('p1-preview');
+        const p2Preview = document.getElementById('p2-preview');
+
+        // Oyun ayarları (Matter.js ve Mantık için birleştirilmiş)
         const CONFIG = {
             arenaSize: 800,
-            ballRadius: 40,
-            maxHealth: 5,
+            ballRadius: INITIAL_BALL_RADIUS,
+            maxHealth: MAX_HEALTH,
             itemSize: 40,
-            itemRespawnTime: 3000,
-            maxSpeed: 8,
+            itemRespawnTime: ITEM_RESPAWN_TIME,
+            maxSpeed: MAX_SPEED,
             colors: ['#FF5252', '#4CAF50', '#2196F3', '#FFC107', '#9C27B0', '#00BCD4']
         };
 
-        const gameState = {
-            isGameOver: false,
-            currentItem: null,
-            itemSpawnTimer: null,
-            runner: null,
-            render: null,
-            engine: null,
-            world: null,
-            ball1: null,
-            ball2: null,
-            arenaWidth: 0,
-            arenaHeight: 0,
-            INITIAL_BALL_RADIUS: 40,
-            MAX_HEALTH: CONFIG.maxHealth, // Kodu daha okunaklı yapmak için
-            MAX_SPEED: CONFIG.maxSpeed
-        };
-
-        // DOM elementlerini al
-        const elements = {
-            gameContainer: document.getElementById('game-container'),
-            setupModal: document.getElementById('setup-modal'),
-            startGameBtn: document.getElementById('start-custom-game-button'),
-            customizeBtn: document.getElementById('customize-button'),
-            gameOverModal: document.getElementById('game-over-modal'),
-            winnerText: document.getElementById('winner-text'),
-            winnerEmoji: document.getElementById('winner-emoji'),
-            itemEmojiDiv: document.getElementById('item-emoji'),
-            p1: {
-                nameInput: document.getElementById('p1-name-input'),
-                fileInput: document.getElementById('p1-file'),
-                preview: document.getElementById('p1-preview')
-            },
-            p2: {
-                nameInput: document.getElementById('p2-name-input'),
-                fileInput: document.getElementById('p2-file'),
-                preview: document.getElementById('p2-preview')
-            }
-        };
-
-        // Oyuncu Bilgileri (Global state'e bağlı)
-        const players = {
-            p1: {
-                id: 'p1',
-                name: elements.p1.nameInput.value || 'Oyuncu 1',
-                health: CONFIG.maxHealth,
+        // Oyuncu Bilgileri (Global state'e taşındı ve eksikler tamamlandı)
+        const playerInfo = {
+            ball1: {
+                id: 'ball1',
+                name: 'Oyuncu 1',
+                health: MAX_HEALTH,
                 hasSword: false,
                 texture: '',
                 emoji: '🔴',
                 color: CONFIG.colors[0],
-                photoDiv: document.getElementById('ball1-photo'),
-                nameDisplay: document.getElementById('p1-name-display'),
-                healthBar: document.getElementById('p1-health'),
+                photoDiv: photo1Div,
+                nameDisplay: p1NameDisplay,
+                healthBar: document.getElementById('p1-health').querySelector('.health-bar'),
                 swordIcon: document.getElementById('p1-sword')
             },
-            p2: {
-                id: 'p2',
-                name: elements.p2.nameInput.value || 'Oyuncu 2',
-                health: CONFIG.maxHealth,
+            ball2: {
+                id: 'ball2',
+                name: 'Oyuncu 2',
+                health: MAX_HEALTH,
                 hasSword: false,
                 texture: '',
                 emoji: '🔵',
                 color: CONFIG.colors[2],
-                photoDiv: document.getElementById('ball2-photo'),
-                nameDisplay: document.getElementById('p2-name-display'),
-                healthBar: document.getElementById('p2-health'),
+                photoDiv: photo2Div,
+                nameDisplay: p2NameDisplay,
+                healthBar: document.getElementById('p2-health').querySelector('.health-bar'),
                 swordIcon: document.getElementById('p2-sword')
             }
         };
-        
-        // Yardımcı Fonksiyon: Rastgele Renk
+
+        // Rastgele Renk Üretici
         function getRandomColor() {
             const letters = '0123456789ABCDEF';
             let color = '#';
@@ -342,185 +382,223 @@
             }
             return color;
         }
-
+        
         // --- RESPONSIVE VE ARENA YÖNETİMİ ---
 
         function updateArenaSize() {
-            const container = elements.gameContainer;
+            const container = gameContainer;
             const size = Math.min(container.clientWidth, container.clientHeight);
-
-            gameState.arenaWidth = size;
-            gameState.arenaHeight = size;
-            gameState.INITIAL_BALL_RADIUS = size * 0.05; // %5 yarıçap
-
-            if (gameState.render) {
-                // Render boyutlarını güncelle
-                Render.stop(gameState.render);
-                gameState.render.canvas.width = size;
-                gameState.render.canvas.height = size;
-                gameState.render.options.width = size;
-                gameState.render.options.height = size;
-                Render.run(gameState.render);
+            
+            arenaWidth = size;
+            arenaHeight = size;
+            INITIAL_BALL_RADIUS = size * 0.05; // %5 yarıçap
+            CONFIG.ballRadius = INITIAL_BALL_RADIUS;
+            
+            // Matter.js Render boyutunu güncelle
+            if (render) {
+                Render.stop(render);
+                render.canvas.width = arenaWidth;
+                render.canvas.height = arenaHeight;
+                render.options.width = arenaWidth;
+                render.options.height = arenaHeight;
+                Render.run(render);
             }
+
+            // Top divlerini ve yarıçaplarını güncelle
+            const ballDiameter = INITIAL_BALL_RADIUS * 2;
+            photo1Div.style.width = `${ballDiameter}px`;
+            photo1Div.style.height = `${ballDiameter}px`;
+            photo2Div.style.width = `${ballDiameter}px`;
+            photo2Div.style.height = `${ballDiameter}px`;
+            
+            if (ball1 && ball2) {
+                Body.set(ball1, 'circleRadius', INITIAL_BALL_RADIUS);
+                Body.set(ball2, 'circleRadius', INITIAL_BALL_RADIUS);
+            }
+
+            // Duvarları yeniden oluştur
+            if (world) setupWalls();
         }
 
         function setupWalls() {
-            const world = gameState.world;
             if (!world) return;
-
             // Eski duvarları temizle
             Composite.allBodies(world).forEach(body => {
                 if (body.label === 'wall' || body.label === 'sword') {
-                    Composite.remove(world, body);
+                     Composite.remove(world, body);
                 }
             });
 
             const wallThickness = 20;
-            const { arenaWidth, arenaHeight } = gameState;
 
             const walls = [
                 // Üst, Alt, Sol, Sağ
-                Bodies.rectangle(arenaWidth / 2, wallThickness / 2, arenaWidth, wallThickness, { isStatic: true, label: 'wall', render: { fillStyle: '#4a4a70' } }),
-                Bodies.rectangle(arenaWidth / 2, arenaHeight - wallThickness / 2, arenaWidth, wallThickness, { isStatic: true, label: 'wall', render: { fillStyle: '#4a4a70' } }),
-                Bodies.rectangle(wallThickness / 2, arenaHeight / 2, wallThickness, arenaHeight, { isStatic: true, label: 'wall', render: { fillStyle: '#4a4a70' } }),
-                Bodies.rectangle(arenaWidth - wallThickness / 2, arenaHeight / 2, wallThickness, arenaHeight, { isStatic: true, label: 'wall', render: { fillStyle: '#4a4a70' } })
+                Bodies.rectangle(arenaWidth / 2, wallThickness / 2, arenaWidth, wallThickness, { isStatic: true, label: 'wall', render: { fillStyle: '#333' } }),
+                Bodies.rectangle(arenaWidth / 2, arenaHeight - wallThickness / 2, arenaWidth, wallThickness, { isStatic: true, label: 'wall', render: { fillStyle: '#333' } }),
+                Bodies.rectangle(wallThickness / 2, arenaHeight / 2, wallThickness, arenaHeight, { isStatic: true, label: 'wall', render: { fillStyle: '#333' } }),
+                Bodies.rectangle(arenaWidth - wallThickness / 2, arenaHeight / 2, wallThickness, arenaHeight, { isStatic: true, label: 'wall', render: { fillStyle: '#333' } })
             ];
             Composite.add(world, walls);
         }
 
         function initializeGame() {
-            // Durdurma ve Sıfırlama
-            if (gameState.runner) {
-                Runner.stop(gameState.runner);
-                // Eski event'leri temizle
-                Events.off(gameState.engine, 'afterUpdate', afterUpdateHandler);
-                Events.off(gameState.engine, 'collisionStart', collisionStartHandler);
+            // Engine ve World oluşturma (Eğer yoksa)
+            if (!engine) {
+                engine = Engine.create();
+                world = engine.world;
+                world.gravity.y = 0;
+                world.gravity.x = 0;
+            } else {
+                Engine.clear(engine);
+                Composite.clear(world, false); // Sadece body'leri temizle
             }
-            clearTimeout(gameState.itemSpawnTimer);
+            
+            // Runner'ı sıfırla/oluştur
+            if (runner) Runner.stop(runner);
+            runner = Runner.create();
+            Runner.run(runner, engine);
 
-            // Yeni Engine Oluştur
-            gameState.engine = Engine.create();
-            gameState.world = gameState.engine.world;
-            gameState.world.gravity.y = 0;
-            gameState.world.gravity.x = 0;
+            // Events silme/ekleme
+            Events.off(engine, 'afterUpdate', afterUpdateHandler);
+            Events.off(engine, 'collisionStart', collisionStartHandler);
+            Events.on(engine, 'afterUpdate', afterUpdateHandler);
+            Events.on(engine, 'collisionStart', collisionStartHandler);
+            
+            updateArenaSize();
+            setupWalls(); // Yeni duvarları oluştur
 
-            // Render yoksa oluştur
-            if (!gameState.render) {
-                gameState.render = Render.create({
-                    element: elements.gameContainer,
-                    engine: gameState.engine,
+            // Render oluşturma (Eğer yoksa)
+            if (!render) {
+                render = Render.create({
+                    element: gameContainer,
+                    engine: engine,
                     options: {
-                        width: gameState.arenaWidth,
-                        height: gameState.arenaHeight,
+                        width: arenaWidth,
+                        height: arenaHeight,
                         wireframes: false,
                         background: 'transparent',
                         showAngleIndicator: false
                     }
                 });
-                Render.run(gameState.render);
-            } else {
-                // Mevcut Render'ı güncelle
-                Render.setEngine(gameState.render, gameState.engine);
+                Render.run(render);
             }
             
-            // Boyutları ve duvarları ayarla
-            updateArenaSize(); 
-            setupWalls();
-
-            // Eski topları ve eşyaları temizle
-            Composite.clear(gameState.world, false, true); // Sadece body'leri temizle
-
-            // Runner'ı başlat
-            gameState.runner = Runner.create();
-            Runner.run(gameState.runner, gameState.engine);
-            
-            // Event listener'ları ekle
-            Events.on(gameState.engine, 'afterUpdate', afterUpdateHandler);
-            Events.on(gameState.engine, 'collisionStart', collisionStartHandler);
-            
-            gameState.isGameOver = false;
+            // Eski top ve eşyaları temizle
+            ball1 = null; ball2 = null;
+            currentItem = null;
+            clearTimeout(itemSpawnTimer);
+            itemEmojiDiv.style.display = 'none';
 
             // Oyuncu objelerini ve canlarını sıfırla
-            players.p1.health = gameState.MAX_HEALTH;
-            players.p2.health = gameState.MAX_HEALTH;
-            players.p1.hasSword = false;
-            players.p2.hasSword = false;
-            players.p1.swordIcon.style.display = 'none';
-            players.p2.swordIcon.style.display = 'none';
+            playerInfo.ball1.health = MAX_HEALTH;
+            playerInfo.ball2.health = MAX_HEALTH;
+            playerInfo.ball1.hasSword = false;
+            playerInfo.ball2.hasSword = false;
             
             // Topların oluşturulması
             const ballOptions = {
-                restitution: 1, 
-                friction: 0, 
-                frictionAir: 0, 
-                density: 0.1, 
+                restitution: 1, // Mükemmel sekme
+                friction: 0, // Sürtünme yok
+                frictionAir: 0, // Hava direnci yok
+                density: 0.1, // Düşük yoğunluk
+                inertia: Infinity, // Dönme ataleti yok
                 label: 'ball', // Ortak etiket
-                collisionFilter: { group: 0, category: 0x0001, mask: 0xFFFFFFFF }
+                render: { fillStyle: 'transparent', strokeStyle: 'transparent' }
             };
 
-            const { arenaWidth, arenaHeight, INITIAL_BALL_RADIUS } = gameState;
-
             // Topları oluştur
-            gameState.ball1 = Bodies.circle(
-                arenaWidth / 4, 
+            ball1 = Bodies.circle(
+                arenaWidth / 3, 
                 arenaHeight / 2, 
                 INITIAL_BALL_RADIUS, 
                 { 
                     ...ballOptions, 
-                    id: players.p1.id, // Oyuncu kimliğini body'e ekle
+                    label: 'ball1',
                     mass: 1,
                     inverseMass: 1
                 }
             );
 
-            gameState.ball2 = Bodies.circle(
-                arenaWidth * 3 / 4, 
+            ball2 = Bodies.circle(
+                arenaWidth * 2 / 3, 
                 arenaHeight / 2, 
                 INITIAL_BALL_RADIUS, 
                 { 
                     ...ballOptions, 
-                    id: players.p2.id, // Oyuncu kimliğini body'e ekle
+                    label: 'ball2',
                     mass: 1,
                     inverseMass: 1
                 }
             );
-
-            // Toplara rastgele başlangıç hızları ver
-            const speed = 5 + Math.random() * 3;
-            const angle1 = Math.random() * Math.PI * 2;
+            
+            // Toplara rastgele başlangıç hızları ver (MAX_SPEED civarında)
+            const speed = CONFIG.maxSpeed;
+            const angle1 = Math.random() * Math.PI * 2; 
             const angle2 = Math.PI + Math.random() * Math.PI; 
             
-            Body.setVelocity(gameState.ball1, { 
+            Body.setVelocity(ball1, { 
                 x: Math.cos(angle1) * speed, 
                 y: Math.sin(angle1) * speed 
             });
             
-            Body.setVelocity(gameState.ball2, { 
+            Body.setVelocity(ball2, { 
                 x: Math.cos(angle2) * speed, 
                 y: Math.sin(angle2) * speed 
             });
 
             // Topları dünyaya ekle
-            Composite.add(gameState.world, [gameState.ball1, gameState.ball2]);
+            Composite.add(world, [ball1, ball2]);
+            isGameOver = false;
+
+            // Görsel ve Durum Güncellemeleri
+            updateHealthBar(playerInfo.ball1, MAX_HEALTH);
+            updateHealthBar(playerInfo.ball2, MAX_HEALTH);
             
-            // CSS Fotoğraflarını Ayarla ve Canları Güncelle
-            updateHealthBar(players.p1, players.p1.health);
-            updateHealthBar(players.p2, players.p2.health);
-            
+            // CSS Fotoğraflarını Ayarla
+            playerInfo.ball1.photoDiv.style.backgroundImage = playerInfo.ball1.texture ? `url(${playerInfo.ball1.texture})` : 'none';
+            playerInfo.ball2.photoDiv.style.backgroundImage = playerInfo.ball2.texture ? `url(${playerInfo.ball2.texture})` : 'none';
+            playerInfo.ball1.photoDiv.style.backgroundColor = playerInfo.ball1.texture ? 'transparent' : playerInfo.ball1.color;
+            playerInfo.ball2.photoDiv.style.backgroundColor = playerInfo.ball2.texture ? 'transparent' : playerInfo.ball2.color;
+
             // Eşya Sistemi
-            gameState.itemSpawnTimer = setTimeout(spawnItem, 1000);
-            
-            // Top boyutlarını görsel divlere uygula (CSS için)
-            players.p1.photoDiv.style.width = players.p2.photoDiv.style.width = `${INITIAL_BALL_RADIUS * 2}px`;
-            players.p1.photoDiv.style.height = players.p2.photoDiv.style.height = `${INITIAL_BALL_RADIUS * 2}px`;
+            setTimeout(spawnItem, 1000);
         }
 
+        // Pencere boyutu değiştiğinde arenamızın boyutunu güncelle
+        const resizeObserver = new ResizeObserver(entries => {
+            if (isGameOver) return; // Oyun bitmişse konumları güncelleme
+            
+            const oldArenaWidth = arenaWidth;
+            const oldArenaHeight = arenaHeight;
+            
+            updateArenaSize();
+            
+            // Eğer toplar varsa, oranlı olarak konumlarını güncelle
+            if (ball1 && ball2 && oldArenaWidth > 0 && oldArenaHeight > 0) {
+                const scaleX = arenaWidth / oldArenaWidth;
+                const scaleY = arenaHeight / oldArenaHeight;
+                
+                Body.setPosition(ball1, {
+                    x: ball1.position.x * scaleX,
+                    y: ball1.position.y * scaleY
+                });
+                
+                Body.setPosition(ball2, {
+                    x: ball2.position.x * scaleX,
+                    y: ball2.position.y * scaleY
+                });
+            }
+        });
+        resizeObserver.observe(gameContainer);
+
+
         // --- OYUN MANTIK FONKSİYONLARI ---
+
         function updateHealthBar(player, health) {
-            const healthPercentage = (health / gameState.MAX_HEALTH) * 100;
+            const healthPercentage = (health / MAX_HEALTH) * 100;
             player.healthBar.style.width = `${healthPercentage}%`;
             
-            player.nameDisplay.textContent = `${player.name} Can: ${health}/${gameState.MAX_HEALTH}`;
+            player.nameDisplay.textContent = `${player.name} Can: ${health}/${MAX_HEALTH}`;
 
             if (healthPercentage <= 33) {
                 player.healthBar.classList.add('low-health');
@@ -529,209 +607,231 @@
             }
         }
 
-        function updatePhotoPosition(body, playerObj) {
-            if (body && body.position) {
-                // CSS pozisyonunu güncelle
-                playerObj.photoDiv.style.left = `${body.position.x}px`;
-                playerObj.photoDiv.style.top = `${body.position.y}px`;
-                Body.setAngularVelocity(body, 0); 
+        function updatePhotoPosition(body, player) {
+            if (body) {
+                // CSS Div konumunu Matter.js topuna göre ayarla
+                const ballDiameter = INITIAL_BALL_RADIUS * 2;
+                player.photoDiv.style.left = `${body.position.x - INITIAL_BALL_RADIUS}px`;
+                player.photoDiv.style.top = `${body.position.y - INITIAL_BALL_RADIUS}px`;
+                Body.setAngularVelocity(body, 0); // Topların dönmesini engelle
                 
-                // Kılıç simgesi animasyonu
-                if (playerObj.hasSword) {
-                    playerObj.swordIcon.style.display = 'block';
-                    playerObj.swordIcon.style.transform = `rotate(${Math.sin(gameState.engine.timing.timestamp * 0.005) * 15}deg)`;
+                // Kılıç ikonunu güncelle
+                if (player.hasSword) {
+                    player.swordIcon.style.display = 'block';
+                    // Hafif sallanma efekti
+                    player.swordIcon.style.transform = `rotate(${Math.sin(engine.timing.timestamp * 0.005) * 15}deg)`;
                 } else {
-                    playerObj.swordIcon.style.display = 'none';
+                    player.swordIcon.style.display = 'none';
                 }
             }
         }
 
-        function removeHitEffect(player, delay = 200) {
+        function removeHitEffect(player, delay = 300) {
             setTimeout(() => {
                 player.photoDiv.classList.remove('hit-effect');
             }, delay);
         }
 
         function endGame(winnerPlayer) {
-            if (gameState.isGameOver) return;
-            gameState.isGameOver = true;
+            if (isGameOver) return;
+            isGameOver = true;
             
-            if (gameState.runner) Runner.stop(gameState.runner); 
-            clearTimeout(gameState.itemSpawnTimer);
+            if (runner) Runner.stop(runner); // Oyunu durdur
 
             const winnerName = winnerPlayer.name;
-            elements.winnerText.textContent = `${winnerName} KAZANDI!`;
+            
+            winnerText.textContent = `${winnerName} KAZANDI!`;
             
             // Kazananın görselini ayarla
             if (winnerPlayer.texture) {
-                elements.winnerEmoji.style.backgroundImage = `url(${winnerPlayer.texture})`;
-                elements.winnerEmoji.textContent = '';
+                winnerEmoji.style.backgroundImage = `url(${winnerPlayer.texture})`;
+                winnerEmoji.style.backgroundSize = 'cover';
+                winnerEmoji.textContent = '';
+                winnerEmoji.style.backgroundColor = 'transparent';
             } else {
-                elements.winnerEmoji.style.backgroundImage = 'none';
-                elements.winnerEmoji.style.backgroundColor = winnerPlayer.color;
-                elements.winnerEmoji.textContent = winnerPlayer.emoji;
+                winnerEmoji.style.backgroundImage = 'none';
+                winnerEmoji.style.backgroundColor = winnerPlayer.color;
+                winnerEmoji.textContent = winnerPlayer.emoji;
             }
+            winnerEmoji.style.display = 'flex'; // Gerekli CSS özelliklerini ayarla
+            winnerEmoji.style.justifyContent = 'center';
+            winnerEmoji.style.alignItems = 'center';
+            winnerEmoji.style.borderRadius = '50%';
+            winnerEmoji.style.fontSize = '60px';
 
-            elements.gameOverModal.style.display = 'flex';
+
+            gameOverModal.style.display = 'flex';
             
-            if (gameState.currentItem) Composite.remove(gameState.world, gameState.currentItem);
-            elements.itemEmojiDiv.style.display = 'none';
+            if (currentItem) Composite.remove(world, currentItem);
+            clearTimeout(itemSpawnTimer);
+            itemEmojiDiv.style.display = 'none';
         }
 
         function spawnItem() {
-            if (gameState.currentItem) return;
-
             const currentItemType = 'sword';
             const emoji = '⚔️';
 
-            const { arenaWidth, arenaHeight, itemSize } = CONFIG;
+            // Duvarlardan ve toplardan yeterince uzakta rastgele konum
+            const padding = CONFIG.ballRadius * 2;
+            const x = Math.random() * (arenaWidth - 2 * padding) + padding;
+            const y = Math.random() * (arenaHeight - 2 * padding) + padding;
 
-            const x = Math.random() * (arenaWidth - 100) + 50;
-            const y = Math.random() * (arenaHeight - 100) + 50;
-
-            gameState.currentItem = Bodies.circle(x, y, itemSize / 2, { 
+            currentItem = Bodies.circle(x, y, CONFIG.itemSize / 2, { 
                 isStatic: true, 
                 render: { fillStyle: 'transparent' }, 
                 label: currentItemType,
-                collisionFilter: { group: 0, category: 0x0002 } 
+                collisionFilter: { group: 0 } 
             });
 
-            Composite.add(gameState.world, gameState.currentItem);
-            elements.itemEmojiDiv.textContent = emoji;
-            elements.itemEmojiDiv.style.display = 'block';
+            Composite.add(world, currentItem);
+            itemEmojiDiv.textContent = emoji;
+            itemEmojiDiv.style.display = 'block';
             
-            gameState.itemSpawnTimer = setTimeout(removeAndRespawnItem, CONFIG.itemRespawnTime * 3); // Çok uzun kalırsa kaybolsun
-        }
-        
-        function removeAndRespawnItem() {
-            if (gameState.currentItem) {
-                Composite.remove(gameState.world, gameState.currentItem);
-                gameState.currentItem = null;
-                elements.itemEmojiDiv.style.display = 'none';
-            }
-            gameState.itemSpawnTimer = setTimeout(spawnItem, CONFIG.itemRespawnTime);
+            clearTimeout(itemSpawnTimer);
         }
 
+        // **!!! ÖNEMLİ DÜZELTME: Topların Hız Kontrolü ve Sınırda Kalması !!!**
         const afterUpdateHandler = function() {
-            if (gameState.isGameOver) return; 
+            if (isGameOver || !ball1 || !ball2) return; 
 
-            // Eşya pozisyonunu güncelle
-            if (gameState.currentItem) {
-                elements.itemEmojiDiv.style.left = `${gameState.currentItem.position.x}px`;
-                elements.itemEmojiDiv.style.top = `${gameState.currentItem.position.y}px`;
+            if (currentItem) {
+                itemEmojiDiv.style.left = `${currentItem.position.x}px`;
+                itemEmojiDiv.style.top = `${currentItem.position.y}px`;
             }
 
-            // Top pozisyonlarını güncelle
-            updatePhotoPosition(gameState.ball1, players.p1);
-            updatePhotoPosition(gameState.ball2, players.p2);
+            updatePhotoPosition(ball1, playerInfo.ball1);
+            updatePhotoPosition(ball2, playerInfo.ball2);
 
-            // Hız Sınırlandırması (Enerji Kaybını Önler)
-            const checkSpeed = (ball) => {
-                if (!ball) return;
-                const speed = Math.sqrt(ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y);
+            const checkBallBoundsAndSpeed = (ball) => {
+                const wallThickness = 20;
+                const halfBall = CONFIG.ballRadius;
                 
-                if (speed < gameState.MAX_SPEED) {
-                    const scaleFactor = gameState.MAX_SPEED / speed;
-                    Body.setVelocity(ball, { x: ball.velocity.x * scaleFactor, y: ball.velocity.y * scaleFactor });
+                // 1. ARENA SINIR KONTROLÜ (Kaybolmayı önler)
+                let newX = ball.position.x;
+                let newY = ball.position.y;
+                let velocity = { ...ball.velocity };
+
+                // X Sınırları
+                if (newX < wallThickness + halfBall) {
+                    newX = wallThickness + halfBall;
+                    velocity.x = Math.abs(velocity.x); // Sağa sektir
+                } else if (newX > arenaWidth - wallThickness - halfBall) {
+                    newX = arenaWidth - wallThickness - halfBall;
+                    velocity.x = -Math.abs(velocity.x); // Sola sektir
                 }
+
+                // Y Sınırları
+                if (newY < wallThickness + halfBall) {
+                    newY = wallThickness + halfBall;
+                    velocity.y = Math.abs(velocity.y); // Aşağı sektir
+                } else if (newY > arenaHeight - wallThickness - halfBall) {
+                    newY = arenaHeight - wallThickness - halfBall;
+                    velocity.y = -Math.abs(velocity.y); // Yukarı sektir
+                }
+                
+                // Eğer konum değiştiyse, Matter.js pozisyonunu ayarla
+                if (newX !== ball.position.x || newY !== ball.position.y) {
+                    Body.setPosition(ball, { x: newX, y: newY });
+                }
+                
+                // 2. HIZ KONTROLÜ (Aynı süratte kalsın)
+                const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+                
+                // Eğer hız MAX_SPEED'den farklıysa düzelt
+                if (speed !== 0 && speed !== CONFIG.maxSpeed) {
+                    const scaleFactor = CONFIG.maxSpeed / speed;
+                    velocity.x *= scaleFactor;
+                    velocity.y *= scaleFactor;
+                }
+
+                // Hızı ayarla (Sınırda sektirme veya hız düzeltmesi nedeniyle değişmiş olabilir)
+                Body.setVelocity(ball, velocity);
+                
+                Body.setAngularVelocity(ball, 0); // Dönmeyi engelle
             };
 
-            checkSpeed(gameState.ball1);
-            checkSpeed(gameState.ball2);
+            checkBallBoundsAndSpeed(ball1);
+            checkBallBoundsAndSpeed(ball2);
         };
 
         const collisionStartHandler = function(event) {
-            if (gameState.isGameOver) return;
+            if (isGameOver) return;
 
             const pairs = event.pairs;
 
             pairs.forEach(pair => {
-                const bodyA = pair.bodyA;
-                const bodyB = pair.bodyB;
-                
-                const labels = [bodyA.label, bodyB.label];
-                const isBallCollision = labels.includes('ball') && labels.includes('ball');
-                const isItemCollision = labels.includes('sword') && labels.includes('ball'); 
-                
-                const ball1Body = gameState.ball1;
-                const ball2Body = gameState.ball2;
+                const labels = [pair.bodyA.label, pair.bodyB.label];
+                const isItemCollision = labels.includes('sword');
+                const isBallCollision = labels.includes('ball1') && labels.includes('ball2');
 
                 // 1. Öğe Alma Mantığı
-                if (isItemCollision) {
-                    const itemBody = bodyA.label === 'sword' ? bodyA : bodyB;
-                    const takerBall = bodyA.label === 'ball' ? bodyA : bodyB;
-
-                    if (itemBody === gameState.currentItem) { // Sadece mevcut eşyayı alabilir
-                        // Kılıç alma
-                        players.p1.hasSword = (takerBall === ball1Body);
-                        players.p2.hasSword = (takerBall === ball2Body);
-                        
-                        // Eşyayı kaldır
-                        Composite.remove(gameState.world, gameState.currentItem);
-                        gameState.currentItem = null;
-                        elements.itemEmojiDiv.style.display = 'none';
-                        clearTimeout(gameState.itemSpawnTimer);
-                        gameState.itemSpawnTimer = setTimeout(spawnItem, CONFIG.itemRespawnTime);
-                    }
+                if (isItemCollision && (labels.includes('ball1') || labels.includes('ball2'))) {
+                    const takerBall = pair.bodyA.label.startsWith('ball') ? pair.bodyA : pair.bodyB;
+                    
+                    playerInfo.ball1.hasSword = (takerBall === ball1);
+                    playerInfo.ball2.hasSword = (takerBall === ball2);
+                    
+                    Composite.remove(world, currentItem);
+                    itemEmojiDiv.style.display = 'none';
+                    currentItem = null;
+                    itemSpawnTimer = setTimeout(spawnItem, ITEM_RESPAWN_TIME);
                 }
 
-                // 2. Topların Birbirine Çarpışması
+                // 2. Topların Birbirine Çarpışması (Kılıç hasarı)
                 if (isBallCollision) {
-                    const p1 = players.p1;
-                    const p2 = players.p2;
+                    const p1 = playerInfo.ball1;
+                    const p2 = playerInfo.ball2;
 
                     let damageDealt = false;
                     let damagedPlayer = null;
                     
                     if (p1.hasSword && !p2.hasSword) {
                         p2.health--;
-                        p1.hasSword = false; 
+                        p1.hasSword = false;
                         damageDealt = true;
                         damagedPlayer = p2;
                     } else if (p2.hasSword && !p1.hasSword) {
                         p1.health--;
-                        p2.hasSword = false; 
+                        p2.hasSword = false;
                         damageDealt = true;
                         damagedPlayer = p1;
                     } else if (p1.hasSword && p2.hasSword) {
-                        // Kılıç kılıca çarpışma
+                        // Kılıçlar çarpışırsa ikisi de kaybolur
                         p1.hasSword = false;
                         p2.hasSword = false;
-                        damageDealt = false; 
+                        damageDealt = false;
                     }
                     
                     if (damageDealt) {
                         updateHealthBar(p1, p1.health);
                         updateHealthBar(p2, p2.health);
                         
-                        // Vurulan oyuncuya efekt ekle
-                        damagedPlayer.photoDiv.classList.add('hit-effect'); 
+                        damagedPlayer.photoDiv.classList.add('hit-effect');
                         removeHitEffect(damagedPlayer);
 
-                        // Kılıç çarpınca hemen yeni kılıç spawn süresini kısalt
-                        if (!gameState.currentItem) {
-                            clearTimeout(gameState.itemSpawnTimer);
-                            gameState.itemSpawnTimer = setTimeout(spawnItem, CONFIG.itemRespawnTime / 2); 
+                        // Kılıç çarpışma sonucu yok olduysa, eşya geri gelme süresini kısalt
+                        if (!currentItem) {
+                            itemSpawnTimer = setTimeout(spawnItem, ITEM_RESPAWN_TIME / 3);
                         }
                     }
 
-                    // Oyun Bitti Kontrolü
+                    // Oyun Sonu Kontrolü
                     if (p1.health <= 0) {
-                        endGame(players.p2);
+                        endGame(playerInfo.ball2);
                     } else if (p2.health <= 0) {
-                        endGame(players.p1);
+                        endGame(playerInfo.ball1);
                     }
                 }
             });
         };
-
+        
         // --- OYUN BAŞLATMA VE YÖNETİM ---
 
         // Fotoğraf yükleme işlevi
         function setupPhotoUpload(playerId) {
-            const input = elements[playerId].fileInput;
-            const preview = elements[playerId].preview;
-            const player = players[playerId];
+            const input = document.getElementById(`${playerId}-file`);
+            const preview = document.getElementById(`${playerId}-preview`);
+            const player = playerInfo[playerId === 'p1' ? 'ball1' : 'ball2'];
             
             input.addEventListener('change', (e) => {
                 const file = e.target.files[0];
@@ -747,18 +847,21 @@
                         canvas.height = size;
                         
                         const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, size, size);
+                        ctx.drawImage(
+                            img, 
+                            (img.width - size) / 2, 
+                            (img.height - size) / 2, 
+                            size, size, 
+                            0, 0, 
+                            size, size
+                        );
                         
                         const dataUrl = canvas.toDataURL('image/png');
                         player.texture = dataUrl;
-                        
-                        // Önizleme ve Top div'ini güncelle
                         preview.style.backgroundImage = `url(${dataUrl})`;
-                        preview.textContent = '';
-                        player.photoDiv.style.backgroundImage = `url(${dataUrl})`;
-                        player.photoDiv.textContent = '';
+                        preview.style.backgroundSize = 'cover';
                         
-                        checkCanStartGame();
+                        checkCanStartCustom();
                     };
                     img.src = event.target.result;
                 };
@@ -767,113 +870,67 @@
         }
 
         // Oyun başlatma kontrolü
-        function checkCanStartGame() {
-            const p1Ready = elements.p1.nameInput.value.trim() !== '';
-            const p2Ready = elements.p2.nameInput.value.trim() !== '';
-            elements.startGameBtn.disabled = !(p1Ready && p2Ready);
+        function checkCanStartCustom() {
+            const p1Ready = p1NameInput.value.trim() !== '';
+            const p2Ready = p2NameInput.value.trim() !== '';
+            startGameCustomButton.disabled = !(p1Ready && p2Ready);
             return p1Ready && p2Ready;
         }
 
-        // Oyunu başlat
-        function startGame() {
-            // Oyuncu isimlerini ve renk/fotoğraflarını global state'e kaydet
-            players.p1.name = elements.p1.nameInput.value.trim() || 'Oyuncu 1';
-            players.p2.name = elements.p2.nameInput.value.trim() || 'Oyuncu 2';
+        // Oyunu sıfırla ve yeni oyun başlat (Aynı ayarlar)
+        function resetGame() {
+            // Oyun durumunu sıfırla
+            isGameOver = false;
+            gameOverModal.style.display = 'none';
             
-            // Eğer fotoğraf seçilmediyse rastgele renk/emoji ata
-            if (!players.p1.texture) {
-                players.p1.color = getRandomColor();
-                players.p1.photoDiv.style.backgroundColor = players.p1.color;
-                players.p1.photoDiv.textContent = players.p1.emoji;
-            }
-            if (!players.p2.texture) {
-                players.p2.color = getRandomColor();
-                players.p2.photoDiv.style.backgroundColor = players.p2.color;
-                players.p2.photoDiv.textContent = players.p2.emoji;
-            }
+            // Oyunu başlat
+            initializeGame();
+        }
+
+        function startGameCustom() {
+            if (!checkCanStartCustom()) return;
+
+            // Oyuncu isimlerini güncelle
+            playerInfo.ball1.name = p1NameInput.value.trim() || 'Oyuncu 1';
+            playerInfo.ball2.name = p2NameInput.value.trim() || 'Oyuncu 2';
             
             // Modalı kapat
-            elements.setupModal.style.display = 'none';
-            elements.gameOverModal.style.display = 'none';
+            setupModal.style.display = 'none';
             
-            // Oyunu sıfırla ve başlat
+            // Oyunu yeni ayarlar ile başlat
             initializeGame();
         }
 
         // Event listener'ları kur
         function setupEventListeners() {
+            // Fotoğraf yükleme
             setupPhotoUpload('p1');
             setupPhotoUpload('p2');
             
             // İsim değişikliklerini dinle
-            elements.p1.nameInput.addEventListener('input', checkCanStartGame);
-            elements.p2.nameInput.addEventListener('input', checkCanStartGame);
+            p1NameInput.addEventListener('input', checkCanStartCustom);
+            p2NameInput.addEventListener('input', checkCanStartCustom);
             
-            // Oyun kontrolleri
-            elements.startGameBtn.addEventListener('click', startGame);
-            
-            elements.customizeBtn.addEventListener('click', () => {
-                if (gameState.runner) {
-                    Runner.stop(gameState.runner); // Oyun oynanırken durdur
-                }
-                elements.setupModal.style.display = 'flex';
-                // Mevcut bilgileri forma yükle
-                elements.p1.nameInput.value = players.p1.name;
-                elements.p2.nameInput.value = players.p2.name;
-                elements.p1.preview.style.backgroundImage = players.p1.texture ? `url(${players.p1.texture})` : 'none';
-                elements.p2.preview.style.backgroundImage = players.p2.texture ? `url(${players.p2.texture})` : 'none';
-                elements.p1.preview.textContent = players.p1.texture ? '' : players.p1.emoji;
-                elements.p2.preview.textContent = players.p2.texture ? '' : players.p2.emoji;
-                checkCanStartGame();
+            // Oyun Kontrolleri
+            startGameCustomButton.addEventListener('click', startGameCustom);
+            customizeButton.addEventListener('click', () => {
+                if (runner) Runner.stop(runner);
+                setupModal.style.display = 'flex';
             });
             
             // Oyun sonu butonları
-            document.getElementById('restart-button').addEventListener('click', startGame); // Aynı ayarla başlat
-            document.getElementById('new-game-button').addEventListener('click', () => {
-                elements.gameOverModal.style.display = 'none';
-                elements.setupModal.style.display = 'flex';
-            });
-            
-            // Responsive yeniden boyutlandırma
-            window.addEventListener('resize', () => {
-                if (!gameState.runner) return; // Oyun başlamadıysa fizik motorunu güncelleme
-                
-                const oldArenaWidth = gameState.arenaWidth;
-                const oldArenaHeight = gameState.arenaHeight;
-                
-                updateArenaSize(); 
-                setupWalls();
-                
-                // Topların pozisyonunu ölçeklendir
-                if (gameState.ball1 && gameState.ball2) {
-                    const scaleX = gameState.arenaWidth / oldArenaWidth;
-                    const scaleY = gameState.arenaHeight / oldArenaHeight;
-                    
-                    Body.setPosition(gameState.ball1, {
-                        x: gameState.ball1.position.x * scaleX,
-                        y: gameState.ball1.position.y * scaleY
-                    });
-                    Body.setPosition(gameState.ball2, {
-                        x: gameState.ball2.position.x * scaleX,
-                        y: gameState.ball2.position.y * scaleY
-                    });
-                }
+            restartButton.addEventListener('click', resetGame);
+            newGameButton.addEventListener('click', () => {
+                gameOverModal.style.display = 'none';
+                setupModal.style.display = 'flex';
             });
         }
-
+        
         // Sayfa yüklendiğinde çalıştır
         document.addEventListener('DOMContentLoaded', () => {
             setupEventListeners();
-            
-            // Başlangıçta varsayılan renk ve emoji ayarlarını uygula
-            players.p1.photoDiv.style.backgroundColor = players.p1.color;
-            players.p2.photoDiv.style.backgroundColor = players.p2.color;
-            
-            // setup modalını açarak oyunu başlatmaya hazırla
-            elements.setupModal.style.display = 'flex';
-            
-            // İlk kez oyun boyutlarını ayarla (Engine yokken bile)
             updateArenaSize(); 
+            // İlk açılışta Setup Modal'ı göster
         });
     </script>
 </body>
