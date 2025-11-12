@@ -41,10 +41,17 @@ canvas {
 .sword-icon {
     position: absolute;
     font-size: 50px; 
-    top: -25px; 
-    right: -25px; 
+    top: -30px; 
+    right: -30px; 
     transition: transform 0.1s ease-out;
     pointer-events: none;
+}
+
+/* Vuruş/Hasar Efekti */
+.hit-effect {
+    box-shadow: 0 0 15px 10px rgba(255, 0, 0, 0.8), 0 0 30px 15px rgba(255, 100, 100, 0.4);
+    border-radius: 50%;
+    transition: box-shadow 0.1s ease-out;
 }
 
 .item-emoji {
@@ -55,6 +62,13 @@ canvas {
     user-select: none;
     z-index: 11;
     display: none;
+    /* Eşya dönüşü */
+    animation: rotateItem 4s linear infinite; 
+}
+
+@keyframes rotateItem {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 /* STATUS BAR STİLİ */
@@ -71,94 +85,86 @@ canvas {
     box-sizing: border-box;
 }
 
-/* ... (health-bar ve player-status stilleri aynı kalır) ... */
-.player-status {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+/* ... (health-bar stilleri ve MODAL stilleri aynı kalır) ... */
+
+
+/* YENİ: ÖZELLEŞTİRME MODALI STİLLERİ */
+.setup-content {
+    max-width: 800px;
 }
-.player-name {
-    font-size: 14px;
-    margin-bottom: 5px;
+
+.player-setup-row {
+    display: flex;
+    gap: 40px;
+    margin-top: 20px;
+    margin-bottom: 30px;
+}
+
+.player-setup-box {
+    flex: 1;
+    padding: 20px;
+    border-radius: 10px;
+    background-color: #2c3e50;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.player-setup-box h3 {
+    margin-top: 0;
+    font-size: 20px;
+}
+
+#p1-name-input, #p2-name-input {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #34495e;
     color: #fff;
 }
-.health-bar-container {
-    width: 150px;
-    height: 15px;
-    background-color: #444;
-    border: 1px solid #777;
-    border-radius: 7px;
+
+.file-label {
+    display: block;
+    padding: 10px;
+    background-color: #3498DB;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s;
+}
+
+.file-label:hover {
+    background-color: #2980B9;
+}
+
+.file-input {
+    display: none; /* Dosya seçme butonunu gizle */
+}
+
+.image-preview {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    margin: 15px auto 0;
+    border: 3px solid #f1c40f;
+    background-size: cover;
+    background-position: center;
+    background-color: #34495e;
     overflow: hidden;
 }
-.health-bar {
-    height: 100%;
-    width: 100%;
-    background-color: #4CAF50;
-    transition: width 0.5s ease-in-out, background-color 0.5s;
-}
-.low-health {
-    background-color: #F44336;
+
+#start-game-button {
+    margin-top: 20px;
 }
 
-/* YENİ MODAL STİLLERİ */
-.modal-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.8); /* Arka planı karart */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 100; /* En üstte olmalı */
+#start-game-button:disabled {
+    background-color: #7f8c8d;
+    cursor: not-allowed;
 }
 
-.modal-content {
-    background: linear-gradient(145deg, #2c3e50, #34495e);
-    padding: 40px 60px;
-    border-radius: 15px;
-    text-align: center;
-    box-shadow: 0 0 50px rgba(255, 255, 255, 0.2);
-    animation: fadeIn 0.5s ease-out;
-}
-
-#winner-text {
-    font-size: 32px;
-    color: #4CAF50; /* Yeşil */
-    margin-bottom: 10px;
-}
-
-.winner-emoji-display {
-    font-size: 80px;
-    margin: 20px 0;
-    animation: pulse 1.5s infinite;
-}
-
-#restart-button {
-    padding: 10px 25px;
-    font-size: 18px;
-    font-weight: bold;
-    color: #fff;
-    background-color: #E74C3C; /* Kırmızı düğme */
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.3s, transform 0.1s;
-}
-
-#restart-button:hover {
-    background-color: #C0392B;
-    transform: scale(1.05);
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.8); }
-    to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+.small-info {
+    font-size: 12px;
+    color: #bdc3c7;
+    margin-top: 15px;
 }
