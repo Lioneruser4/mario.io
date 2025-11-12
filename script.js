@@ -1,14 +1,15 @@
 const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
 
 // --- AYARLAR ---
-let arenaWidth = 0; 
-let arenaHeight = 0;
-let INITIAL_BALL_RADIUS = 0;
+let arenaWidth = 800; // Varsayılan değerler
+let arenaHeight = 800;
+let INITIAL_BALL_RADIUS = 40;
 const MAX_HEALTH = 5; 
 const itemSize = 40;
 const itemRespawnTime = 3000;
 const MAX_SPEED = 8; 
 let isGameOver = false;
+let runner = null;
 
 // --- HTML ELEMANLARI ---
 const setupModal = document.getElementById('setup-modal');
@@ -138,17 +139,31 @@ function setupWalls() {
 }
 
 function initializeGame() {
-    // ! KRİTİK DÜZELTME 1: Runner'ı mutlaka çalışır hale getir
-    if (!runner) {
-        runner = Runner.create();
-        Events.on(engine, 'afterUpdate', afterUpdateHandler);
-        Events.on(engine, 'collisionStart', collisionStartHandler);
+    // Engine'i sıfırla
+    if (engine) {
+        Engine.clear(engine);
     }
+    
+    // Yeni bir engine oluştur
+    engine = Engine.create();
+    world = engine.world;
+    world.gravity.y = 0;
+    world.gravity.x = 0;
+    
+    // Runner'ı başlat
+    if (runner) {
+        Runner.stop(runner);
+    }
+    runner = Runner.create();
+    
+    // Event listener'ları ekle
+    Events.on(engine, 'afterUpdate', afterUpdateHandler);
+    Events.on(engine, 'collisionStart', collisionStartHandler);
     
     // Ekran boyutunu güncelle
     updateArenaSize();
     
-    // Render yoksa oluştur
+    // Render yoksa oluştur, varsa güncelle
     if (!render) {
         render = Render.create({
             element: gameContainer,
@@ -157,10 +172,16 @@ function initializeGame() {
                 width: arenaWidth,
                 height: arenaHeight,
                 wireframes: false,
-                background: 'transparent'
+                background: 'transparent',
+                showAngleIndicator: false
             }
         });
         Render.run(render);
+    } else {
+        // Mevcut render'ı güncelle
+        render.options.width = arenaWidth;
+        render.options.height = arenaHeight;
+        Render.setPixelRatio(render, window.devicePixelRatio);
     }
     
     // Eski top ve eşyaları temizle
@@ -191,16 +212,52 @@ function initializeGame() {
     
     // Topların oluşturulması
     const ballOptions = {
-        restitution: 1.0,
-        friction: 0.0, frictionAir: 0.0, density: 0.001, inertia: Infinity, angularVelocity: 0, angularSpin: 0,
-        render: { fillStyle: 'transparent' }, 
-        collisionFilter: { group: 0 } 
+        restitution: 0.9,
+        friction: 0.005,
+        frictionAir: 0.01,
+        density: 0.5,
+        inertia: Infinity,
+        render: { 
+            fillStyle: 'transparent',
+            strokeStyle: 'transparent'
+        },
+        collisionFilter: { 
+            group: 0,
+            category: 0x0001,
+            mask: 0xFFFFFFFF
+        }
     };
 
-    ball1 = Bodies.circle(arenaWidth / 4, arenaHeight / 2, INITIAL_BALL_RADIUS, { ...ballOptions, label: 'ball1' });
-    ball2 = Bodies.circle(arenaWidth * 3 / 4, arenaHeight / 2, INITIAL_BALL_RADIUS, { ...ballOptions, label: 'ball2' });
+    // Topları oluştur
+    ball1 = Bodies.circle(
+        arenaWidth / 4, 
+        arenaHeight / 2, 
+        INITIAL_BALL_RADIUS, 
+        { 
+            ...ballOptions, 
+            label: 'ball1',
+            mass: 10,
+            inverseMass: 1/10
+        }
+    );
 
+    ball2 = Bodies.circle(
+        arenaWidth * 3 / 4, 
+        arenaHeight / 2, 
+        INITIAL_BALL_RADIUS, 
+        { 
+            ...ballOptions, 
+            label: 'ball2',
+            mass: 10,
+            inverseMass: 1/10
+        }
+    );
+
+    // Topları dünyaya ekle
     Composite.add(world, [ball1, ball2]);
+    
+    // Fizik motorunu başlat
+    Engine.update(engine);
     
     // CSS Fotoğraflarını Ayarla
     // ! DÜZELTME 2: Fotoğraf yolları yoksa div'i temizle
@@ -208,9 +265,20 @@ function initializeGame() {
     playerInfo.ball2.photoDiv.style.backgroundImage = playerInfo.ball2.texture ? `url(${playerInfo.ball2.texture})` : 'none';
 
 
-    // Başlangıç Hızı
-    Body.setVelocity(ball1, { x: MAX_SPEED, y: MAX_SPEED * (Math.random() > 0.5 ? 1 : -1) });
-    Body.setVelocity(ball2, { x: -MAX_SPEED, y: MAX_SPEED * (Math.random() > 0.5 ? 1 : -1) });
+    // Başlangıç Hızı (daha yüksek hız)
+    const speed = MAX_SPEED * 2;
+    Body.setVelocity(ball1, { 
+        x: speed, 
+        y: speed * (Math.random() > 0.5 ? 1 : -0.5) 
+    });
+    Body.setVelocity(ball2, { 
+        x: -speed, 
+        y: speed * (Math.random() > 0.5 ? 1 : -0.5) 
+    });
+    
+    // Açısal hızı sıfırla
+    Body.setAngularVelocity(ball1, 0);
+    Body.setAngularVelocity(ball2, 0);
 
     // Can ve İsimleri Güncelle
     updateHealthBar(playerInfo.ball1, MAX_HEALTH);
@@ -231,11 +299,41 @@ function initializeGame() {
 }
 
 // Pencere boyutu değiştiğinde arenamızın boyutunu güncelle
-const resizeObserver = new ResizeObserver(updateArenaSize);
-resizeObserver.observe(document.getElementById('game-container'));
+const resizeObserver = new ResizeObserver(entries => {
+    // Önceki boyutları sakla
+    const oldArenaWidth = arenaWidth;
+    const oldArenaHeight = arenaHeight;
+    
+    // Yeni boyutları güncelle
+    updateArenaSize();
+    
+    // Eğer toplar varsa, oranlı olarak konumlarını güncelle
+    if (ball1 && ball2) {
+        const scaleX = arenaWidth / oldArenaWidth;
+        const scaleY = arenaHeight / oldArenaHeight;
+        
+        Body.setPosition(ball1, {
+            x: ball1.position.x * scaleX,
+            y: ball1.position.y * scaleY
+        });
+        
+        Body.setPosition(ball2, {
+            x: ball2.position.x * scaleX,
+            y: ball2.position.y * scaleY
+        });
+    }
+});
 
 // İlk yüklemede boyutları ayarla
-window.addEventListener('load', updateArenaSize);
+window.addEventListener('load', () => {
+    updateArenaSize();
+    
+    // Oyunu başlatmak için küçük bir gecikme ekle
+    setTimeout(() => {
+        const startBtn = document.getElementById('start-custom-game-button');
+        if (startBtn) startBtn.click();
+    }, 500);
+});
 
 // --- OYUN MANTIK FONKSİYONLARI (Değişmedi) ---
 
