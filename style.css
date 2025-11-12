@@ -1,48 +1,95 @@
 body {
     margin: 0;
-    overflow: hidden; /* Kaydırma çubuklarını gizle */
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background-color: #222;
+    background: linear-gradient(135deg, #1f1c2c, #928dab); /* Gradient Arkaplan */
     color: #eee;
-    font-family: Arial, sans-serif;
-}
-
-h1 {
-    margin-bottom: 20px;
-    color: #4CAF50;
+    font-family: 'Roboto', sans-serif;
 }
 
 #game-container {
     position: relative;
-    border: 2px solid #555;
-    background-color: #333;
-    /* Canvas boyutu script.js içinde ayarlanacak, bu sadece kapsayıcı */
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7); /* Daha belirgin gölge */
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: #00000030;
 }
 
 canvas {
-    display: block; /* Canvas altındaki boşluğu kaldır */
-    background-color: transparent; /* Matter.js canvas'ının arkaplanını şeffaf yap */
+    display: block;
+    background-color: transparent;
 }
 
+/* EMOJİ STİLİ (Toplar ve Öğeler) */
 .ball-emoji {
     position: absolute;
-    font-size: 30px; /* Emojinin boyutu */
-    pointer-events: none; /* Emojiye tıklamayı engelle */
-    transform: translate(-50%, -50%); /* Merkezi kendi etrafında ortala */
-    user-select: none; /* Seçmeyi engelle */
-    z-index: 10; /* Canvas'ın üzerinde görünmesini sağla */
+    font-size: 35px; 
+    pointer-events: none;
+    /* translate(-50%, -50%) merkezi ortalar */
+    transform: translate(-50%, -50%); 
+    user-select: none;
+    z-index: 10;
+    /* Toplar dönerken emojilerin stabil kalması için */
+    will-change: transform; 
 }
 
-.sword-emoji {
+.item-emoji {
     position: absolute;
-    font-size: 40px; /* Kılıç emojisinin boyutu */
+    font-size: 45px;
     pointer-events: none;
     transform: translate(-50%, -50%);
     user-select: none;
-    z-index: 11; /* En üstte görünsün */
-    display: none; /* Başlangıçta gizli, script.js gösterecek */
+    z-index: 11;
+    display: none;
+    transition: transform 0.1s ease-out; 
+}
+
+/* STATUS BAR STİLİ (Profesyonel) */
+#status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    z-index: 20;
+    background-color: #00000070;
+    box-sizing: border-box;
+}
+
+.player-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.player-name {
+    font-size: 14px;
+    margin-bottom: 5px;
+    color: #fff;
+}
+
+.health-bar-container {
+    width: 150px;
+    height: 15px;
+    background-color: #444;
+    border: 1px solid #777;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.health-bar {
+    height: 100%;
+    width: 100%;
+    background-color: #4CAF50; /* Yeşil */
+    transition: width 0.5s ease-in-out, background-color 0.5s;
+}
+
+.low-health {
+    background-color: #F44336; /* Kırmızı */
 }
