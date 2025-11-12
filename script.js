@@ -1,49 +1,93 @@
-const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+// Oyun ayarları
+const CONFIG = {
+    arenaSize: 800,
+    ballRadius: 40,
+    maxHealth: 5,
+    itemSize: 40,
+    itemRespawnTime: 3000,
+    maxSpeed: 8,
+    colors: ['#FF5252', '#4CAF50', '#2196F3', '#FFC107', '#9C27B0', '#00BCD4']
+};
 
-// --- AYARLAR ---
-let arenaWidth = 800; // Varsayılan değerler
-let arenaHeight = 800;
-let INITIAL_BALL_RADIUS = 40;
-const MAX_HEALTH = 5; 
-const itemSize = 40;
-const itemRespawnTime = 3000;
-const MAX_SPEED = 8; 
-let isGameOver = false;
-let runner = null;
+// Oyun durumu
+const gameState = {
+    isGameOver: false,
+    currentItem: null,
+    itemSpawnTimer: null,
+    runner: null,
+    render: null,
+    engine: null,
+    world: null,
+    ball1: null,
+    ball2: null
+};
 
-// --- HTML ELEMANLARI ---
-const setupModal = document.getElementById('setup-modal');
-const startGameCustomButton = document.getElementById('start-custom-game-button'); 
-const customizeButton = document.getElementById('customize-button'); 
-const p1NameInput = document.getElementById('p1-name-input');
-const p2NameInput = document.getElementById('p2-name-input');
-const p1FileInput = document.getElementById('p1-file');
-const p2FileInput = document.getElementById('p2-file');
-const p1Preview = document.getElementById('p1-preview');
-const p2Preview = document.getElementById('p2-preview');
+// Oyuncu bilgileri
+const players = {
+    p1: {
+        id: 'p1',
+        name: 'Oyuncu 1',
+        health: CONFIG.maxHealth,
+        hasSword: false,
+        texture: '',
+        emoji: '🔴',
+        color: CONFIG.colors[0],
+        photoDiv: document.getElementById('ball1-photo'),
+        nameDisplay: document.getElementById('p1-name-display'),
+        healthBar: document.getElementById('p1-health').querySelector('.health-bar'),
+        swordIcon: document.getElementById('p1-sword')
+    },
+    p2: {
+        id: 'p2',
+        name: 'Oyuncu 2',
+        health: CONFIG.maxHealth,
+        hasSword: false,
+        texture: '',
+        emoji: '🔵',
+        color: CONFIG.colors[1],
+        photoDiv: document.getElementById('ball2-photo'),
+        nameDisplay: document.getElementById('p2-name-display'),
+        healthBar: document.getElementById('p2-health').querySelector('.health-bar'),
+        swordIcon: document.getElementById('p2-sword')
+    }
+};
 
-const p1NameDisplay = document.getElementById('p1-name-display');
-const p2NameDisplay = document.getElementById('p2-name-display');
-const photo1Div = document.getElementById('ball1-photo');
-const photo2Div = document.getElementById('ball2-photo');
-const itemEmojiDiv = document.getElementById('item-emoji');
+// HTML elementleri
+const elements = {
+    setupModal: document.getElementById('setup-modal'),
+    startGameBtn: document.getElementById('start-custom-game-button'),
+    customizeBtn: document.getElementById('customize-button'),
+    gameOverModal: document.getElementById('game-over-modal'),
+    winnerText: document.getElementById('winner-text'),
+    winnerEmoji: document.getElementById('winner-emoji'),
+    itemEmoji: document.getElementById('item-emoji'),
+    p1: {
+        nameInput: document.getElementById('p1-name-input'),
+        fileInput: document.getElementById('p1-file'),
+        preview: document.getElementById('p1-preview')
+    },
+    p2: {
+        nameInput: document.getElementById('p2-name-input'),
+        fileInput: document.getElementById('p2-file'),
+        preview: document.getElementById('p2-preview')
+    }
+};
 
-const gameOverModal = document.getElementById('game-over-modal');
-const winnerText = document.getElementById('winner-text');
-const winnerEmoji = document.getElementById('winner-emoji');
-const restartButton = document.getElementById('restart-button');
-const newGameButton = document.getElementById('new-game-button'); 
-
-// --- MATTER.JS DEĞİŞKENLERİ ---
-const engine = Engine.create();
-const world = engine.world;
-world.gravity.y = 0; 
-world.gravity.x = 0;
-let runner = null; 
-
-const gameContainer = document.getElementById('game-container');
-let render = null;
-let ball1, ball2;
+// Oyun alanı boyutlarını güncelle
+function updateArenaSize() {
+    const container = document.getElementById('game-container');
+    const size = Math.min(container.clientWidth, container.clientHeight);
+    CONFIG.arenaSize = size;
+    CONFIG.ballRadius = size * 0.05; // Ekran boyutuna göre top büyüklüğü
+    
+    if (gameState.render) {
+        gameState.render.options.width = size;
+        gameState.render.options.height = size;
+        Render.setPixelRatio(gameState.render, window.devicePixelRatio);
+    }
+    
+    return size;
+}
 
 // --- OYUNCU BİLGİLERİ ---
 const playerInfo = {
@@ -328,11 +372,13 @@ const resizeObserver = new ResizeObserver(entries => {
 window.addEventListener('load', () => {
     updateArenaSize();
     
-    // Oyunu başlatmak için küçük bir gecikme ekle
-    setTimeout(() => {
-        const startBtn = document.getElementById('start-custom-game-button');
-        if (startBtn) startBtn.click();
-    }, 500);
+    // Oyunu başlat
+    initializeGame();
+    
+    // Eğer başlat butonu görünürse tıkla
+    if (elements.startGameBtn && !gameState.runner) {
+        elements.startGameBtn.click();
+    }
 });
 
 // --- OYUN MANTIK FONKSİYONLARI (Değişmedi) ---
@@ -527,35 +573,125 @@ const collisionStartHandler = function(event) {
     });
 };
 
-// --- ÖZELLEŞTİRME VE AKIŞ YÖNETİMİ ---
+// --- OYUN BAŞLATMA VE YÖNETİM ---
 
-function setupFileReader(fileInput, previewDiv, player) {
-    fileInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const url = e.target.result;
-                previewDiv.style.backgroundImage = `url(${url})`;
-                player.texture = url;
-                checkCanStartCustom();
+// Fotoğraf yükleme işlevi
+function setupPhotoUpload(playerId) {
+    const input = elements[playerId].fileInput;
+    const preview = elements[playerId].preview;
+    const player = players[playerId];
+    
+    input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                // Resmi kare yap
+                const canvas = document.createElement('canvas');
+                const size = Math.min(img.width, img.height);
+                canvas.width = size;
+                canvas.height = size;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(
+                    img, 
+                    (img.width - size) / 2, 
+                    (img.height - size) / 2, 
+                    size, size, 
+                    0, 0, 
+                    size, size
+                );
+                
+                const dataUrl = canvas.toDataURL('image/png');
+                player.texture = dataUrl;
+                preview.style.backgroundImage = `url(${dataUrl})`;
+                preview.style.backgroundSize = 'cover';
+                
+                // Eğer oyun başlamışsa topun görselini güncelle
+                if (gameState[`ball${playerId === 'p1' ? '1' : '2'}`]) {
+                    const ballDiv = player.photoDiv;
+                    ballDiv.style.backgroundImage = `url(${dataUrl})`;
+                    ballDiv.style.backgroundSize = 'cover';
+                    ballDiv.textContent = '';
+                }
+                
+                checkCanStartGame();
             };
-            reader.readAsDataURL(file);
-        }
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
     });
 }
 
-function checkCanStartCustom() {
-    // Sadece isimlerin dolu olması yeterli
-    const p1Ready = p1NameInput.value.trim() !== '';
-    const p2Ready = p2NameInput.value.trim() !== '';
-    startGameCustomButton.disabled = !(p1Ready && p2Ready);
+// Oyun başlatma kontrolü
+function checkCanStartGame() {
+    const p1Ready = elements.p1.nameInput.value.trim() !== '';
+    const p2Ready = elements.p2.nameInput.value.trim() !== '';
+    elements.startGameBtn.disabled = !(p1Ready && p2Ready);
+    return p1Ready && p2Ready;
 }
 
-setupFileReader(p1FileInput, p1Preview, playerInfo.ball1);
-setupFileReader(p2FileInput, p2Preview, playerInfo.ball2);
-p1NameInput.addEventListener('input', checkCanStartCustom);
-p2NameInput.addEventListener('input', checkCanStartCustom);
+// Oyunu başlat
+function startGame() {
+    // Oyuncu isimlerini güncelle
+    players.p1.name = elements.p1.nameInput.value.trim() || 'Oyuncu 1';
+    players.p2.name = elements.p2.nameInput.value.trim() || 'Oyuncu 2';
+    
+    // Modalı kapat
+    elements.setupModal.style.display = 'none';
+    
+    // Oyunu başlat
+    resetGame();
+}
+
+// Event listener'ları kur
+function setupEventListeners() {
+    // Fotoğraf yükleme
+    setupPhotoUpload('p1');
+    setupPhotoUpload('p2');
+    
+    // İsim değişikliklerini dinle
+    elements.p1.nameInput.addEventListener('input', checkCanStartGame);
+    elements.p2.nameInput.addEventListener('input', checkCanStartGame);
+    
+    // Oyun kontrolleri
+    elements.startGameBtn.addEventListener('click', startGame);
+    elements.customizeBtn.addEventListener('click', () => {
+        if (gameState.runner) {
+            Runner.stop(gameState.runner);
+        }
+        elements.setupModal.style.display = 'flex';
+    });
+    
+    // Oyun sonu butonları
+    document.getElementById('restart-button').addEventListener('click', resetGame);
+    document.getElementById('new-game-button').addEventListener('click', () => {
+        elements.gameOverModal.style.display = 'none';
+        elements.setupModal.style.display = 'flex';
+    });
+    
+    // Klavye kontrolleri
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+}
+
+// Sayfa yüklendiğinde çalıştır
+document.addEventListener('DOMContentLoaded', () => {
+    setupEventListeners();
+    updateArenaSize();
+    
+    // Varsayılan oyuncu renklerini ayarla
+    players.p1.photoDiv.style.backgroundColor = players.p1.color;
+    players.p2.photoDiv.style.backgroundColor = players.p2.color;
+    
+    // Oyunu başlat
+    if (checkCanStartGame()) {
+        startGame();
+    }
+});
 
 
 // --- Buton Aksiyonları ---
