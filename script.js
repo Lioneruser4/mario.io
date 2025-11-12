@@ -5,7 +5,7 @@ const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
 let arenaWidth = 900; 
 let arenaHeight = 900;
 const INITIAL_BALL_RADIUS = 60;
-const MAX_HEALTH = 5; // ! DÜZELTME: Can 5 yapıldı
+const MAX_HEALTH = 5; 
 const itemSize = 40;
 const itemRespawnTime = 3000;
 const MAX_SPEED = 8; 
@@ -13,8 +13,8 @@ let isGameOver = false;
 
 // --- HTML ELEMANLARI ---
 const setupModal = document.getElementById('setup-modal');
-const startGameCustomButton = document.getElementById('start-custom-game-button'); // İsim değiştirildi
-const customizeButton = document.getElementById('customize-button'); // Yeni alt buton
+const startGameCustomButton = document.getElementById('start-custom-game-button'); 
+const customizeButton = document.getElementById('customize-button'); 
 const p1NameInput = document.getElementById('p1-name-input');
 const p2NameInput = document.getElementById('p2-name-input');
 const p1FileInput = document.getElementById('p1-file');
@@ -32,14 +32,14 @@ const gameOverModal = document.getElementById('game-over-modal');
 const winnerText = document.getElementById('winner-text');
 const winnerEmoji = document.getElementById('winner-emoji');
 const restartButton = document.getElementById('restart-button');
-const newGameButton = document.getElementById('new-game-button'); // Yeni buton
+const newGameButton = document.getElementById('new-game-button'); 
 
 // --- MATTER.JS DEĞİŞKENLERİ ---
 const engine = Engine.create();
 const world = engine.world;
 world.gravity.y = 0; 
 world.gravity.x = 0;
-let runner = null; // Runner başlangıçta null
+let runner = null; 
 
 const gameContainer = document.getElementById('game-container');
 let render = null;
@@ -47,14 +47,14 @@ let ball1, ball2;
 
 // --- OYUNCU BİLGİLERİ ---
 const playerInfo = {
-    ball1: { health: MAX_HEALTH, hasSword: false, photoDiv: photo1Div, swordIcon: document.getElementById('p1-sword'), healthBar: document.getElementById('p1-health').querySelector('.health-bar'), nameDisplay: p1NameDisplay, name: 'Oyuncu 1', texture: './default-p1.png' }, // Varsayılan foto/isim
-    ball2: { health: MAX_HEALTH, hasSword: false, photoDiv: photo2Div, swordIcon: document.getElementById('p2-sword'), healthBar: document.getElementById('p2-health').querySelector('.health-bar'), nameDisplay: p2NameDisplay, name: 'Oyuncu 2', texture: './default-p2.png' } // Varsayılan foto/isim
+    // ! DÜZELTME: Varsayılan değerler boş string olmalı ki, fotoğraf eklenince otomatik güncellensin.
+    ball1: { health: MAX_HEALTH, hasSword: false, photoDiv: photo1Div, swordIcon: document.getElementById('p1-sword'), healthBar: document.getElementById('p1-health').querySelector('.health-bar'), nameDisplay: p1NameDisplay, name: 'Oyuncu 1', texture: '' }, 
+    ball2: { health: MAX_HEALTH, hasSword: false, photoDiv: photo2Div, swordIcon: document.getElementById('p2-sword'), healthBar: document.getElementById('p2-health').querySelector('.health-bar'), nameDisplay: p2NameDisplay, name: 'Oyuncu 2', texture: '' } 
 };
 
 // --- RESPONSIVE VE ARENA YÖNETİMİ ---
 
 function updateArenaSize() {
-    // Game container'ın anlık boyutunu al
     arenaWidth = gameContainer.clientWidth;
     arenaHeight = gameContainer.clientHeight;
     
@@ -69,9 +69,14 @@ function updateArenaSize() {
     }
 }
 
-// Duvarları yeniden oluşturma ve eski topları kaldırma
 function setupWalls() {
-    Composite.clear(world, false); 
+    // Sadece duvarları temizle, topları initializeGame halledecek
+    Composite.allBodies(world).forEach(body => {
+        if (body.label === 'wall' || body.label === 'sword') {
+             Composite.remove(world, body);
+        }
+    });
+
     const wallThickness = 20;
 
     const walls = [
@@ -84,7 +89,14 @@ function setupWalls() {
 }
 
 function initializeGame() {
-    // Sadece ilk çağrıda Render oluşturulur
+    // ! KRİTİK DÜZELTME 1: Runner'ı mutlaka çalışır hale getir
+    if (!runner) {
+        runner = Runner.create();
+        Events.on(engine, 'afterUpdate', afterUpdateHandler);
+        Events.on(engine, 'collisionStart', collisionStartHandler);
+    }
+    
+    // Render yoksa oluştur
     if (!render) {
         render = Render.create({
             element: gameContainer,
@@ -97,12 +109,21 @@ function initializeGame() {
             }
         });
         Render.run(render);
-        runner = Runner.create();
-        Events.on(engine, 'afterUpdate', afterUpdateHandler);
-        Events.on(engine, 'collisionStart', collisionStartHandler);
     }
     
-    // İlk çağrıda arena boyutunu ayarla
+    // Eski top ve eşyaları temizle
+    if (ball1 && ball2) {
+        Composite.remove(world, [ball1, ball2]);
+        ball1 = null; ball2 = null;
+    }
+    if (currentItem) {
+        Composite.remove(world, currentItem);
+        currentItem = null;
+    }
+    clearTimeout(itemSpawnTimer);
+    itemEmojiDiv.style.display = 'none';
+
+    // Arena ve Duvarları sıfırla
     updateArenaSize(); 
     setupWalls();
     
@@ -130,8 +151,10 @@ function initializeGame() {
     Composite.add(world, [ball1, ball2]);
     
     // CSS Fotoğraflarını Ayarla
-    playerInfo.ball1.photoDiv.style.backgroundImage = `url(${playerInfo.ball1.texture})`;
-    playerInfo.ball2.photoDiv.style.backgroundImage = `url(${playerInfo.ball2.texture})`;
+    // ! DÜZELTME 2: Fotoğraf yolları yoksa div'i temizle
+    playerInfo.ball1.photoDiv.style.backgroundImage = playerInfo.ball1.texture ? `url(${playerInfo.ball1.texture})` : 'none';
+    playerInfo.ball2.photoDiv.style.backgroundImage = playerInfo.ball2.texture ? `url(${playerInfo.ball2.texture})` : 'none';
+
 
     // Başlangıç Hızı
     Body.setVelocity(ball1, { x: MAX_SPEED, y: MAX_SPEED * (Math.random() > 0.5 ? 1 : -1) });
@@ -151,7 +174,7 @@ window.addEventListener('resize', () => {
     setupWalls();
 });
 
-// --- OYUN MANTIK FONKSİYONLARI (Aynı Kaldı) ---
+// --- OYUN MANTIK FONKSİYONLARI (Değişmedi) ---
 
 function updateHealthBar(player, health) {
     const healthPercentage = (health / MAX_HEALTH) * 100;
@@ -192,10 +215,11 @@ function endGame(winnerPlayer) {
     if (isGameOver) return;
     isGameOver = true;
     
-    Runner.stop(runner); 
+    // ! Runner'ı kesinlikle durdur
+    if (runner) Runner.stop(runner); 
 
     const winnerName = winnerPlayer.name;
-    const winnerEmojiCode = winnerPlayer.texture.includes('default') ? '🏆' : ''; 
+    const winnerEmojiCode = winnerPlayer.texture ? '' : '🏆'; 
 
     winnerText.textContent = `${winnerName} KAZANDI!`;
     winnerEmoji.textContent = winnerEmojiCode;
@@ -213,7 +237,6 @@ function endGame(winnerPlayer) {
 }
 
 function spawnItem() {
-    // ! DÜZELTME: Sadece Kılıç (Sword) spawn edilir, Bomba kaldırıldı
     const currentItemType = 'sword';
     const emoji = '⚔️';
 
@@ -233,8 +256,6 @@ function spawnItem() {
     
     clearTimeout(itemSpawnTimer);
 }
-
-// --- EVENT HANDLERS ---
 
 const afterUpdateHandler = function() {
     if (isGameOver) return; 
@@ -268,7 +289,7 @@ const collisionStartHandler = function(event) {
 
     pairs.forEach(pair => {
         const labels = [pair.bodyA.label, pair.bodyB.label];
-        const isItemCollision = labels.includes('sword'); // ! Bomba kaldırıldı
+        const isItemCollision = labels.includes('sword'); 
         const isBallCollision = labels.includes('ball1') && labels.includes('ball2');
 
         // 1. Öğe Alma Mantığı
@@ -276,12 +297,10 @@ const collisionStartHandler = function(event) {
             const itemBody = pair.bodyA.label === 'sword' ? pair.bodyA : pair.bodyB;
             const takerBall = pair.bodyA.label.startsWith('ball') ? pair.bodyA : pair.bodyB;
 
-            // Kılıç alma
             if (itemBody.label === 'sword') {
                 playerInfo.ball1.hasSword = (takerBall === ball1);
                 playerInfo.ball2.hasSword = (takerBall === ball2);
             }
-            // Bomba yok, bu yüzden başka bir item mantığı yok
             
             Composite.remove(world, currentItem);
             itemEmojiDiv.style.display = 'none';
@@ -357,8 +376,9 @@ function setupFileReader(fileInput, previewDiv, player) {
 }
 
 function checkCanStartCustom() {
-    const p1Ready = p1NameInput.value.trim() !== '' && p1Preview.style.backgroundImage !== '';
-    const p2Ready = p2NameInput.value.trim() !== '' && p2Preview.style.backgroundImage !== '';
+    // Fotoğraf seçimi için sadece arka planın ayarlanmış olup olmadığına bakmak yeterli.
+    const p1Ready = p1NameInput.value.trim() !== '' && p1Preview.style.backgroundImage !== 'none' && p1Preview.style.backgroundImage !== '';
+    const p2Ready = p2NameInput.value.trim() !== '' && p2Preview.style.backgroundImage !== 'none' && p2Preview.style.backgroundImage !== '';
     startGameCustomButton.disabled = !(p1Ready && p2Ready);
 }
 
@@ -373,7 +393,7 @@ p2NameInput.addEventListener('input', checkCanStartCustom);
 // 1. Yeni Oyun Kur / Özelleştirme Butonu
 customizeButton.addEventListener('click', () => {
     // Modal açıldığında Runner'ı durdur
-    Runner.stop(runner); 
+    if (runner) Runner.stop(runner); 
     setupModal.style.display = 'flex';
 });
 
@@ -382,17 +402,12 @@ startGameCustomButton.addEventListener('click', () => {
     // Yeni ayarları global playerInfo'ya uygula
     playerInfo.ball1.name = p1NameInput.value.trim();
     playerInfo.ball2.name = p2NameInput.value.trim();
+    
     // Texture zaten setupFileReader içinde güncelleniyor.
-
+    
     setupModal.style.display = 'none';
     
-    // Gerekirse eski topları kaldır
-    if (ball1 && ball2) {
-        Composite.remove(world, [ball1, ball2]);
-        clearTimeout(itemSpawnTimer);
-        itemEmojiDiv.style.display = 'none';
-    }
-    
+    // Oyunu yeni ayarlar ile başlat
     initializeGame();
 });
 
@@ -400,23 +415,17 @@ startGameCustomButton.addEventListener('click', () => {
 restartButton.addEventListener('click', () => {
     gameOverModal.style.display = 'none';
     
-    // Gerekirse eski topları kaldır
-    Composite.remove(world, [ball1, ball2]);
-    clearTimeout(itemSpawnTimer);
-    itemEmojiDiv.style.display = 'none';
-    
+    // Tekrar başlat
     initializeGame();
 });
 
 // 4. Oyun Bitti: Yeni Oyun Kur (Özelleştirme modalını aç)
 newGameButton.addEventListener('click', () => {
     gameOverModal.style.display = 'none';
-    
-    // Modal açıldığında runner'ı durduracak
     customizeButton.click(); 
 });
 
 
 // --- Başlangıç ---
 // Sayfa yüklendiğinde varsayılan ayarlar ile oyunu başlat
-initializeGame();
+// initializeGame(); // Bu satırı kaldırdık, ilk açılışta boş başlamalı.
