@@ -8,14 +8,18 @@ const ballRadius = 30;
 const maxHealth = 3;
 const itemSize = 40;
 const itemRespawnTime = 3000; // Öğenin tekrar doğma süresi (ms)
-const randomForceMagnitude = 0.008; // Topların sürekli hareket etmesi için itme gücü
+const randomForceMagnitude = 0.015; // Topların sürekli hareket etmesi için itme gücü
 
 // --- MOTOR VE ARENA KURULUMU ---
 const engine = Engine.create();
 const world = engine.world;
-// Yerçekimini neredeyse sıfır yapalım ki, top yere düşüp kalmasın
-world.gravity.y = 0.0001; 
+
+// ! KRİTİK DÜZELTME: Yer çekimini tamamen sıfırla
+world.gravity.y = 0; 
+world.gravity.x = 0;
+
 const gameContainer = document.getElementById('game-container');
+// Oyun kutusunun boyutlarını HTML elemanına da uygula
 gameContainer.style.width = `${arenaWidth}px`;
 gameContainer.style.height = `${arenaHeight}px`;
 
@@ -44,14 +48,27 @@ Composite.add(world, [
 ]);
 
 // --- OYUNCU VE CAN SİSTEMİ ---
+// Can metinlerini göstermek için yeni HTML elemanları eklenmeliydi, ancak biz mevcut player-name div'ini kullanacağız.
 const playerInfo = {
-    ball1: { health: maxHealth, hasSword: false, emoji: document.getElementById('ball1-emoji'), healthBar: document.getElementById('p1-health').querySelector('.health-bar') },
-    ball2: { health: maxHealth, hasSword: false, emoji: document.getElementById('ball2-emoji'), healthBar: document.getElementById('p2-health').querySelector('.health-bar') }
+    ball1: { 
+        health: maxHealth, 
+        hasSword: false, 
+        emoji: document.getElementById('ball1-emoji'), 
+        healthBar: document.getElementById('p1-health').querySelector('.health-bar'),
+        nameDisplay: document.getElementById('player1-status').querySelector('.player-name')
+    },
+    ball2: { 
+        health: maxHealth, 
+        hasSword: false, 
+        emoji: document.getElementById('ball2-emoji'), 
+        healthBar: document.getElementById('p2-health').querySelector('.health-bar'),
+        nameDisplay: document.getElementById('player2-status').querySelector('.player-name')
+    }
 };
 
-// Toplar (Daha hızlı ve sürekli hareket için ayarlar)
+// Toplar (Sürekli hareket için ayarlar)
 const ballOptions = {
-    restitution: 1.0,  // Enerji kaybı sıfır (duvarlardan tam zıplama)
+    restitution: 1.0,  // Enerji kaybı sıfır (tam zıplama)
     friction: 0.0,     // Yüzey sürtünmesi sıfır
     frictionAir: 0.005, // Hava sürtünmesi çok düşük
     density: 0.001,    // Hafif ve hızlı tepki verir
@@ -65,7 +82,7 @@ Composite.add(world, [ball1, ball2]);
 
 // --- ÖĞE SİSTEMİ (Kılıç/Bomba) ---
 let currentItem = null;
-let currentItemType = null; // 'sword' veya 'bomb'
+let currentItemType = null; 
 const itemEmojiDiv = document.getElementById('item-emoji');
 let itemSpawnTimer = null;
 
@@ -74,40 +91,42 @@ function spawnItem() {
     const x = Math.random() * (arenaWidth - wallThickness * 4) + wallThickness * 2;
     const y = Math.random() * (arenaHeight - wallThickness * 4) + wallThickness * 2;
 
-    // Kılıç (%50) veya Bomba (%50) düşsün
     currentItemType = Math.random() < 0.5 ? 'sword' : 'bomb';
     const emoji = currentItemType === 'sword' ? '⚔️' : '💣';
     const color = currentItemType === 'sword' ? '#FFD700' : '#444';
 
-    currentItem = Bodies.circle(x, y, itemSize / 2, { // Top boyutunda olması için daire yapıldı
-        isStatic: true, 
+    currentItem = Bodies.circle(x, y, itemSize / 2, { 
+        isStatic: true, // Sabit kalsın
         render: { fillStyle: color },
-        label: currentItemType
+        label: currentItemType,
+        // Çarpışmalarda sadece item'ın label'ına bakacağımız için collisionFilter'ı değiştiriyoruz
+        collisionFilter: {
+            category: 0x0002, // Yeni kategori
+            mask: 0x0001 | 0x0002 // Diğer her şeyle çarpışsın
+        }
     });
 
     Composite.add(world, currentItem);
     itemEmojiDiv.textContent = emoji;
     itemEmojiDiv.style.display = 'block';
     
-    // Timer'ı temizle (Çarpışma anında tekrar spawn etmemek için)
     clearTimeout(itemSpawnTimer);
 }
 
 // Oyuna başlarken ilk öğeyi düşür
 setTimeout(spawnItem, 1000);
 
-// --- GÖRSEL VE HAREKET GÜNCELLEMELERİ ---
+// --- GÖRSEL VE CAN GÜNCELLEMELERİ ---
 function updateEmojiPosition(body, emojiDiv) {
     if (body) {
         emojiDiv.style.left = `${body.position.x}px`;
         emojiDiv.style.top = `${body.position.y}px`;
         
-        // Kılıçlı top görsel animasyonu
         const p1 = playerInfo.ball1;
         const p2 = playerInfo.ball2;
 
         if ((body === ball1 && p1.hasSword) || (body === ball2 && p2.hasSword)) {
-            // Hafif sallanma efekti
+            // Kılıçlı top animasyonu
             emojiDiv.style.transform = `translate(-50%, -50%) rotate(${Math.sin(engine.timing.timestamp * 0.005) * 10}deg)`;
         } else {
             emojiDiv.style.transform = 'translate(-50%, -50%)';
@@ -119,6 +138,11 @@ function updateHealthBar(player, health) {
     const healthPercentage = (health / maxHealth) * 100;
     player.healthBar.style.width = `${healthPercentage}%`;
     
+    // Can metnini güncelle (Player 1 (🇹🇷) Can: 3/3)
+    const baseName = player === playerInfo.ball1 ? 'Player 1 (🇹🇷)' : 'Player 2 (⚽)';
+    player.nameDisplay.textContent = `${baseName} Can: ${health}/${maxHealth}`;
+
+
     if (healthPercentage <= 33) {
         player.healthBar.classList.add('low-health');
     } else {
@@ -132,15 +156,14 @@ Events.on(engine, 'afterUpdate', function() {
     updateEmojiPosition(ball2, playerInfo.ball2.emoji);
     updateEmojiPosition(currentItem, itemEmojiDiv);
 
-    // Toplara sürekli rastgele itme uygula (Hız sınırlaması ile)
+    // Toplara sürekli rastgele itme uygula
     const applyRandomForce = (ball) => {
-        // Rastgele yönde itme
         Body.applyForce(ball, ball.position, { 
             x: (Math.random() - 0.5) * randomForceMagnitude, 
             y: (Math.random() - 0.5) * randomForceMagnitude 
         });
         
-        // Çok hızlanmayı engelle
+        // Hızı sınırlama
         const maxVelocitySquared = 50; 
         if (ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y > maxVelocitySquared) {
              const factor = Math.sqrt(maxVelocitySquared / (ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y));
@@ -179,10 +202,10 @@ Events.on(engine, 'collisionStart', function(event) {
                 // Bombaya dokunanın canı gitsin
                 player.health--;
                 updateHealthBar(player, player.health);
-                // Can gitme animasyonu: Kılıç takılıysa düşür
+                // Kılıç takılıysa düşür
                 if (player.hasSword) {
                      player.hasSword = false;
-                     // Kılıç düştükten sonra yeniden spawn etme mantığı aktifleşsin
+                     player.emoji.style.transform = 'translate(-50%, -50%)'; // Animasyonu sıfırla
                 }
             }
 
@@ -202,25 +225,34 @@ Events.on(engine, 'collisionStart', function(event) {
 
             let damageDealt = false;
             
-            // Kılıçlı top, kılıçsız topa çarptıysa: Canı gider ve kılıç düşer
+            // a) Kılıçlı top, kılıçsız topa çarptıysa: Canı gider ve kılıç düşer
             if (p1.hasSword && !p2.hasSword) {
                 p2.health--;
-                p1.hasSword = false; // Kılıç düşer
+                p1.hasSword = false; 
                 damageDealt = true;
             } else if (p2.hasSword && !p1.hasSword) {
                 p1.health--;
-                p2.hasSword = false; // Kılıç düşer
+                p2.hasSword = false; 
                 damageDealt = true;
             } 
             
-            // Kılıçlar kaybolsun, can gitmesin (Çarpışma anında kılıç düşer)
+            // b) İki kılıçlı çarpışma: Kılıçlar kaybolsun, can gitmesin
             else if (p1.hasSword && p2.hasSword) {
                 p1.hasSword = false;
                 p2.hasSword = false;
-                damageDealt = false; // Can gitmedi
+                // Kılıç animasyonlarını sıfırla
+                p1.emoji.style.transform = 'translate(-50%, -50%)';
+                p2.emoji.style.transform = 'translate(-50%, -50%)';
+                damageDealt = false; 
+            }
+            
+            // c) İki kılıçsız çarpışma: Birbirlerini itsinler
+            else if (!p1.hasSword && !p2.hasSword) {
+                // Matter.js zaten itme kuvvetini otomatik uygular (momentum koruma)
+                // Burada ekstra bir şey yapmaya gerek yok, can gitmemeli.
             }
 
-            if (damageDealt) {
+            if (damageDealt || (isBallCollision && (p1.hasSword || p2.hasSword))) {
                 updateHealthBar(p1, p1.health);
                 updateHealthBar(p2, p2.health);
                 
@@ -242,6 +274,6 @@ Events.on(engine, 'collisionStart', function(event) {
     });
 });
 
-// Başlangıç can çubuklarını ayarla
+// Başlangıç can çubuklarını ayarla ve Can Metnini göster
 updateHealthBar(playerInfo.ball1, maxHealth);
 updateHealthBar(playerInfo.ball2, maxHealth);
