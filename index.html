@@ -3,45 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arena Kapışması - Canlı Fotoğraf Versiyonu</title>
+    <title>Süper Arena Kapışması - Responsive</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div id="game-container">
-        
-        <div id="status-bar">
-            <div id="player1-status" class="player-status">
-                <span id="p1-name-display" class="player-name">Player 1 Can: 3/3</span>
-                <div id="p1-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
+    <div id="main-wrapper">
+        <div id="game-container">
+            
+            <div id="status-bar">
+                <div id="player1-status" class="player-status">
+                    <span id="p1-name-display" class="player-name">Player 1 Can: 5/5</span>
+                    <div id="p1-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
+                </div>
+                <div id="player2-status" class="player-status">
+                    <span id="p2-name-display" class="player-name">Player 2 Can: 5/5</span>
+                    <div id="p2-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
+                </div>
             </div>
-            <div id="player2-status" class="player-status">
-                <span id="p2-name-display" class="player-name">Player 2 Can: 3/3</span>
-                <div id="p2-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
-            </div>
-        </div>
 
-        <div id="ball1-photo" class="moving-photo">
-             <span id="p1-sword" class="sword-icon" style="display:none;">⚔️</span>
+            <div id="ball1-photo" class="moving-photo">
+                 <span id="p1-sword" class="sword-icon" style="display:none;">⚔️</span>
+            </div>
+            <div id="ball2-photo" class="moving-photo">
+                 <span id="p2-sword" class="sword-icon" style="display:none;">⚔️</span>
+            </div>
+            
+            <div id="item-emoji" class="item-emoji"></div>
+            
+            <button id="customize-button" class="action-button">FOTOĞRAF VE İSİM DÜZENLE</button>
         </div>
-        <div id="ball2-photo" class="moving-photo">
-             <span id="p2-sword" class="sword-icon" style="display:none;">⚔️</span>
-        </div>
-        <div id="item-emoji" class="item-emoji"></div>
-        
     </div>
 
     <div id="game-over-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content">
             <h2 id="winner-text"></h2>
             <div id="winner-emoji" class="winner-emoji-display"></div>
-            <button id="restart-button">YENİDEN BAŞLAT</button>
+            <div class="modal-actions">
+                <button id="restart-button" class="modal-btn">YENİDEN BAŞLAT</button>
+                <button id="new-game-button" class="modal-btn new-setup-btn">YENİ OYUN KUR</button>
+            </div>
         </div>
     </div>
 
-    <div id="setup-modal" class="modal-overlay">
+    <div id="setup-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content setup-content">
-            <h2>ARENA HAZIRLIK</h2>
+            <h2>OYUNCU ÖZELLEŞTİRME</h2>
             
             <div class="player-setup-row">
                 <div class="player-setup-box">
@@ -64,8 +71,8 @@
                     <div id="p2-preview" class="image-preview"></div>
                 </div>
             </div>
-            <button id="start-game-button" disabled>OYUNU BAŞLAT</button>
-            <p class="small-info">İki oyuncu için de isim ve fotoğraf seçmek zorunludur.</p>
+            <button id="start-custom-game-button" disabled>OYUNU BAŞLAT</button>
+            <p class="small-info">İsim ve fotoğraf seçimi zorunludur.</p>
         </div>
     </div>
 
