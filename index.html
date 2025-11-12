@@ -1,51 +1,20 @@
 <!DOCTYPE html>
-<html lang="az">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Birlikdə İzlə (Lobi)</title>
+    <title>Emoji Top Arena Savaşı</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-    <div id="lobby-screen">
-        <h1>Birlikdə İzlə Lobi</h1>
-        <div class="input-group">
-            <input type="text" id="username" placeholder="Adınızı daxil edin (örn: Elvin)">
-            <input type="text" id="roomIdInput" placeholder="Otaq Kodu (Boş buraxın, yeni yaratsın)">
-        </div>
-        <button id="enterRoomBtn">Odaya Daxil Ol / Yarat</button>
+    <h1>Emoji Top Arena Savaşı</h1>
+    <div id="game-container">
+        <div id="ball1-emoji" class="ball-emoji"></div>
+        <div id="ball2-emoji" class="ball-emoji"></div>
+        <div id="sword-emoji" class="sword-emoji">⚔️</div>
     </div>
 
-    <div id="room-screen" class="hidden">
-        <h1>Otaq: <span id="roomCodeDisplay"></span></h1>
-        
-        <div class="room-info">
-            <div class="code-share">
-                <span id="roomCodeToCopy">Oda Kodu: XXXX</span>
-                <button id="copyCodeBtn">Kopyala</button>
-            </div>
-            
-            <div class="user-list-container">
-                <h3 class="users-title">Odadakılar:</h3>
-                <ul id="userList"></ul>
-            </div>
-        </div>
-
-        <div class="controls-area">
-            <div class="control-group">
-                <input type="text" id="videoUrl" placeholder="YouTube Linkini bura yapışdırın...">
-                <button id="loadVideoBtn">Videonu Yüklə</button>
-            </div>
-        </div>
-
-        <div id="player-container">
-            <div id="player"></div>
-        </div>
-    </div>
-
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="client.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.17.1/matter.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
