@@ -3,15 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Emoji Top Arena Savaşı</title>
+    <title>Arena Savaşı Kapışması - Büyük Kare</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Emoji Top Arena Savaşı</h1>
     <div id="game-container">
-        <div id="ball1-emoji" class="ball-emoji"></div>
-        <div id="ball2-emoji" class="ball-emoji"></div>
-        <div id="sword-emoji" class="sword-emoji">⚔️</div>
+        
+        <div id="status-bar">
+            <div id="player1-status" class="player-status">
+                <span class="player-name">Player 1 (🇹🇷)</span>
+                <div id="p1-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
+            </div>
+            <div id="player2-status" class="player-status">
+                <span class="player-name">Player 2 (⚽)</span>
+                <div id="p2-health" class="health-bar-container"><div class="health-bar full-health"></div></div>
+            </div>
+        </div>
+
+        <div id="ball1-emoji" class="ball-emoji">🇹🇷</div>
+        <div id="ball2-emoji" class="ball-emoji">⚽</div>
+        <div id="item-emoji" class="item-emoji"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.17.1/matter.min.js"></script>
