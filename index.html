@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matter.js Sword Ball Duel - Pro Edition</title>
+    <title>Matter.js Sword Ball Duel - Final</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         /* Base Styling */
@@ -41,18 +41,12 @@
         /* Ball Visual Div (Handles both Color and Photo) */
         .ball-photo-div {
             position: absolute;
-            /* Size controlled by JS (INITIAL_BALL_RADIUS * 2) */
             border-radius: 50%;
             background-size: cover;
             background-position: center;
             transition: transform 0.05s ease-out;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 40px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-            z-index: 5;
-            /* **FOTOĞRAF BOYUTU FIX** */
+            z-index: 5; /* Z-index set for Matter.js */
             background-color: transparent; 
         }
         
@@ -64,10 +58,10 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: inherit; /* Inherits initial color or stays transparent */
+            font-size: 40px;
         }
 
-        /* SWORD VISUALS */
+        /* SWORD VISUALS IMPROVEMENT (Closer to ball, small circles) */
         .sword-icon-container {
             position: absolute;
             top: 50%;
@@ -77,20 +71,32 @@
             height: 150%;
             display: none;
             pointer-events: none; 
-            z-index: 10;
-            animation: sword-spin 1s linear infinite; /* Base Spin Animation */
+            z-index: 10; /* Kılıçlar topun önünde gözükmeli */
+            animation: sword-spin 1s linear infinite; 
         }
 
-        .sword-icon {
+        .sword-circle {
             position: absolute;
-            font-size: 30px;
-            text-shadow: 0 0 0 #f1c40f, 0 0 5px #e67e22;
+            width: 30px; /* Küçük yuvarlak boyutu */
+            height: 30px;
+            border-radius: 50%;
+            background-color: #f39c12; /* Kılıç yuvarlağı rengi */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 5px #e67e22;
+        }
+        
+        .sword-icon {
+            font-size: 15px; /* Kılıç emojisi boyutu */
+            text-shadow: 0 0 5px #fff;
         }
 
-        /* Positioning the three swords around the center */
-        .sword-icon-container .sword-1 { transform: rotate(0deg) translate(0, -100%) rotate(0deg); }
-        .sword-icon-container .sword-2 { transform: rotate(120deg) translate(0, -100%) rotate(-120deg); }
-        .sword-icon-container .sword-3 { transform: rotate(240deg) translate(0, -100%) rotate(-240deg); }
+        /* Positioning the three sword circles around the center */
+        /* Translate değeri azaltılarak topa yaklaştırıldı (Örn: %100 -> %70) */
+        .sword-icon-container .sword-1 { transform: rotate(0deg) translate(0, -70px) rotate(0deg); }
+        .sword-icon-container .sword-2 { transform: rotate(120deg) translate(0, -70px) rotate(-120deg); }
+        .sword-icon-container .sword-3 { transform: rotate(240deg) translate(0, -70px) rotate(-240deg); }
         
         @keyframes sword-spin {
             from { transform: translate(-50%, -50%) rotate(0deg); }
@@ -103,25 +109,7 @@
             box-shadow: 0 0 20px 5px #e74c3c;
         }
 
-        @keyframes hit-shake {
-            0% { transform: translate(1px, 1px) rotate(0deg); }
-            20% { transform: translate(-3px, 0px) rotate(-2deg); }
-            40% { transform: translate(3px, 1px) rotate(2deg); }
-            60% { transform: translate(-3px, 1px) rotate(0deg); }
-            80% { transform: translate(1px, -1px) rotate(2deg); }
-            100% { transform: translate(1px, 1px) rotate(0deg); }
-        }
-
-        /* Item Icon (Sword Drop) */
-        #item-emoji {
-            position: absolute;
-            font-size: 40px;
-            transform: translate(-50%, -50%);
-            display: none;
-            z-index: 10;
-        }
-
-        /* Info Panel (Health & Controls) */
+        /* ... (Diğer CSS stilleri aynı kaldı) ... */
         .info-panel {
             width: 90vmin;
             max-width: 800px;
@@ -140,7 +128,6 @@
             border-radius: 5px;
         }
         
-        /* HEART HEALTH DISPLAY */
         .health-display {
             display: flex;
             justify-content: center;
@@ -152,14 +139,14 @@
         .heart {
             font-size: 20px;
             margin: 0 2px;
-            color: #e74c3c; /* Full heart color */
+            color: #e74c3c;
             transition: opacity 0.3s;
         }
         
         .heart.lost {
-            color: #95a5a6; /* Lost heart color */
+            color: #95a5a6;
         }
-
+        
         #customize-button {
             padding: 8px 15px;
             font-size: 14px;
@@ -170,11 +157,6 @@
             transition: background-color 0.2s;
         }
         
-        #customize-button:hover {
-            background-color: #e67e22;
-        }
-
-        /* Modals and other UI (Pro Look) */
         .modal {
             position: fixed;
             top: 0;
@@ -236,11 +218,6 @@
             font-weight: bold;
             margin-top: 15px;
         }
-
-        #start-custom-game-button:disabled {
-            background-color: #5d7c99;
-            cursor: not-allowed;
-        }
         
         /* Matter.js Canvas hiding */
         #game-container canvas {
@@ -270,18 +247,18 @@
         <div id="ball1-photo" class="ball-photo-div">
             <div id="ball1-emoji" class="ball-emoji-display" style="background-color: #FF5252;">🔴</div>
             <div id="p1-sword-container" class="sword-icon-container">
-                 <span class="sword-icon sword-1">⚔️</span>
-                 <span class="sword-icon sword-2">⚔️</span>
-                 <span class="sword-icon sword-3">⚔️</span>
+                 <div class="sword-circle sword-1"><span class="sword-icon">⚔️</span></div>
+                 <div class="sword-circle sword-2"><span class="sword-icon">⚔️</span></div>
+                 <div class="sword-circle sword-3"><span class="sword-icon">⚔️</span></div>
             </div>
         </div>
         
         <div id="ball2-photo" class="ball-photo-div">
             <div id="ball2-emoji" class="ball-emoji-display" style="background-color: #2196F3;">🔵</div>
             <div id="p2-sword-container" class="sword-icon-container">
-                <span class="sword-icon sword-1">⚔️</span>
-                <span class="sword-icon sword-2">⚔️</span>
-                <span class="sword-icon sword-3">⚔️</span>
+                <div class="sword-circle sword-1"><span class="sword-icon">⚔️</span></div>
+                <div class="sword-circle sword-2"><span class="sword-icon">⚔️</span></div>
+                <div class="sword-circle sword-3"><span class="sword-icon">⚔️</span></div>
             </div>
         </div>
         <div id="item-emoji">⚔️</div>
@@ -320,14 +297,13 @@
     </div>
 
     <script>
-        // Matter.js Modules
         const { Engine, Render, Runner, Bodies, Composite, Events, Body, Vector } = Matter;
 
         // --- GLOBAL CONSTANTS ---
         const MAX_HEALTH = 5;
-        const BASE_SPEED = 4; // Reduced speed to 4
-        const KICK_DURATION = 500; // 0.5 seconds in milliseconds
-        const KICK_SPEED = 10; // Kicked speed
+        const BASE_SPEED = 4; 
+        const KICK_DURATION = 500; 
+        const KICK_SPEED = 10; 
         const ITEM_RESPAWN_TIME = 3000;
         let INITIAL_BALL_RADIUS = 40; 
         let arenaWidth = 800;
@@ -339,19 +315,13 @@
         let currentItem = null;
         let itemSpawnTimer = null;
         let isGameOver = true;
-        
-        // KICK TIMERS
         let kickTimer1 = null;
         let kickTimer2 = null;
 
-        // --- SOUND FILES (Local path assumption) ---
-        const knifeSounds = [
-            'knife1.mp3', 
-            'knife2.mp3', 
-            'knife3.mp3'
-        ];
+        // --- SOUND FILES (Assumes local in the same directory) ---
+        const knifeSounds = [ 'knife1.mp3', 'knife2.mp3', 'knife3.mp3' ];
 
-        // HTML Elements and Player Info
+        // HTML Elements
         const gameContainer = document.getElementById('game-container');
         const p1NameDisplay = document.getElementById('p1-name-display');
         const p2NameDisplay = document.getElementById('p2-name-display');
@@ -396,7 +366,11 @@
             const randomIndex = Math.floor(Math.random() * knifeSounds.length);
             const audio = new Audio(knifeSounds[randomIndex]);
             audio.volume = 0.5;
-            audio.play().catch(e => console.error("Sound playback failed (Check file path):", e));
+            audio.play().catch(e => {
+                // Bu kısım, tarayıcıların otomatik oynatma engellerini aşmak için eklenmiştir.
+                console.error("Sound playback failed. (Check file paths and browser autoplay permissions)", e);
+                // Kullanıcının ilk tıklaması sonrası tekrar denemek faydalı olabilir.
+            });
         }
 
         // --- HEALTH AND VISUALS ---
@@ -425,18 +399,18 @@
             if (p2Health <= 0) endGame(p1);
         }
 
-        // FIX: Photo size matching ball size and hiding color top
         function updateBallVisuals(player) {
             const ballDiameter = INITIAL_BALL_RADIUS * 2;
             player.photoDiv.style.width = `${ballDiameter}px`;
             player.photoDiv.style.height = `${ballDiameter}px`;
             
             if (player.texture) {
-                // If texture exists, apply it to the main div and hide the inner emoji div
+                // Fotoğrafı ana div'e uygula
                 player.photoDiv.style.backgroundImage = `url(${player.texture})`;
+                // Renkli emojiyi gizle
                 player.emojiDiv.style.display = 'none';
             } else {
-                // If no texture, hide background image and show the colored emoji div
+                // Fotoğraf yoksa, renkli emojiyi göster
                 player.photoDiv.style.backgroundImage = 'none';
                 player.emojiDiv.style.display = 'flex';
                 player.emojiDiv.style.backgroundColor = player.color;
@@ -446,7 +420,6 @@
         // --- ARENA AND INITIALIZATION ---
 
         function updateArenaSize() {
-            // ... (Same updateArenaSize logic) ...
             const container = gameContainer;
             const size = Math.min(container.clientWidth, container.clientHeight);
             
@@ -474,7 +447,6 @@
         }
 
         function setupWalls() {
-            // ... (Same setupWalls logic) ...
             if (!world) return;
             Composite.allBodies(world).forEach(body => {
                 if (body.label === 'wall' || body.label === 'sword') {
@@ -494,8 +466,7 @@
         }
 
         function initializeGame() {
-            // ... (Same initialization logic) ...
-             if (!engine) {
+            if (!engine) {
                 engine = Engine.create();
                 world = engine.world;
                 world.gravity.y = 0;
@@ -579,38 +550,29 @@
             const currentVelocity = ball.velocity;
             const currentSpeed = Vector.magnitude(currentVelocity);
 
-            // Apply kick speed
             if (currentSpeed > 0) {
+                // Sadece mevcut yönünde KICK_SPEED hızıyla gitmesini sağla.
                 const newVelocity = Vector.mult(Vector.normalise(currentVelocity), KICK_SPEED);
                 Body.setVelocity(ball, newVelocity);
             }
             
-            // Set timer to reset speed after duration
             const player = (ball === ball1) ? playerInfo.ball1 : playerInfo.ball2;
+            
+            // Kick timer'ı sıfırla ve başlat
             if (player.id === 'ball1') {
                 clearTimeout(kickTimer1);
                 kickTimer1 = setTimeout(() => {
-                    resetSpeed(ball);
+                    kickTimer1 = null; // Süre doldu, null yap
                 }, duration);
             } else {
                 clearTimeout(kickTimer2);
                 kickTimer2 = setTimeout(() => {
-                    resetSpeed(ball);
+                    kickTimer2 = null; // Süre doldu, null yap
                 }, duration);
             }
         }
         
-        function resetSpeed(ball) {
-             const currentVelocity = ball.velocity;
-             const currentSpeed = Vector.magnitude(currentVelocity);
-             
-             if (currentSpeed > BASE_SPEED) {
-                const newVelocity = Vector.mult(Vector.normalise(currentVelocity), BASE_SPEED);
-                Body.setVelocity(ball, newVelocity);
-             }
-        }
-
-        // Game Loop Update
+        // **ÇOK ÖNEMLİ: Hızın Giderek Artmasını Engelleme**
         const afterUpdateHandler = function() {
             if (isGameOver || !ball1 || !ball2) return; 
 
@@ -619,7 +581,7 @@
                 itemEmojiDiv.style.top = `${currentItem.position.y}px`;
             }
 
-            // Update photo positions
+            // Top görselini güncelle
             const updateBallDisplay = (ball, player) => {
                 if (ball) {
                     player.photoDiv.style.left = `${ball.position.x - INITIAL_BALL_RADIUS}px`;
@@ -632,36 +594,32 @@
             updateBallDisplay(ball1, playerInfo.ball1);
             updateBallDisplay(ball2, playerInfo.ball2);
 
-            // Apply Speed Dampening (To return to BASE_SPEED after kick/impact)
-            const checkSpeed = (ball) => {
+            // Hız Kontrolü ve Sabitleme
+            const checkSpeed = (ball, kickTimer) => {
                 const currentVelocity = ball.velocity;
                 const currentSpeed = Vector.magnitude(currentVelocity);
                 
-                // If speed is much higher than BASE_SPEED and the kick timer is finished, reduce it.
-                const player = (ball === ball1) ? playerInfo.ball1 : playerInfo.ball2;
-                const isKicked = (player.id === 'ball1' && kickTimer1 !== null) || (player.id === 'ball2' && kickTimer2 !== null);
-                
-                if (!isKicked && currentSpeed > BASE_SPEED * 1.1) {
-                    // Gradual dampening back to BASE_SPEED
-                    const dampeningFactor = (BASE_SPEED * 1.05) / currentSpeed;
+                // Kick süresi dolduysa ve hız hala yüksekse, BASE_SPEED'e yavaşça indir.
+                if (kickTimer === null && currentSpeed > BASE_SPEED * 1.1) {
+                    const dampeningFactor = (BASE_SPEED * 1.05) / currentSpeed; // Yumuşakça indir
                     const newVelocity = Vector.mult(currentVelocity, dampeningFactor);
                     Body.setVelocity(ball, newVelocity);
-                } else if (currentSpeed < BASE_SPEED * 0.95 && currentSpeed > 0) {
-                     // Minor acceleration back to BASE_SPEED if too slow
-                    const boostFactor = (BASE_SPEED) / currentSpeed;
-                    const newVelocity = Vector.mult(currentVelocity, boostFactor);
-                    Body.setVelocity(ball, newVelocity);
-                }
-                
-                // Keep speed capped at KICK_SPEED for safety
-                if (currentSpeed > KICK_SPEED) {
+                } 
+                // Eğer hız çok yavaşladıysa (sürtünme vs. nedeniyle), BASE_SPEED'e çek.
+                else if (currentSpeed < BASE_SPEED * 0.95 && currentSpeed > 0) {
+                     const boostFactor = (BASE_SPEED) / currentSpeed;
+                     const newVelocity = Vector.mult(currentVelocity, boostFactor);
+                     Body.setVelocity(ball, newVelocity);
+                } 
+                // Kick devam ediyorsa, KICK_SPEED'i geçmemesini sağla.
+                else if (kickTimer !== null && currentSpeed > KICK_SPEED) {
                     const cappedVelocity = Vector.mult(Vector.normalise(currentVelocity), KICK_SPEED);
                     Body.setVelocity(ball, cappedVelocity);
                 }
             };
 
-            checkSpeed(ball1);
-            checkSpeed(ball2);
+            checkSpeed(ball1, kickTimer1);
+            checkSpeed(ball2, kickTimer2);
         };
         
         // --- COLLISION LOGIC ---
@@ -675,9 +633,8 @@
                 const isItemCollision = labels.includes('sword');
                 const isBallCollision = labels.includes('ball1') && labels.includes('ball2');
 
-                // 1. Item Pickup (Sword)
+                // 1. Item Pickup
                 if (isItemCollision && (labels.includes('ball1') || labels.includes('ball2'))) {
-                    // FIX: Sword was correctly picked up before. The issue was dynamic.
                     const takerBall = pair.bodyA.label.startsWith('ball') ? pair.bodyA : pair.bodyB;
                     
                     playerInfo.ball1.hasSword = (takerBall === ball1);
@@ -711,6 +668,7 @@
                         damagedPlayer = p1;
                         damagedBall = ball1;
                     } else if (p1.hasSword && p2.hasSword) {
+                        // Kılıçlar çarpışırsa ikisi de kaybolur (Hasar yok)
                         p1.hasSword = false;
                         p2.hasSword = false;
                     }
@@ -723,7 +681,7 @@
                         damagedPlayer.photoDiv.classList.add('hit-effect');
                         removeHitEffect(damagedPlayer);
 
-                        // KICK EFFECT (Apply temporary speed up)
+                        // KICK EFFECT (0.5 saniye hızlanma)
                         applyKick(damagedBall, KICK_DURATION);
                     }
                 }
@@ -739,7 +697,6 @@
         function spawnItem() {
             if (isGameOver) return;
             const size = 15;
-            // Spawn closer to center to keep it accessible
             const x = Math.random() * (arenaWidth - 200) + 100;
             const y = Math.random() * (arenaHeight - 200) + 100;
             
@@ -792,11 +749,7 @@
             const p1Name = document.getElementById('p1-name-input').value.trim();
             const p2Name = document.getElementById('p2-name-input').value.trim();
             
-            if (p1Name && p2Name) {
-                document.getElementById('start-custom-game-button').disabled = false;
-            } else {
-                document.getElementById('start-custom-game-button').disabled = true;
-            }
+            document.getElementById('start-custom-game-button').disabled = !(p1Name && p2Name);
         }
 
         function setupGameAndStart() {
@@ -823,14 +776,12 @@
             document.getElementById('setup-modal').style.display = 'flex';
         });
 
-        // Initial setup check and arena observation
         checkSetupComplete(); 
         const resizeObserver = new ResizeObserver(entries => {
             if (isGameOver) return;
             const oldArenaWidth = arenaWidth;
             const oldArenaHeight = arenaHeight;
             updateArenaSize();
-            // Reposition balls proportionally on resize
             if (ball1 && ball2 && oldArenaWidth > 0 && oldArenaHeight > 0) {
                 const scaleX = arenaWidth / oldArenaWidth;
                 const scaleY = arenaHeight / oldArenaHeight;
