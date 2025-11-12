@@ -1,5 +1,7 @@
+/* Base styles */
 body {
     margin: 0;
+    padding: 0;
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -8,26 +10,48 @@ body {
     background: linear-gradient(135deg, #1f1c2c, #928dab);
     color: #eee;
     font-family: 'Roboto', sans-serif;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
-/* ! DÜZELTME 1: Tam ekran kaplama ve kare arena */
+/* Main container */
 #main-wrapper {
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 10px;
+    box-sizing: border-box;
 }
 
+/* Game container */
 #game-container {
     position: relative;
-    /* Ekranın daha küçük boyutuna göre maksimum kare boyutunu al */
-    width: min(90vh, 90vw); 
-    height: min(90vh, 90vw);
+    width: 100%;
+    max-width: 800px; /* Maksimum genişlik */
+    aspect-ratio: 1/1; /* Kare oranını koru */
     box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
     border-radius: 10px;
     overflow: hidden;
     background-color: #00000070;
+    margin: 0 auto;
+}
+
+/* Mobile landscape */
+@media (max-height: 500px) and (orientation: landscape) {
+    #game-container {
+        max-height: 90vh;
+        max-width: 90vh;
+    }
+}
+
+/* Mobile portrait */
+@media (orientation: portrait) {
+    #game-container {
+        max-width: 95vw;
+        max-height: 95vw;
+    }
 }
 
 canvas {
@@ -41,9 +65,9 @@ canvas {
 /* FOTOĞRAF DİVLERİ VE KILINÇ İKONLARI */
 .moving-photo {
     position: absolute;
-    /* Boyutları % olarak ayarlamak zor, bu yüzden JAVASCRIPT ile boyutlandırılacak. */
-    width: 120px; 
-    height: 120px;
+    width: 15%;
+    height: auto;
+    aspect-ratio: 1/1;
     border-radius: 50%;
     transform: translate(-50%, -50%); 
     pointer-events: none;
@@ -51,9 +75,22 @@ canvas {
     z-index: 10;
     background-size: cover;
     background-position: center;
-    border: 5px solid #fff; 
+    border: 4px solid #fff; 
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
     transition: box-shadow 0.1s ease-out;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 5vw;
+    box-sizing: border-box;
+}
+
+/* Adjust for larger screens */
+@media (min-width: 768px) {
+    .moving-photo {
+        font-size: 3vw;
+        border-width: 5px;
+    }
 }
 
 .sword-icon {
@@ -75,13 +112,20 @@ canvas {
 /* Eşya Emojisi */
 .item-emoji {
     position: absolute;
-    font-size: 45px;
+    font-size: 5vw;
     pointer-events: none;
     transform: translate(-50%, -50%);
     user-select: none;
     z-index: 11;
     display: none;
-    animation: rotateItem 4s linear infinite; 
+    animation: rotateItem 4s linear infinite;
+}
+
+/* Adjust for larger screens */
+@media (min-width: 768px) {
+    .item-emoji {
+        font-size: 2.5vw;
+    }
 }
 
 @keyframes rotateItem {
