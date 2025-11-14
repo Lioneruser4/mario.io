@@ -1,19 +1,35 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
 const server = http.createServer(app);
 
 // Socket.IO ayarları
 const io = new Server(server, {
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
+        origin: [
+            "http://localhost:3000", 
+            "https://mario-io-1.onrender.com",
+            /.*\.onrender\.com$/
+        ],
+        methods: ["GET", "POST", "OPTIONS"],
+        credentials: true,
+        allowedHeaders: ["my-custom-header"],
+        exposedHeaders: ["my-custom-header"]
     },
     transports: ['websocket', 'polling'],
     pingTimeout: 10000,
-    pingInterval: 5000
+    pingInterval: 5000,
+    allowEIO3: true,
+    cookie: {
+        name: "io",
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax"
+    }
 });
 
 // Oyun odalarını ve oyuncuları tutacak yapılar
