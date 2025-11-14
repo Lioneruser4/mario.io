@@ -7,29 +7,13 @@ const app = express();
 app.use(cors());
 const server = http.createServer(app);
 
-// Socket.IO ayarları
+// Socket.IO ayarları - Basitleştirilmiş versiyon
 const io = new Server(server, {
     cors: {
-        origin: [
-            "http://localhost:3000", 
-            "https://mario-io-1.onrender.com",
-            /.*\.onrender\.com$/
-        ],
-        methods: ["GET", "POST", "OPTIONS"],
-        credentials: true,
-        allowedHeaders: ["my-custom-header"],
-        exposedHeaders: ["my-custom-header"]
+        origin: "*",
+        methods: ["GET", "POST"]
     },
-    transports: ['websocket', 'polling'],
-    pingTimeout: 10000,
-    pingInterval: 5000,
-    allowEIO3: true,
-    cookie: {
-        name: "io",
-        httpOnly: true,
-        path: "/",
-        sameSite: "lax"
-    }
+    transports: ['websocket']
 });
 
 // Oyun odalarını ve oyuncuları tutacak yapılar
@@ -42,6 +26,27 @@ const waitingPlayers = []; // Eşleşmeyi bekleyen oyuncular
 const SERVER_PORT = process.env.PORT || 3000;
 server.listen(SERVER_PORT, () => {
     console.log(`Sunucu ${SERVER_PORT} portunda çalışıyor...`);
+    console.log('CORS ayarları:', {
+        origin: [
+            "http://localhost:3000", 
+            "https://mario-io-1.onrender.com",
+            /.*\.onrender\.com$/
+        ],
+        methods: ["GET", "POST", "OPTIONS"]
+    });
+});
+
+// Socket bağlantılarını dinle
+io.on('connection', (socket) => {
+    console.log('Yeni bir istemci bağlandı:', socket.id);
+    console.log('Bağlantı başlıkları:', socket.handshake.headers);
+    
+    socket.on('disconnect', () => {
+        console.log('İstemci ayrıldı:', socket.id);
+    });
+    
+    // Test mesajı gönder
+    socket.emit('welcome', { message: 'Sunucuya hoş geldiniz!' });
 });
 
 // Oda kodu oluşturma
