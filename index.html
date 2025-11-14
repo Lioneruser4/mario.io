@@ -259,22 +259,112 @@
 
 
     <script>
-        // Sunucu URL'sini güncelle
-        const SERVER_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://mario-io-1.onrender.com';
+        // Global değişkenler
+        let socket;
+        let isConnecting = false;
+        const CONNECTION_ATTEMPTS = 5;
+        let connectionAttempts = 0;
         
-        console.log('Sunucuya bağlanılıyor:', SERVER_URL);
-        console.log('Socket bağlantısı başlatılıyor...');
-        const socket = io(SERVER_URL, {
-            transports: ['websocket', 'polling'],
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            timeout: 10000
-        });
+        // Socket bağlantısını başlat
+        function initializeSocket() {
+            const SERVER_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://mario-io-1.onrender.com';
+            console.log('Sunucuya bağlanılıyor:', SERVER_URL);
+            
+            // Eğer zaten bir socket varsa bağlantıyı kapat
+            if (window.socket) {
+                window.socket.disconnect();
+            }
+            
+            // Yeni socket bağlantısı oluştur
+            socket = io(SERVER_URL, {
+                transports: ['websocket'],
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 10000,
+                forceNew: true
+            });
+            
+            window.socket = socket;
+            isConnecting = true;
+            connectionAttempts = 0;
+            
+            // Bağlantı olaylarını dinle
+            setupSocketEvents();
+            
+            // Butonları bağla
+            bindButtonEvents();
+        }
         
-        // Global değişken olarak ata (eğer yoksa)
-        window.socket = socket;
+        // Socket olaylarını ayarla
+        function setupSocketEvents() {
+            if (!socket) return;
+            
+            socket.on('connect', function() {
+                console.log('Sunucuya bağlanıldı!');
+                isConnecting = false;
+                showMessage('Sunucuya bağlanıldı!', false);
+                showScreen('lobby');
+            });
+            
+            socket.on('disconnect', function() {
+                console.warn('Sunucu bağlantısı kesildi!');
+                showMessage('Sunucu bağlantısı kesildi. Yeniden bağlanılıyor...', true);
+                attemptReconnect();
+            });
+            
+            socket.on('connect_error', function(error) {
+                console.error('Bağlantı hatası:', error);
+                isConnecting = false;
+                showMessage('Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.', true);
+                attemptReconnect();
+            });
+            
+            // Oda oluşturulduğunda
+            socket.on('roomCreated', function(data) {
+                console.log('Oda oluşturuldu:', data);
+                currentRoomId = data.roomId;
+                myColor = data.color;
+                
+                if (data.isRanked) {
+                    showScreen('queueScreen');
+                    startQueueTimer();
+                } else {
+                    showScreen('waitScreen');
+                    document.getElementById('roomCode').textContent = data.roomId;
+                }
+            });
+            
+            // Kuyruk güncellemeleri
+            socket.on('queueUpdate', function(data) {
+                console.log('Kuyruk güncellendi:', data);
+                updateQueueInfo(data);
+            });
+            
+            // Oyun başladığında
+            socket.on('gameStart', function(data) {
+                console.log('Oyun başladı:', data);
+                startGame(data);
+            });
+        }
+        
+        // Yeniden bağlanmayı dene
+        function attemptReconnect() {
+            if (connectionAttempts >= CONNECTION_ATTEMPTS) {
+                showMessage('Bağlantı sağlanamadı. Lütfen sayfayı yenileyin.', true);
+                return;
+            }
+            
+            connectionAttempts++;
+            console.log(`Yeniden bağlanılıyor... (${connectionAttempts}/${CONNECTION_ATTEMPTS})`);
+            
+            setTimeout(function() {
+                if (!socket.connected && !isConnecting) {
+                    initializeSocket();
+                }
+            }, 2000 * connectionAttempts);
+        }
 
         let USERNAME = 'Misafir';
         let TELEGRAM_ID = `GUEST_${Date.now()}`;
@@ -811,42 +901,99 @@
             
             // Dereceli Oyun Butonu
             $('#createRankedBtn').off('click').on('click', function() {
-                console.log('Dereceli oyun butonuna tıklandı');
-                
-                if (!checkSocketConnection()) {
-                    console.error('Socket bağlantısı yok!');
-                    showMessage('Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.', true);
-                    return;
-                }
-                
-                // Misafir kullanıcı kontrolü
-                if (TELEGRAM_ID.startsWith('GUEST_')) {
-                    showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-                    return;
-                }
-                
-                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
-                console.log('Kullanıcı adı:', username);
-                
-                showScreen('loading');
-                console.log('Yükleme ekranı gösteriliyor');
-                
-                console.log('Dereceli oyun başlatılıyor...');
-                console.log('Socket bağlantı durumu:', socket.connected ? 'Bağlı' : 'Bağlı değil');
-                
-                try {
-                    socket.emit('createRoom', {
-                        username: username,
-                        telegramId: TELEGRAM_ID,
-                        isRanked: true
-                    });
-                    console.log('createRoom eventi gönderildi');
-                } catch (error) {
-                    console.error('Hata oluştu:', error);
-                    showMessage('Bir hata oluştu: ' + error.message, true);
-                    showScreen('lobby');
-                }
+                handleGameStart(true);
             });
+            
+            // Arkadaşla Oyun Butonu
+            $('#createCasualBtn').off('click').on('click', function() {
+                handleGameStart(false);
+            });
+            
+            // İptal butonları
+            const cancelQueueBtn = document.getElementById('cancelQueueBtn');
+            if (cancelQueueBtn) {
+                cancelQueueBtn.addEventListener('click', function() {
+                    if (socket && socket.connected) {
+                        socket.emit('leaveQueue');
+                    }
+                    stopQueueTimer();
+                    showScreen('lobby');
+                });
+            }
+            
+            const cancelWaitBtn = document.getElementById('cancelWaitBtn');
+            if (cancelWaitBtn) {
+                cancelWaitBtn.addEventListener('click', function() {
+                    if (socket && socket.connected && currentRoomId) {
+                        socket.emit('leaveRoom', { roomId: currentRoomId });
+                        currentRoomId = null;
+                    }
+                    showScreen('lobby');
+                });
+            }
+            
+            console.log('Buton eventleri başarıyla bağlandı');
+        }
+        
+        // Oyun başlatma işlemini yönet
+        function handleGameStart(isRanked) {
+            console.log(isRanked ? 'Dereceli oyun' : 'Arkadaşla oyun', 'başlatılıyor...');
+            
+            // Bağlantı kontrolü
+            if (!socket || !socket.connected) {
+                console.error('Socket bağlantısı yok!');
+                showMessage('Sunucu bağlantısı yok. Lütfen sayfayı yenileyin.', true);
+                initializeSocket(); // Otomatik olarak yeniden bağlanmayı dene
+                return;
+            }
+            
+            // Misafir kontrolü
+            if (TELEGRAM_ID.startsWith('GUEST_')) {
+                const message = isRanked 
+                    ? 'Dereceli oynamak için Telegram girişi gereklidir.'
+                    : 'Arkadaşınla oynamak için Telegram girişi gereklidir.';
+                showMessage(message, true);
+                return;
+            }
+            
+            // Kullanıcı adını al veya rastgele oluştur
+            const usernameElement = document.getElementById('username');
+            const username = usernameElement && usernameElement.value 
+                ? usernameElement.value 
+                : 'Oyuncu' + Math.floor(Math.random() * 1000);
+                
+            console.log('Kullanıcı adı:', username);
+            
+            // Yükleme ekranını göster
+            showScreen('loading');
+            console.log('Yükleme ekranı gösteriliyor');
+            
+            // Sunucuya istek gönder
+            try {
+                console.log('Sunucuya istek gönderiliyor...');
+                socket.emit('createRoom', {
+                    username: username,
+                    telegramId: TELEGRAM_ID,
+                    isRanked: isRanked
+                }, function(response) {
+                    // Callback fonksiyonu - sunucudan yanıt alındığında çalışır
+                    if (response && response.error) {
+                        console.error('Sunucu hatası:', response.error);
+                        showMessage('Hata: ' + response.error, true);
+                        showScreen('lobby');
+                    } else {
+                        console.log('Sunucu yanıtı:', response);
+                    }
+                });
+                
+                console.log('createRoom eventi gönderildi');
+            } catch (error) {
+                console.error('İstek gönderilirken hata oluştu:', error);
+                const errorMessage = error && error.message ? error.message : 'Bilinmeyen hata';
+                showMessage('Bir hata oluştu: ' + errorMessage, true);
+                showScreen('lobby');
+            }
+        }          });
 
             // Arkadaşla Oyun Butonu
             $('#createCasualBtn').off('click').on('click', function() {
