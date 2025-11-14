@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🏆 Şaşki Game ELO (Dama)</title>
+    <title>🏆 Şaşki ELO (Dama)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -143,24 +143,47 @@
     </div>
     
     <div id="queueScreen" class="screen space-y-6">
-        <h2 class="text-3xl font-bold mb-4 text-red-400">Dereceli Eşleşme Aranıyor...</h2>
+        <h2 class="text-3xl font-bold mb-4 text-red-400">Rakip Aranıyor...</h2>
         <div class="wait-spinner mb-4 text-6xl">⏳</div>
         
-        <div class="p-4 bg-gray-800 rounded-lg w-full">
-            <p class="text-2xl font-bold mb-2">Geçen Süre:</p>
-            <p id="queueTimer" class="text-4xl font-extrabold text-yellow-300">00:00</p>
+        <div class="p-4 bg-gray-800 rounded-lg w-full max-w-xs">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-gray-400">Sıranız:</span>
+                <span id="queuePosition" class="text-2xl font-bold text-yellow-300">-</span>
+            </div>
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-gray-400">Toplam Oyuncu:</span>
+                <span id="totalPlayers" class="text-xl font-semibold">-</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-gray-400">Tahmini Süre:</span>
+                <span id="estimatedTime" class="text-xl font-semibold">-</span>
+            </div>
         </div>
         
-        <div class="text-left p-4 bg-gray-700 rounded-lg w-full">
-            <h3 class="font-bold text-lg mb-2 text-red-300"><i class="fas fa-info-circle"></i> Dereceli Bilgilendirme</h3>
+        <div class="w-full h-4 bg-gray-700 rounded-full overflow-hidden mt-2">
+            <div id="queueProgress" class="h-full bg-yellow-500 transition-all duration-1000" style="width: 0%"></div>
+        </div>
+        
+        <div class="text-left p-4 bg-gray-700 rounded-lg w-full max-w-xs">
+            <h3 class="font-bold text-lg mb-2 text-blue-300"><i class="fas fa-info-circle"></i> Eşleşme Bilgisi</h3>
             <p class="text-sm text-gray-300">
-                Bu modda, ELO puanınızı etkileyecek oyuncularla eşleşirsiniz. Galibiyetler puanınızı artırır, mağlubiyetler düşürür. Eşleşme, mevcut ELO aralığınızdaki oyuncularla yapılır.
+                Sizinle aynı seviyede rakip aranıyor. Eşleşme bulunduğunda otomatik olarak yönlendirileceksiniz.
+            </p>
+            <p class="text-xs text-gray-400 mt-2">
+                <i class="fas fa-lightbulb"></i> Beklerken sayfadan ayrılmayın.
             </p>
         </div>
 
-        <button id="cancelQueueBtn" class="py-3 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
-            <i class="fas fa-ban mr-2"></i> Vazgeç
-        </button>
+        <div class="flex flex-col space-y-3 w-full max-w-xs">
+            <button id="cancelQueueBtn" class="py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
+                <i class="fas fa-sign-out-alt mr-2"></i> Kuyruktan Ayrıl
+            </button>
+            
+            <div class="text-center">
+                <p id="queueTimer" class="text-sm text-gray-400">Aranıyor: <span class="font-mono">00:00</span></p>
+            </div>
+        </div>
     </div>
 
 
@@ -287,23 +310,69 @@
             $('#welcomeMessage').html(`Hoş geldin, <span class="font-bold">${USERNAME}</span>! ${eloSpan}`);
         }
 
-        // YENİ: Süre Sayacı Fonksiyonu
-        function startQueueTimer() {
-            let seconds = 0;
-            clearInterval(queueTimerInterval); 
-            $('#queueTimer').text('00:00');
+        // Kuyruk güncellemelerini dinle
+        socket.on('queueUpdate', (data) => {
+            console.log('Kuyruk güncellendi:', data);
             
-            queueTimerInterval = setInterval(() => {
-                seconds++;
-                const min = String(Math.floor(seconds / 60)).padStart(2, '0');
-                const sec = String(seconds % 60).padStart(2, '0');
-                $('#queueTimer').text(`${min}:${sec}`);
+            // Kuyruk bilgilerini güncelle
+            document.getElementById('queuePosition').textContent = data.position || '-';
+            document.getElementById('totalPlayers').textContent = data.totalPlayers || '-';
+            
+            // Tahmini süreyi güncelle
+            if (data.estimatedWaitTime) {
+                const minutes = Math.floor(data.estimatedWaitTime);
+                const seconds = Math.floor((data.estimatedWaitTime - minutes) * 60);
+                const timeStr = `${minutes > 0 ? `${minutes}d ` : ''}${seconds > 0 ? `${seconds}s` : ''}`.trim();
+                document.getElementById('estimatedTime').textContent = timeStr || 'Hesaplanıyor...';
+            }
+            
+            // İlerleme çubuğunu güncelle
+            if (data.position && data.totalPlayers) {
+                const progress = Math.min(100, Math.max(0, ((data.position - 1) / data.totalPlayers) * 100));
+                document.getElementById('queueProgress').style.width = `${100 - progress}%`;
+            }
+            
+            // Eğer oyun ekranında değilsek kuyruk ekranını göster
+            if (!document.getElementById('gameScreen').classList.contains('active')) {
+                showScreen('queueScreen');
+            }
+        });
+        
+        // Kuyruk süresini başlat
+        function startQueueTimer() {
+            const startTime = Date.now();
+            const timerElement = document.querySelector('#queueTimer .font-mono');
+            
+            // Eğer zaten bir timer çalışıyorsa temizle
+            if (queueInterval) {
+                clearInterval(queueInterval);
+            }
+            
+            queueInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                if (timerElement) {
+                    timerElement.textContent = `${minutes}:${seconds}`;
+                }
             }, 1000);
+            
+            // İlk güncellemeyi hemen yap
+            if (timerElement) {
+                timerElement.textContent = '00:00';
+            }
         }
-
+        
+        // Kuyruk süresini durdur
         function stopQueueTimer() {
-            clearInterval(queueTimerInterval);
-            $('#queueTimer').text('00:00');
+            if (queueInterval) {
+                clearInterval(queueInterval);
+                queueInterval = null;
+            }
+            const timerElement = document.querySelector('#queueTimer .font-mono');
+            if (timerElement) {
+                timerElement.textContent = '00:00';
+            }
         }
 
 
@@ -814,17 +883,22 @@
             $('#createRankedBtn').on('click', function() {
                 if (!checkSocketConnection()) return;
                 
-                console.log('Dereceli oyun başlatılıyor...');
+                // Misafir kullanıcı kontrolü
+                if (TELEGRAM_ID.startsWith('GUEST_')) {
+                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                }
+                
                 const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
                 
+                // Yükleme ekranını göster
+                showScreen('loading');
+                
+                // Oda oluşturma isteği gönder
                 socket.emit('createRoom', {
                     username: username,
                     telegramId: TELEGRAM_ID,
                     isRanked: true
                 });
-                
-                showScreen('queueScreen');
-                startQueueTimer();
             });
 
             // Arkadaşla Oyun Butonu
