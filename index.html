@@ -2,15 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#1a202c">
-    <!-- iOS için özel ikon ve başlık -->
-    <meta name="apple-mobile-web-app-title" content="Dama Oyunu">
-    <link rel="apple-touch-icon" href="icon.png">
-    <!-- Safari'de adres çubuğunu gizle -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏆 Şaşki ELO (Dama)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -985,50 +977,80 @@
             
             loadTelegramData();
 
-            // Ortak buton işleyici fonksiyonu
-            function handleGameButtonClick(isRanked) {
-                if (!checkSocketConnection()) {
-                    console.error('Bağlantı hatası: Socket bağlı değil');
-                    return false;
-                }
-                
-                // Misafir kullanıcı kontrolü
-                if (TELEGRAM_ID.startsWith('GUEST_')) {
-                    const message = isRanked 
-                        ? "Dereceli oynamak için Telegram girişi gereklidir."
-                        : "Arkadaşınla oynamak için Telegram girişi gereklidir.";
-                    showMessage(message, true);
-                    return false;
-                }
-                
-                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
-                
-                // Yükleme ekranını göster
-                showScreen('loading');
-                
-                console.log(isRanked ? 'Dereceli oyun başlatılıyor...' : 'Arkadaşla oyun başlatılıyor...');
-                
-                // Oda oluşturma isteği gönder
-                socket.emit('createRoom', {
-                    username: username,
-                    telegramId: TELEGRAM_ID,
-                    isRanked: isRanked
-                }, (response) => {
-                    if (response && response.error) {
-                        console.error('Oda oluşturma hatası:', response.error);
+            // Buton tıklamalarını yönet
+            setupGameButtons();
+            
+            function setupGameButtons() {
+                // Dereceli Oyun Butonu
+                document.getElementById('createRankedBtn').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    console.log('Dereceli oyun butonuna tıklandı');
+                    
+                    try {
+                        if (!checkSocketConnection()) {
+                            console.error('Bağlantı hatası: Socket bağlı değil');
+                            return;
+                        }
+                        
+                        if (TELEGRAM_ID.startsWith('GUEST_')) {
+                            showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                            return;
+                        }
+                        
+                        const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                        showScreen('loading');
+                        
+                        console.log('Dereceli oyun başlatılıyor...');
+                        socket.emit('createRoom', {
+                            username: username,
+                            telegramId: TELEGRAM_ID,
+                            isRanked: true
+                        });
+                    } catch (error) {
+                        console.error('Dereceli oyun başlatma hatası:', error);
+                        showMessage('Bir hata oluştu. Lütfen tekrar deneyin.', true);
                         showScreen('lobby');
-                        showMessage(response.error, true);
                     }
                 });
                 
-                return true;
+                // Arkadaşla Oyun Butonu
+                document.getElementById('createCasualBtn').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    console.log('Arkadaşla oyun butonuna tıklandı');
+                    
+                    try {
+                        if (!checkSocketConnection()) {
+                            console.error('Bağlantı hatası: Socket bağlı değil');
+                            return;
+                        }
+                        
+                        if (TELEGRAM_ID.startsWith('GUEST_')) {
+                            showMessage("Arkadaşınla oynamak için Telegram girişi gereklidir.", true);
+                            return;
+                        }
+                        
+                        const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                        showScreen('loading');
+                        
+                        console.log('Arkadaşla oyun başlatılıyor...');
+                        socket.emit('createRoom', {
+                            username: username,
+                            telegramId: TELEGRAM_ID,
+                            isRanked: false
+                        });
+                    } catch (error) {
+                        console.error('Arkadaşla oyun başlatma hatası:', error);
+                        showMessage('Bir hata oluştu. Lütfen tekrar deneyin.', true);
+                        showScreen('lobby');
+                    }
+                });
+                
+                console.log('Butonlar başarıyla ayarlandı');
             }
-            
-            // Dereceli Oyun Butonu
-            $('#createRankedBtn').on('click', () => handleGameButtonClick(true));
-
-            // Arkadaşla Oyun Butonu
-            $('#createCasualBtn').on('click', () => handleGameButtonClick(false));
 
             // Oda Katılımı
             $('#joinRoomBtn').on('click', function() {
