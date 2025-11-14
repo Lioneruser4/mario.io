@@ -1,4 +1,4 @@
-// Dosya Adı: server.js (Eksiksiz ELO ve Dama Mantığı)
+// Dosya Adı: server.js (Eksiksiz ELO ve Dama Mantığı - GÜNCEL)
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -24,12 +24,12 @@ const client = new Client({
 
 client.connect().then(() => {
     console.log("✅ PostgreSQL veritabanına başarıyla bağlanıldı.");
-    // Kullanıcı tablosunu oluştur (ON CONFLICT ile tekrar oluşturmayı engeller)
+    // Kullanıcı tablosunu oluştur
     client.query(`
         CREATE TABLE IF NOT EXISTS players (
             telegram_id VARCHAR(50) PRIMARY KEY,
             username VARCHAR(100) NOT NULL,
-            elo_score INTEGER DEFAULT 1000,
+            elo_score INTEGER DEFAULT 0, -- ELO 1000 yerine 0 ile başlar
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0
         );
@@ -45,49 +45,24 @@ client.connect().then(() => {
 
 let games = {}; // Odaları ve oyun durumlarını tutar
 let socketToRoom = {}; // Socket ID'yi Odaya eşlemek için
-const ELO_CHANGE_AMOUNT = 10; // Kazanana +10, Kaybedene -10
+const ELO_CHANGE_AMOUNT = 20; // Kazanana +20, Kaybedene -20 (GÜNCEL)
 
 // ----------------------------------------------------------------------
-// OYUN MANTIĞI FONKSİYONLARI (ŞAŞKİ/DAMA)
+// OYUN MANTIĞI FONKSİYONLARI (ŞAŞKİ/DAMA) - (DEĞİŞMEDİ)
 // ----------------------------------------------------------------------
-
-/**
- * Tahtayı başlangıç durumuna getirir. 
- * 0: Boş, 1: Siyah Piyon, 2: Beyaz Piyon, 3: Siyah Vezir, 4: Beyaz Vezir
- */
 function initializeCheckersBoard() {
     const board = Array(8).fill(null).map(() => Array(8).fill(0));
-    
-    // Siyah taşlar (Tahtanın üst yarısı: r=0, 1, 2)
-    for (let r = 0; r < 3; r++) {
-        for (let c = 0; c < 8; c++) {
-            board[r][c] = 1; 
-        }
-    }
-    
-    // Beyaz taşlar (Tahtanın alt yarısı: r=5, 6, 7)
-    for (let r = 5; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            board[r][c] = 2; 
-        }
-    }
+    for (let r = 0; r < 3; r++) { for (let c = 0; c < 8; c++) { board[r][c] = 1; } }
+    for (let r = 5; r < 8; r++) { for (let c = 0; c < 8; c++) { board[r][c] = 2; } }
     return board; 
 }
-
-function isKing(piece) {
-    return piece === 3 || piece === 4;
-}
-
-/**
- * Türk Daması (Şaşki) kuralına göre taşın tüm olası hamlelerini/atlamalarını bulur.
- */
+function isKing(piece) { return piece === 3 || piece === 4; }
 function getPossibleMoves(board, r, c, isJumpOnly = false) {
     const piece = board[r][c];
     const isBlack = piece === 1 || piece === 3;
     const isWhite = piece === 2 || piece === 4;
     const isKingPiece = isKing(piece);
     const moves = [];
-    // Yatay ve Dikey Yönler
     const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; 
 
     for (const [dr, dc] of directions) {
@@ -100,27 +75,18 @@ function getPossibleMoves(board, r, c, isJumpOnly = false) {
             const targetPiece = board[nr][nc];
 
             if (targetPiece === 0) {
-                // Boş kare: Normal hareket veya sıçrama hedefi
-                if (!isJumpOnly) {
-                    moves.push({ r: nr, c: nc, type: 'move' }); 
-                }
+                if (!isJumpOnly) { moves.push({ r: nr, c: nc, type: 'move' }); }
                 if (!isKingPiece) break; 
             } else {
-                // Başka bir taş var
-                const isOpponent = (isBlack && (targetPiece === 2 || targetPiece === 4)) || 
-                                   (isWhite && (targetPiece === 1 || targetPiece === 3));
-
+                const isOpponent = (isBlack && (targetPiece === 2 || targetPiece === 4)) || (isWhite && (targetPiece === 1 || targetPiece === 3));
                 if (isOpponent) {
-                    // Rakip taş bulundu, arkasına atlama (sıçrama) var mı kontrol et
                     const jumpR = nr + dr;
                     const jumpC = nc + dc;
-
                     if (jumpR >= 0 && jumpR < 8 && jumpC >= 0 && jumpC < 8 && board[jumpR][jumpC] === 0) {
                         moves.push({ r: jumpR, c: jumpC, type: 'jump', capturedR: nr, capturedC: nc });
                     }
                     break;
                 } else {
-                    // Kendi taşımız: Hareket biter
                     break;
                 }
             }
@@ -130,10 +96,6 @@ function getPossibleMoves(board, r, c, isJumpOnly = false) {
     }
     return moves;
 }
-
-/**
- * Tahtadaki belirli bir rengin herhangi bir zorunlu atlama hamlesi olup olmadığını kontrol eder.
- */
 function hasMandatoryJump(board, color) {
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -150,10 +112,6 @@ function hasMandatoryJump(board, color) {
     }
     return false;
 }
-
-/**
- * Tahtadaki belirli bir rengin hiç geçerli hamlesi olup olmadığını kontrol eder (Sıkışma Kontrolü).
- */
 function hasAnyValidMoves(board, color) {
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -163,7 +121,6 @@ function hasAnyValidMoves(board, color) {
             
             if (isMyPiece) {
                 const moves = getPossibleMoves(board, r, c);
-                // Eğer zorunlu atlama varsa ve bu taşın atlama hamlesi varsa geçerlidir.
                 const hasJump = hasMandatoryJump(board, color);
                 
                 if (hasJump) {
@@ -185,9 +142,9 @@ function hasAnyValidMoves(board, color) {
 async function getOrCreatePlayer(telegramId, username) {
     try {
         const result = await client.query(
-            // ON CONFLICT: Eğer ID varsa sadece kullanıcı adını güncelle (ELO'yu elleme)
+            // ON CONFLICT: Eğer ID varsa sadece kullanıcı adını güncelle (ELO'yu elleme). Yeni kullanıcı ELO'su 0 olacak.
             `INSERT INTO players (telegram_id, username, elo_score) 
-             VALUES ($1, $2, 1000) 
+             VALUES ($1, $2, 0) 
              ON CONFLICT (telegram_id) 
              DO UPDATE SET username = $2 
              RETURNING telegram_id, username, elo_score;`,
@@ -196,7 +153,8 @@ async function getOrCreatePlayer(telegramId, username) {
         return result.rows[0];
     } catch (err) {
         console.error("Oyuncu kaydetme/bulma hatası:", err.message);
-        return { telegram_id: telegramId, username: username, elo_score: 1000 };
+        // DB hatası olursa geçici varsayılan değer döndürülür
+        return { telegram_id: telegramId, username: username, elo_score: 0 };
     }
 }
 
@@ -228,13 +186,12 @@ async function updateEloScores(winnerId, loserId, roomIsRanked) {
 }
 
 // ----------------------------------------------------------------------
-// SOCKET.IO BAĞLANTILARI ve ODA YÖNETİMİ
+// SOCKET.IO BAĞLANTILARI
 // ----------------------------------------------------------------------
 
 io.on('connection', (socket) => {
     console.log(`Yeni bağlantı: ${socket.id}`);
     
-    // Yardımcı fonksiyon: Koordinatları ayrıştırma
     const parseCoord = (coordId) => {
         const parts = coordId.split('-');
         return { r: parseInt(parts[1]), c: parseInt(parts[3]) };
@@ -283,8 +240,9 @@ io.on('connection', (socket) => {
 
         const playerStats = await getOrCreatePlayer(telegramId, username);
 
-        // İki oyuncunun da ELO'sunu güncel istatistiklerle güncelle (Oyun başlangıcı için)
-        room.players['black'].elo = (await getOrCreatePlayer(room.players['black'].telegramId, room.players['black'].username)).elo_score;
+        // Odayı kuranın güncel ELO'sunu çek
+        const blackPlayerStats = await getOrCreatePlayer(room.players['black'].telegramId, room.players['black'].username);
+        room.players['black'].elo = blackPlayerStats.elo_score;
         
         room.players['white'] = { 
             id: socket.id, 
@@ -316,7 +274,7 @@ io.on('connection', (socket) => {
         const room = games[roomId];
         if (room) {
             delete games[roomId];
-            io.to(roomId).emit('opponentLeft', 'Rakibiniz odadan ayrıldı. Oyun sonlandırıldı.');
+            // Rakibe bilgi gönderme (Eğer oyun devam ediyorsa disconnect handle edecek)
         }
         delete socketToRoom[socket.id];
     });
@@ -334,45 +292,30 @@ io.on('connection', (socket) => {
         const color = (socket.id === game.players.black.id) ? 'black' : 'white';
         const opponentColor = (color === 'black') ? 'white' : 'black';
         
-        // 1. Sıra ve Doğrulama Kontrolleri
+        // ... (Hamle Mantığı Kontrolleri, Vezirleme, Yeme zorunluluğu) ...
         if (color !== game.turn) return socket.emit('error', 'Sizin sıranız değil.');
         
         const piece = game.board[fromCoord.r][fromCoord.c];
-        const isMyPiece = (color === 'black' && (piece === 1 || piece === 3)) ||
-                          (color === 'white' && (piece === 2 || piece === 4));
-        
+        const isMyPiece = (color === 'black' && (piece === 1 || piece === 3)) || (color === 'white' && (piece === 2 || piece === 4));
         if (!isMyPiece) return socket.emit('error', 'Seçtiğiniz taş size ait değil.');
-        
-        // Çoklu atlama kısıtlaması (Sadece son atlanan taş hareket edebilir)
         if (game.lastJump && from !== game.lastJump) {
             return socket.emit('error', 'Çoklu atlama zorunluluğu var! Sadece son atladığınız taşla devam etmelisiniz.');
         }
 
-        // 2. Geçerli Hamleleri Hesapla
         const allPossibleMoves = getPossibleMoves(game.board, fromCoord.r, fromCoord.c);
         const jumps = allPossibleMoves.filter(m => m.type === 'jump');
-        
-        // 3. Zorunlu Atlama Kontrolü
         const mandatoryJumpExists = hasMandatoryJump(game.board, color);
         
         if (mandatoryJumpExists && jumps.length > 0) {
-            // Zorunlu atlama var, hamlenin atlama olması GEREKİR
             if (!jumps.some(m => m.r === toCoord.r && m.c === toCoord.c)) {
                 return socket.emit('error', 'Atlama (yeme) zorunludur! Lütfen geçerli bir atlama hamlesi yapın.');
             }
-        } else if (mandatoryJumpExists && jumps.length === 0) {
-            // Başka bir taştan zorunlu atlama olabilir, bu taş hareket edemez.
-            // Bu kısım hasMandatoryJump'ın içine dahil edildiği için burada atlıyoruz.
         }
-
-        // 4. Hedef Hamleyi Bul
         const move = allPossibleMoves.find(m => m.r === toCoord.r && m.c === toCoord.c);
-
         if (!move) {
             return socket.emit('error', 'Geçersiz hamle.');
         }
 
-        // 5. Hamleyi Yap ve Tahtayı Güncelle
         const newBoard = JSON.parse(JSON.stringify(game.board));
         newBoard[toCoord.r][toCoord.c] = newBoard[fromCoord.r][fromCoord.c];
         newBoard[fromCoord.r][fromCoord.c] = 0; 
@@ -382,25 +325,22 @@ io.on('connection', (socket) => {
         if (move.type === 'jump') {
             newBoard[move.capturedR][move.capturedC] = 0; // Rakip taşı sil
             
-            // Çoklu atlama kontrolü (Aynı taşla tekrar atlama var mı?)
-            const nextJumps = getPossibleMoves(newBoard, toCoord.r, toCoord.c, true)
-                                .filter(m => m.type === 'jump');
+            const nextJumps = getPossibleMoves(newBoard, toCoord.r, toCoord.c, true).filter(m => m.type === 'jump');
             
             if (nextJumps.length > 0) {
-                // Hala atlama zorunluluğu var, sıra aynı oyuncuda kalır
                 game.board = newBoard;
                 game.lastJump = to; 
                 shouldChangeTurn = false;
             }
         }
         
-        // Vezir Kontrolü (Son sıraya ulaşıldı mı?)
+        // Vezir Kontrolü
         const isKingRow = (color === 'black' && toCoord.r === 7) || (color === 'white' && toCoord.r === 0);
         if (isKingRow) {
             newBoard[toCoord.r][toCoord.c] = (color === 'black') ? 3 : 4; 
         }
 
-        // 6. Sırayı Değiştir ve Oyunu Bitir Kontrolü
+        // Sırayı Değiştir ve Oyunu Bitir Kontrolü
         game.board = newBoard;
         game.lastJump = shouldChangeTurn ? null : game.lastJump;
         
@@ -412,7 +352,6 @@ io.on('connection', (socket) => {
         const opponentPieces = newBoard.flat().filter(p => (opponentColor === 'black' && (p === 1 || p === 3)) || (opponentColor === 'white' && (p === 2 || p === 4)));
 
         if (opponentPieces.length === 0 || !opponentHasMoves) {
-            // Oyun bitti: Kazanan mevcut hamleyi yapan oyuncu (color)
             game.isGameOver = true;
             const winner = game.players[color];
             const loser = game.players[opponentColor];
@@ -424,20 +363,26 @@ io.on('connection', (socket) => {
                 winnerEloChange: game.isRanked ? ELO_CHANGE_AMOUNT : 0 
             });
         } else {
-            // Oyun devam ediyor
+            // Oyun devam ederken ELO puanlarını güncel çekip göndermek gerekir (yoksa güncel ELO'yu görmezler)
+            const blackStats = await getOrCreatePlayer(game.players.black.telegramId, game.players.black.username);
+            const whiteStats = await getOrCreatePlayer(game.players.white.telegramId, game.players.white.username);
+            
+            game.players.black.elo = blackStats.elo_score;
+            game.players.white.elo = whiteStats.elo_score;
+
             io.to(roomId).emit('boardUpdate', { 
                 board: game.board, 
                 turn: game.turn,
                 blackName: game.players['black'].username,
                 whiteName: game.players['white'].username,
-                blackElo: game.players['black'].elo, 
-                whiteElo: game.players['white'].elo 
+                blackElo: game.players['black'].elo,
+                whiteElo: game.players['white'].elo
             });
         }
     });
 
     // ---------------------- BAĞLANTI KESİLMESİ ----------------------
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
         const roomId = socketToRoom[socket.id];
         const room = games[roomId];
         if (room) {
@@ -449,7 +394,6 @@ io.on('connection', (socket) => {
                 const winner = room.players[winnerColor];
                 const loser = room.players[playerColor];
                 
-                // Dereceli ise ELO güncelle (Kazanan +10, Kaybeden -10)
                 updateEloScores(winner.telegramId, loser.telegramId, room.isRanked);
                 
                 io.to(roomId).emit('opponentLeft', `${winner.username} kazandı (Rakip ayrıldı).`);
@@ -476,11 +420,11 @@ app.get('/api/leaderboard', async (req, res) => {
     }
 
     try {
-        // TOP 10 Oyuncuyu Çekme
-        const top10Players = await client.query(
+        // TOP 100 Oyuncuyu Çekme (Daha geniş bir liderlik tablosu için)
+        const topPlayers = await client.query(
             `SELECT username, elo_score, telegram_id FROM players 
              ORDER BY elo_score DESC 
-             LIMIT 10;`
+             LIMIT 100;`
         );
 
         // Kullanıcının Kendi ELO ve Sırasını Çekme
@@ -502,7 +446,8 @@ app.get('/api/leaderboard', async (req, res) => {
         const userData = userRankResult.rows.length > 0 ? userRankResult.rows[0] : null;
 
         res.json({
-            top10: top10Players.rows,
+            top10: topPlayers.rows.slice(0, 10), // İlk 10'u döndür
+            allRanks: topPlayers.rows, // Sıralama için daha fazlasını döndür (isteğe bağlı)
             userStats: userData 
         });
 
