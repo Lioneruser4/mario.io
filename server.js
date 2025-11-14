@@ -1,19 +1,19 @@
+// Dosya Adı: server.js (Eksiksiz ELO ve Dama Mantığı - GÜNCEL)
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
+const { Client } = require('pg');
 
 const app = express();
-app.use(cors());
 const server = http.createServer(app);
 
-// Socket.IO ayarları - Basitleştirilmiş versiyon
+// CORS ve Transport Ayarları
 const io = new Server(server, {
     cors: {
-        origin: "*",
+        origin: "*", 
         methods: ["GET", "POST"]
     },
-    transports: ['websocket']
+    transports: ['websocket', 'polling'] 
 });
 
 // Oyun odalarını ve oyuncuları tutacak yapılar
