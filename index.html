@@ -7,6 +7,55 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        // Socket.io bağlantısı
+        const socket = io('http://localhost:3000');
+        
+        // Oyun durumu
+        const gameState = {
+            roomId: null,
+            playerId: null,
+            playerNumber: null
+        };
+        
+        // Odaya katıl
+        function joinRoom(roomId = 'default') {
+            gameState.roomId = roomId;
+            socket.emit('joinRoom', roomId);
+        }
+        
+        // Socket olaylarını dinle
+        socket.on('connect', () => {
+            console.log('Sunucuya bağlandı:', socket.id);
+            gameState.playerId = socket.id;
+            joinRoom('default-room');
+        });
+        
+        socket.on('roomJoined', (data) => {
+            console.log('Odaya katıldı:', data);
+            gameState.playerNumber = data.playerNumber;
+            document.getElementById('status').textContent = 
+                `Oda: ${data.roomId} | Oyuncu ${data.playerNumber} | Bekleniyor...`;
+        });
+        
+        socket.on('startGame', (data) => {
+            console.log('Oyun başlıyor!', data);
+            document.getElementById('status').textContent = 
+                `Oyun başladı! Sen Oyuncu ${gameState.playerNumber}`;
+            // Oyunu başlat
+            startGame();
+        });
+        
+        socket.on('playerMoved', (data) => {
+            console.log('Rakip hamlesi:', data);
+            // Rakip hamlesini işle
+        });
+        
+        socket.on('playerDisconnected', (data) => {
+            console.log('Rakip ayrıldı:', data);
+            alert('Rakip oyundan ayrıldı!');
+        });
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     
@@ -104,7 +153,7 @@
     
     <div id="loadingMessage">
         <div class="spinner"></div>
-        <p id="loadingText">Sunucuya bağlanılıyor...</p>
+        <div id="status" style="position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; z-index: 1000;">Sunucuya bağlanılıyor...</div>
     </div>
 
     <div id="globalMessage">
