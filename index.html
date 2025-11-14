@@ -20,12 +20,12 @@
             margin: 0;
             padding: 0;
             width: 100%;
-            height: 100vh; /* Tam yükseklik */
+            height: 100vh; 
             overflow: hidden;
             font-family: 'Inter', sans-serif;
         }
         body {
-            background-color: #1a202c; /* Koyu arka plan */
+            background-color: #1a202c; 
             color: #e2e8f0;
             display: flex;
             align-items: center;
@@ -41,7 +41,7 @@
             display: none;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start; /* İçeriği üste hizala */
+            justify-content: flex-start; 
             padding: 1.5rem;
             padding-top: env(safe-area-inset-top, 2.5rem);
             padding-bottom: env(safe-area-inset-bottom, 1.5rem);
@@ -105,8 +105,8 @@
 
         /* OYUN EKRANI (SATRANÇ) ÖZEL STİLLERİ */
         #myBoard {
-            width: 90vw; /* Mobil için duyarlı */
-            max-width: 450px; /* Maksimum genişlik */
+            width: 90vw; 
+            max-width: 450px; 
             margin: 1rem 0;
         }
 
@@ -256,15 +256,15 @@
         $(document).ready(function() {
             
             // === DEĞİŞKENLER ===
-            // !! SİZİN SUNUCU ADRESİNİZE AYARLANDI !!
+            // !! BU ADRES SİZİN TALEBİNİZE GÖRE AYARLANMIŞTIR !!
             const RENDER_URL = 'https://mario-io-1.onrender.com'; 
             
             let socket;
             let board = null;
             let game = new Chess();
-            let playerColor = null; // 'w', 'b' (online)
+            let playerColor = null; 
             let currentRoomId = null;
-            let gameMode = null; // 'online' veya 'offline'
+            let gameMode = null; 
 
             // UI Elementleri
             const $lobby = $('#lobby');
@@ -301,7 +301,7 @@
                 $whitePlayer.removeClass('active-turn');
                 $blackPlayer.removeClass('active-turn');
 
-                const turn = game.turn(); // 'w' veya 'b'
+                const turn = game.turn(); 
                 if (turn === 'w') {
                     $whitePlayer.addClass('active-turn');
                     $status.text("Sıra Beyazda");
@@ -382,7 +382,7 @@
                 let move = {
                     from: source,
                     to: target,
-                    promotion: 'q' // Şimdilik hep vezir
+                    promotion: 'q' 
                 };
                 
                 const validMove = game.move(move);
@@ -456,6 +456,7 @@
             
             function connectToServer() {
                 try {
+                    // Bağlantı adresi buradan ayarlanıyor: https://mario-io-1.onrender.com
                     socket = io(RENDER_URL, {
                         transports: ['websocket', 'polling']
                     });
@@ -466,13 +467,13 @@
                     });
 
                     socket.on('connect_error', () => {
-                        $loading.find('p').text('Sunucuya bağlanılamadı. Yeniden denenecek...');
+                        $loading.find('p').text('Sunucuya bağlanılamadı. Lütfen Render durumunu kontrol edin.');
                         showGlobalMessage('Sunucuya bağlanılamadı!', true);
                     });
 
                     socket.on('roomCreated', (data) => {
                         currentRoomId = data.roomId;
-                        playerColor = data.color; // 'w'
+                        playerColor = data.color; 
                         $('#roomCodeDisplay').text(currentRoomId);
                         showScreen('waitScreen');
                     });
