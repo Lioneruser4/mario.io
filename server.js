@@ -1,50 +1,92 @@
-// Dosya Adı: server.js (Eksiksiz ELO ve Dama Mantığı - GÜNCEL)
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { Client } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
 
-// CORS ve Transport Ayarları
+// Socket.IO ayarları
 const io = new Server(server, {
     cors: {
-        origin: "*", 
+        origin: "*",
         methods: ["GET", "POST"]
     },
-    transports: ['websocket', 'polling'] 
+    transports: ['websocket', 'polling']
 });
 
-// PostgreSQL Bağlantısı
-const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+// Oyun odalarını ve oyuncuları tutacak yapılar
+const rooms = {};
+const players = {};
+const socketToRoom = {};
+
+// HTTP sunucusunu başlat
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor...`);
 });
 
-client.connect().then(() => {
-    console.log("✅ PostgreSQL veritabanına başarıyla bağlanıldı.");
-    client.query(`
-        CREATE TABLE IF NOT EXISTS players (
-            telegram_id VARCHAR(50) PRIMARY KEY,
-            username VARCHAR(100) NOT NULL,
-            elo_score INTEGER DEFAULT 0,
-            wins INTEGER DEFAULT 0,
-            losses INTEGER DEFAULT 0
-        );
-    `).then(() => {
-        console.log("✅ 'players' tablosu kontrol edildi/oluşturuldu.");
-    }).catch(err => {
-        console.error("Tablo oluşturma hatası:", err.message);
+// Socket bağlantılarını dinle
+io.on('connection', (socket) => {
+    console.log('Yeni bir kullanıcı bağlandı:', socket.id);
+    
+    // Odaya katılma
+    socket.on('joinRoom', (roomId) => {
+        if (!rooms[roomId]) {
+            rooms[roomId] = { players: [] };
+        }
+        
+        const room = rooms[roomId];
+        if (room.players.length < 2) { // Maksimum 2 oyuncu
+            socket.join(roomId);
+            room.players.push(socket.id);
+            socketToRoom[socket.id] = roomId;
+            
+            // Odaya katıldı mesajı gönder
+            socket.emit('roomJoined', { 
+                roomId,
+                playerId: socket.id,
+                playerNumber: room.players.length
+            });
+            
+            // İki oyuncu da hazırsa oyunu başlat
+            if (room.players.length === 2) {
+                io.to(roomId).emit('startGame', {
+                    player1: room.players[0],
+                    player2: room.players[1]
+                });
+            }
+        } else {
+            socket.emit('roomFull', { roomId });
+        }
     });
-}).catch(err => {
-    console.error("❌ PostgreSQL bağlantı hatası: DATABASE_URL ayarını kontrol edin.", err.message);
+    
+    // Oyun hareketlerini ilet
+    socket.on('playerMove', (data) => {
+        const roomId = socketToRoom[socket.id];
+        if (roomId) {
+            socket.to(roomId).emit('playerMoved', data);
+        }
+    });
+    
+    // Bağlantı kesildiğinde
+    socket.on('disconnect', () => {
+        console.log('Kullanıcı ayrıldı:', socket.id);
+        const roomId = socketToRoom[socket.id];
+        if (roomId && rooms[roomId]) {
+            // Oyuncuyu odadan çıkar
+            rooms[roomId].players = rooms[roomId].players.filter(id => id !== socket.id);
+            // Oda boşsa sil
+            if (rooms[roomId].players.length === 0) {
+                delete rooms[roomId];
+            } else {
+                // Diğer oyuncuya haber ver
+                io.to(roomId).emit('playerDisconnected', { playerId: socket.id });
+            }
+            delete socketToRoom[socket.id];
+        }
+    });
 });
 
-
-let games = {}; // Odaları ve oyun durumlarını tutar
-let socketToRoom = {}; // Socket ID'yi Odaya eşlemek için
-let rankedQueue = []; // Dereceli oyun arayanları tutan kuyruk
 const ELO_CHANGE_AMOUNT = 20; 
 
 // ----------------------------------------------------------------------
