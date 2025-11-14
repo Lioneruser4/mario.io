@@ -10,7 +10,7 @@ const server = http.createServer(app);
 // CORS ve Transport Ayarları
 const io = new Server(server, {
     cors: {
-        origin: "*", // Tüm client'lara izin ver
+        origin: "*", 
         methods: ["GET", "POST"]
     },
     transports: ['websocket', 'polling'] 
@@ -24,12 +24,11 @@ const client = new Client({
 
 client.connect().then(() => {
     console.log("✅ PostgreSQL veritabanına başarıyla bağlanıldı.");
-    // Kullanıcı tablosunu oluştur
     client.query(`
         CREATE TABLE IF NOT EXISTS players (
             telegram_id VARCHAR(50) PRIMARY KEY,
             username VARCHAR(100) NOT NULL,
-            elo_score INTEGER DEFAULT 0, -- ELO 0 ile başlar
+            elo_score INTEGER DEFAULT 0,
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0
         );
@@ -45,10 +44,11 @@ client.connect().then(() => {
 
 let games = {}; // Odaları ve oyun durumlarını tutar
 let socketToRoom = {}; // Socket ID'yi Odaya eşlemek için
-const ELO_CHANGE_AMOUNT = 20; // Kazanana +20, Kaybedene -20
+let rankedQueue = []; // Dereceli oyun arayanları tutan kuyruk
+const ELO_CHANGE_AMOUNT = 20; 
 
 // ----------------------------------------------------------------------
-// OYUN MANTIĞI FONKSİYONLARI (ŞAŞKİ/DAMA)
+// OYUN MANTIĞI FONKSİYONLARI (DAMA)
 // ----------------------------------------------------------------------
 function initializeCheckersBoard() {
     const board = Array(8).fill(null).map(() => Array(8).fill(0));
@@ -56,6 +56,8 @@ function initializeCheckersBoard() {
     for (let r = 5; r < 8; r++) { for (let c = 0; c < 8; c++) { board[r][c] = 2; } }
     return board; 
 }
+// ... (Diğer tüm yardımcı oyun fonksiyonları: isKing, getPossibleMoves, hasMandatoryJump, hasAnyValidMoves aynı kalır)
+
 function isKing(piece) { return piece === 3 || piece === 4; }
 function getPossibleMoves(board, r, c, isJumpOnly = false) {
     const piece = board[r][c];
@@ -135,8 +137,9 @@ function hasAnyValidMoves(board, color) {
     return false;
 }
 
+
 // ----------------------------------------------------------------------
-// VERİTABANI İŞLEMLERİ
+// VERİTABANI VE KUYRUK İŞLEMLERİ
 // ----------------------------------------------------------------------
 
 async function getOrCreatePlayer(telegramId, username) {
@@ -145,14 +148,13 @@ async function getOrCreatePlayer(telegramId, username) {
             `INSERT INTO players (telegram_id, username, elo_score) 
              VALUES ($1, $2, 0) 
              ON CONFLICT (telegram_id) 
-             DO UPDATE SET username = $2 -- İsim güncellenir
+             DO UPDATE SET username = $2 
              RETURNING telegram_id, username, elo_score;`,
             [telegramId, username]
         );
         return result.rows[0];
     } catch (err) {
         console.error("Oyuncu kaydetme/bulma hatası:", err.message);
-        // DB hatası olursa geçici varsayılan değer döndürülür
         return { telegram_id: telegramId, username: username, elo_score: 0 };
     }
 }
@@ -178,10 +180,68 @@ async function updateEloScores(winnerId, loserId, roomIsRanked) {
          WHERE telegram_id = $2;`,
         [ELO_CHANGE_AMOUNT, loserId]
     );
+    io.emit('rankUpdate'); 
+}
 
-    console.log(`ELO Güncelleme: Kazanan ${winnerId} (+${ELO_CHANGE_AMOUNT}), Kaybeden ${loserId} (-${ELO_CHANGE_AMOUNT})`);
-    
-    io.emit('rankUpdate'); // Skor tablosunu yenilemeleri için sinyal
+// Yeni: Dereceli Kuyruk Kontrolü ve Eşleştirme
+function checkRankedQueue() {
+    if (rankedQueue.length >= 2) {
+        const player1 = rankedQueue.shift(); 
+        const player2 = rankedQueue.shift(); 
+        
+        // Yeni oda kodu
+        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+
+        // Odayı oluştur ve bilgileri kaydet
+        games[code] = {
+            isRanked: true, 
+            players: { 
+                'black': { 
+                    id: player1.socketId, 
+                    telegramId: player1.telegramId, 
+                    username: player1.username, 
+                    elo: player1.elo 
+                }, 
+                'white': { 
+                    id: player2.socketId, 
+                    telegramId: player2.telegramId, 
+                    username: player2.username, 
+                    elo: player2.elo 
+                } 
+            },
+            board: initializeCheckersBoard(),
+            turn: 'black',
+            lastJump: null, 
+            isGameOver: false,
+        };
+
+        // Socket'leri odaya al ve bilgileri eşle
+        const socket1 = io.sockets.sockets.get(player1.socketId);
+        const socket2 = io.sockets.sockets.get(player2.socketId);
+        
+        if (socket1 && socket2) {
+            socketToRoom[player1.socketId] = code;
+            socketToRoom[player2.socketId] = code;
+            socket1.join(code);
+            socket2.join(code);
+
+            // Oyuna başla sinyali gönder
+            io.to(code).emit('gameStart', {
+                board: games[code].board,
+                turn: games[code].turn,
+                blackName: games[code].players['black'].username,
+                whiteName: games[code].players['white'].username,
+                isRanked: true,
+                blackElo: games[code].players['black'].elo, 
+                whiteElo: games[code].players['white'].elo 
+            });
+            console.log(`Otomatik Eşleşme Başladı: ${code} (Dereceli)`);
+        } else {
+             // Eğer socket bulunamazsa kuyruğa geri ekle veya logla
+             console.error(`Eşleştirilen oyuncuların socket'leri bulunamadı. ID'ler: ${player1.socketId}, ${player2.socketId}`);
+             // Şu an için kaybetmeyi kabul edip devam ediyoruz
+        }
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -196,32 +256,61 @@ io.on('connection', (socket) => {
         return { r: parseInt(parts[1]), c: parseInt(parts[3]) };
     };
     
-    // ---------------------- ODA KURMA ----------------------
+    // ---------------------- ODA KURMA / KUYRUK ----------------------
     socket.on('createRoom', async ({ username, telegramId, isRanked = false }) => {
         const playerStats = await getOrCreatePlayer(telegramId, username);
-        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
         
-        games[code] = {
-            isRanked: isRanked, 
-            players: { 
-                'black': { id: socket.id, telegramId, username, elo: playerStats.elo_score }, 
-                'white': null 
-            },
-            board: initializeCheckersBoard(),
-            turn: 'black',
-            lastJump: null, 
-            isGameOver: false,
-        };
-        socketToRoom[socket.id] = code;
-        socket.join(code);
-        
-        socket.emit('roomCreated', { 
-            roomId: code, 
-            color: 'black', 
-            isRanked: isRanked, 
-            elo: playerStats.elo_score 
-        });
-        console.log(`Oda kuruldu: ${code} - Dereceli: ${isRanked}`);
+        if (isRanked) {
+            // Dereceli: Kuyruğa ekle ve eşleşme ara
+            const inQueue = rankedQueue.some(p => p.socketId === socket.id);
+            if (inQueue) return socket.emit('error', 'Zaten kuyrukta bekliyorsunuz.');
+            
+            rankedQueue.push({
+                socketId: socket.id,
+                telegramId: playerStats.telegram_id,
+                username: playerStats.username,
+                elo: playerStats.elo_score
+            });
+            socket.emit('queueEntered', { isRanked: true }); // Frontend'e kuyruğa girildiği bilgisini ver
+            checkRankedQueue(); // Hemen eşleşme kontrolü yap
+            console.log(`Oyuncu ${username} dereceli kuyruğa girdi. Kuyruk boyutu: ${rankedQueue.length}`);
+
+        } else {
+            // Arkadaşla Oyna: Hemen oda kur
+            const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+            
+            games[code] = {
+                isRanked: false, 
+                players: { 
+                    'black': { id: socket.id, telegramId, username, elo: playerStats.elo_score }, 
+                    'white': null 
+                },
+                board: initializeCheckersBoard(),
+                turn: 'black',
+                lastJump: null, 
+                isGameOver: false,
+            };
+            socketToRoom[socket.id] = code;
+            socket.join(code);
+            
+            socket.emit('roomCreated', { 
+                roomId: code, 
+                color: 'black', 
+                isRanked: false, 
+                elo: playerStats.elo_score 
+            });
+            console.log(`Arkadaş Odası Kuruldu: ${code}`);
+        }
+    });
+    
+    // Yeni: Kuyruktan Çıkma
+    socket.on('leaveQueue', () => {
+        const initialLength = rankedQueue.length;
+        rankedQueue = rankedQueue.filter(p => p.socketId !== socket.id);
+        if (rankedQueue.length < initialLength) {
+            console.log(`Oyuncu kuyruktan ayrıldı. Yeni boyut: ${rankedQueue.length}`);
+            socket.emit('queueLeft');
+        }
     });
 
     // ---------------------- ODAYA KATILMA ----------------------
@@ -238,8 +327,6 @@ io.on('connection', (socket) => {
         }
 
         const playerStats = await getOrCreatePlayer(telegramId, username);
-
-        // Odayı kuranın güncel ELO'sunu çek
         const blackPlayerStats = await getOrCreatePlayer(room.players['black'].telegramId, room.players['black'].username);
         room.players['black'].elo = blackPlayerStats.elo_score;
         
@@ -278,7 +365,7 @@ io.on('connection', (socket) => {
     });
 
 
-    // ---------------------- HAMLE YAPMA ----------------------
+    // ---------------------- HAMLE YAPMA (Aynı kalır) ----------------------
     socket.on('makeMove', async (data) => {
         const { roomId, from, to } = data;
         const game = games[roomId];
@@ -353,7 +440,7 @@ io.on('connection', (socket) => {
             const winner = game.players[color];
             const loser = game.players[opponentColor];
             
-            await updateEloScores(winner.telegramId, loser.telegramId, game.isRanked); // Async olmalı
+            await updateEloScores(winner.telegramId, loser.telegramId, game.isRanked); 
             
             io.to(roomId).emit('gameOver', { 
                 winner: winner.username, 
@@ -361,6 +448,7 @@ io.on('connection', (socket) => {
                 winnerEloChange: game.isRanked ? ELO_CHANGE_AMOUNT : 0 
             });
         } else {
+            // ELO güncel çekme
             const blackStats = await getOrCreatePlayer(game.players.black.telegramId, game.players.black.username);
             const whiteStats = await getOrCreatePlayer(game.players.white.telegramId, game.players.white.username);
             
@@ -382,6 +470,10 @@ io.on('connection', (socket) => {
     socket.on('disconnect', async () => {
         const roomId = socketToRoom[socket.id];
         const room = games[roomId];
+        
+        // Kuyruktan da çıkar
+        rankedQueue = rankedQueue.filter(p => p.socketId !== socket.id);
+
         if (room) {
              const playerColor = room.players.black.id === socket.id ? 'black' : 'white';
              
@@ -390,7 +482,7 @@ io.on('connection', (socket) => {
                 const winner = room.players[winnerColor];
                 const loser = room.players[playerColor];
                 
-                await updateEloScores(winner.telegramId, loser.telegramId, room.isRanked); // Async olmalı
+                await updateEloScores(winner.telegramId, loser.telegramId, room.isRanked); 
                 
                 io.to(roomId).emit('opponentLeft', `${winner.username} kazandı (Rakip ayrıldı).`);
              } else {
@@ -405,7 +497,7 @@ io.on('connection', (socket) => {
 });
 
 // ----------------------------------------------------------------------
-// EXPRESS API ROTASI (SKOR TABLOSU)
+// EXPRESS API ROTASI (SKOR TABLOSU - Aynı kalır)
 // ----------------------------------------------------------------------
 
 app.get('/api/leaderboard', async (req, res) => {
