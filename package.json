@@ -9,6 +9,5 @@
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2"
-    // 'chess.js' KÜTÜPHANESİ ÇIKARILDI - ŞAŞKİ İÇİN KENDİ MANTIMIZI YAZACAĞIZ
   }
 }
