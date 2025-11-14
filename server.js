@@ -1,32 +1,26 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { Chess } = require('chess.js'); // Satranç kütüphanesi
+const { Chess } = require('chess.js');
 
 const app = express();
 const server = http.createServer(app);
 
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// !! ÖNEMLİ: BURAYI KENDİ GITHUB PAGES ADRESİNİZLE DEĞİŞTİRİN !!
-// Örnek: "https://kullaniciadiniz.github.io"
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-const GITHUB_PAGES_URL = "https://SİZİN-ADINIZ.github.io"; 
-
+// !!!!!!!!! ÇÖZÜM: CORS Ayarı, TÜM ADRESLERE İZİN VERİR (*) !!!!!!!!!
+// !! Güvenlik için daha sonra burayı kendi GitHub Pages adresinizle değiştirmelisiniz. !!
 const io = new Server(server, {
   cors: {
-    origin: GITHUB_PAGES_URL, // Sadece sizin sitenize izin ver
+    origin: "*", // HERKESE İZİN VERİLDİ
     methods: ["GET", "POST"]
   }
 });
 
-let games = {}; // Aktif oyunları ve odaları tutacak
-let socketToRoom = {}; // Hangi soketin hangi odada olduğunu bulmak için
+let games = {}; 
+let socketToRoom = {}; 
 
-// Odayı ve oyunu temizle
 function cleanupRoom(roomId) {
   if (games[roomId]) {
     delete games[roomId];
-    console.log(`Oda ${roomId} temizlendi.`);
   }
   for (const socketId in socketToRoom) {
     if (socketToRoom[socketId] === roomId) {
@@ -38,40 +32,33 @@ function cleanupRoom(roomId) {
 io.on('connection', (socket) => {
   console.log('Bir kullanıcı bağlandı:', socket.id);
 
-  // Lobi Kurma
   socket.on('createRoom', () => {
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase(); 
     socket.join(roomId);
     socketToRoom[socket.id] = roomId;
     
     games[roomId] = {
-      chess: new Chess(), // Yeni satranç oyunu mantığı
+      chess: new Chess(), 
       players: { 'w': socket.id, 'b': null },
       turn: 'w'
     };
     
     socket.emit('roomCreated', { roomId: roomId, color: 'w' });
-    console.log(`Oda kuruldu: ${roomId} - Kurucu (Beyaz): ${socket.id}`);
+    console.log(`Oda kuruldu: ${roomId}`);
   });
 
-  // Odaya Katılma
   socket.on('joinRoom', (roomId) => {
     roomId = roomId.toUpperCase();
     const room = io.sockets.adapter.rooms.get(roomId);
     let game = games[roomId];
 
-    if (!room || !game) {
-      return socket.emit('error', 'Oda bulunamadı.');
-    }
-    if (game.players['b']) {
-      return socket.emit('error', 'Oda dolu.');
+    if (!room || !game || game.players['b']) {
+      return socket.emit('error', 'Oda bulunamadı veya dolu.');
     }
     
     socket.join(roomId);
     socketToRoom[socket.id] = roomId;
     game.players['b'] = socket.id;
-    
-    console.log(`Oyuncu ${socket.id} odaya katıldı (Siyah): ${roomId}`);
     
     io.to(roomId).emit('gameStart', {
       game: game,
@@ -79,7 +66,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Hamle Yapma (Satranç hamlesi)
   socket.on('makeMove', (data) => {
     const { roomId, move } = data;
     const game = games[roomId];
@@ -100,10 +86,7 @@ io.on('connection', (socket) => {
         });
 
         if (game.chess.isGameOver()) {
-          let reason = 'Oyun bitti.';
-          if (game.chess.isCheckmate()) reason = 'Şah Mat!';
-          if (game.chess.isStalemate()) reason = 'Pat!';
-          
+          let reason = game.chess.isCheckmate() ? 'Şah Mat!' : game.chess.isStalemate() ? 'Pat!' : 'Oyun bitti.';
           io.to(roomId).emit('gameOver', reason);
           cleanupRoom(roomId);
         }
@@ -115,7 +98,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Odadan Ayrılma (Bekleme ekranında iptal)
   socket.on('leaveRoom', (roomId) => {
     roomId = roomId.toUpperCase();
     socket.leave(roomId);
@@ -125,13 +107,10 @@ io.on('connection', (socket) => {
     delete socketToRoom[socket.id];
   });
 
-  // Bağlantı Kesilmesi
   socket.on('disconnect', () => {
-    console.log('Bir kullanıcı ayrıldı:', socket.id);
     const roomId = socketToRoom[socket.id];
     
     if (roomId && games[roomId]) {
-      console.log(`Oyuncu ${socket.id}, ${roomId} odasından ayrıldı.`);
       socket.to(roomId).emit('opponentLeft', 'Rakibiniz oyundan ayrıldı.');
       cleanupRoom(roomId);
     }
