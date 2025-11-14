@@ -220,10 +220,17 @@
 
 
     <script>
-        const RENDER_URL = 'https://mario-io-1.onrender.com'; 
-
-        const socket = io(RENDER_URL, {
-            transports: ['websocket', 'polling'] 
+        // Sunucu URL'sini güncelle
+        const SERVER_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://mario-io-1.onrender.com';
+        
+        console.log('Sunucuya bağlanılıyor:', SERVER_URL);
+        const socket = io(SERVER_URL, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
         });
 
         let USERNAME = 'Misafir';
@@ -678,28 +685,101 @@
         }
 
         // Sayfa yüklendiğinde çalıştır
+        // Socket bağlantısını kontrol et
+        function checkSocketConnection() {
+            console.log('Socket bağlantı durumu:', {
+                connected: socket.connected,
+                id: socket.id,
+                active: socket.active
+            });
+            
+            if (!socket.connected) {
+                console.error('Sunucuya bağlı değil!');
+                showMessage('Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.', true);
+                return false;
+            }
+            return true;
+        }
+        
+        // Socket event listener'larını ekle
+        socket.on('connect', () => {
+            console.log('Sunucuya bağlandı! Socket ID:', socket.id);
+            document.getElementById('loadingMessage').style.display = 'none';
+            showScreen('lobby');
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('Sunucu bağlantısı kesildi!');
+            showMessage('Sunucu bağlantısı kesildi. Tekrar bağlanılıyor...', true);
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.error('Bağlantı hatası:', error);
+            showMessage('Sunucuya bağlanılamadı. Lütfen daha sonra tekrar deneyin.', true);
+        });
+        
+        socket.on('roomCreated', (data) => {
+            console.log('Oda oluşturuldu:', data);
+            currentRoomId = data.roomId;
+            document.getElementById('waitRoomCode').textContent = `Oda Kodu: ${data.roomId}`;
+            document.getElementById('waitGameType').textContent = data.isRanked ? 'Dereceli Maç' : 'Arkadaş Maçı';
+            showScreen('waitScreen');
+        });
+        
+        socket.on('queueEntered', () => {
+            console.log('Dereceli kuyruğa alındı');
+            showScreen('queueScreen');
+            startQueueTimer();
+        });
+        
+        socket.on('error', (message) => {
+            console.error('Sunucu hatası:', message);
+            showMessage(message, true);
+        });
+
         $(document).ready(function() {
             loadTelegramData();
 
-            // Eşleşme Başlatma
-            $('#createRankedBtn, #createCasualBtn').on('click', function() {
-                const isRanked = $(this).data('ranked');
+            // Dereceli Oyun Butonu
+            $('#createRankedBtn').on('click', function() {
+                if (!checkSocketConnection()) return;
                 
-                if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
-                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-                }
-
-                socket.emit('createRoom', { 
-                    username: USERNAME, 
-                    telegramId: TELEGRAM_ID, 
-                    isRanked: isRanked 
+                console.log('Dereceli oyun başlatılıyor...');
+                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                
+                socket.emit('createRoom', {
+                    username: username,
+                    telegramId: TELEGRAM_ID,
+                    isRanked: true
                 });
                 
-                // Eğer casual ise, bekleme ekranı (waitScreen) açılacak (socket.on('roomCreated') ile)
-                // Eğer dereceliyse, kuyruk ekranı (queueScreen) açılacak (socket.on('queueEntered') ile)
+                showScreen('queueScreen');
+                startQueueTimer();
             });
 
-            // Oda Katılımı (Aynı Kalır)
+            // Arkadaşla Oyun Butonu
+            $('#createCasualBtn').on('click', function() {
+                if (!checkSocketConnection()) return;
+                
+                // Misafir kullanıcı kontrolü
+                if (TELEGRAM_ID.startsWith('GUEST_')) {
+                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                }
+                
+                console.log('Arkadaşla oyun başlatılıyor...');
+                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                
+                socket.emit('createRoom', {
+                    username: username,
+                    telegramId: TELEGRAM_ID,
+                    isRanked: false
+                });
+                
+                // Bekleme ekranını göster
+                showScreen('waitScreen');
+            });
+
+            // Oda Katılımı
             $('#joinRoomBtn').on('click', function() {
                 const roomId = $('#roomIdInput').val().trim().toUpperCase();
                 if (roomId.length !== 4) {
