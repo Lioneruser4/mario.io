@@ -258,6 +258,7 @@ io.on('connection', (socket) => {
     
     // ---------------------- ODA KURMA / KUYRUK ----------------------
     socket.on('createRoom', async ({ username, telegramId, isRanked = false }) => {
+        console.log(`Yeni oda isteği: ${username} (${telegramId}), Tür: ${isRanked ? 'Dereceli' : 'Arkadaş'}`);
         const playerStats = await getOrCreatePlayer(telegramId, username);
         
         if (isRanked) {
