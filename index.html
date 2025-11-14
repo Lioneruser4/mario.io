@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>🏆 Şaşki ELO (Dama)</title>
     
+    <!-- External Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
-        /* Ana Ekran Yönetimi (Aynı Kalır) */
+        /* Base Styles */
         body { 
             background-color: #1a202c; 
             color: #fff; 
@@ -25,6 +25,7 @@
             margin: 0;
             padding: 10px;
         }
+        
         .screen { 
             display: none; 
             width: 100%; 
@@ -32,6 +33,7 @@
             padding: 20px;
             text-align: center;
         }
+        
         .screen.active { 
             display: flex; 
             flex-direction: column;
@@ -39,219 +41,134 @@
         }
         
         /* Loading Spinner */
-        #loadingMessage {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: #1a202c; z-index: 1000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-size: 1.5rem;
-        }
         .spinner { 
-            border: 8px solid rgba(255, 255, 255, 0.1); border-top: 8px solid #4a90e2;
-            border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            border: 8px solid rgba(255, 255, 255, 0.1); 
+            border-top: 8px solid #4a90e2;
+            border-radius: 50%; 
+            width: 60px; 
+            height: 60px; 
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Global Message (Aynı Kalır) */
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        
+        /* Global Message */
         #globalMessage {
-            position: fixed; top: 0; left: 0; right: 0; padding: 10px; z-index: 999;
-            transform: translateY(-100%); transition: transform 0.3s ease-in-out;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            z-index: 1000;
+            display: none;
+            max-width: 90%;
         }
-        #globalMessage.show { transform: translateY(0); }
-
-        /* Tahta ve Taş Stilleri (Aynı Kalır) */
-        #checkersBoard {
-            display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
-            width: 90vw; max-width: 450px; aspect-ratio: 1 / 1; border: 4px solid #4a5568;
-            margin: 1rem 0; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
-        }
-        .square {
-            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-            font-size: clamp(1.5rem, 6vw, 2.5rem); cursor: pointer; transition: background-color 0.1s ease;
-        }
-        .light { background-color: #cbd5e0; } 
-        .dark { background-color: #2d3748; } 
         
-        .dark.selectable { cursor: grab; box-shadow: inset 0 0 0 4px #38a169; }
-        .dark.selected { background-color: #4a5568; box-shadow: inset 0 0 0 4px #ffc107; }
-
-        /* ELO Renk Sınıflandırmaları (Aynı Kalır) */
-        .elo-rank-low, .elo-rank-mid-blue, .elo-rank-purple, .elo-rank-gold {
-            color: white !important; 
-            padding: 2px 5px; 
-            border-radius: 5px; 
-            font-weight: bold; 
+        #globalMessage.show {
+            display: block;
+            animation: fadeInOut 3s ease-in-out;
         }
-        .elo-rank-low { background-color: rgba(255, 255, 255, 0.1); } 
-        .elo-rank-mid-blue { background-color: rgba(66, 133, 244, 0.3); } 
-        .elo-rank-purple { background-color: rgba(156, 39, 176, 0.3); } 
-        .elo-rank-gold { 
-            background-color: rgba(255, 193, 7, 0.3); 
-            color: #ffc107 !important; 
-            text-shadow: 0 0 2px black; 
-        } 
         
-        /* Buton Devre Dışı Stili (Aynı Kalır) */
-        #createRankedBtn:disabled {
-            background-color: #6d6d6d;
-            cursor: not-allowed;
-            opacity: 0.7;
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            90% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
         }
     </style>
 </head>
-
 <body>
-    
-    <div id="loadingMessage">
+    <!-- Loading Screen -->
+    <div id="loading" class="screen active">
         <div class="spinner"></div>
         <p id="loadingText">Sunucuya bağlanılıyor...</p>
     </div>
-
-    <div id="globalMessage">
-        <p id="globalMessageText" class="font-bold"></p>
-    </div>
-
-    <div id="lobby" class="screen space-y-6">
-        <h1 class="text-4xl font-black text-blue-400">
-            <i class="fas fa-chess-board"></i> Şaşki ELO
-        </h1>
-        <p class="text-xl text-gray-400" id="welcomeMessage">
-            Hoş geldin! ELO: 0
-        </p>
-
-        <div class="w-full space-y-3">
-            <button id="createRankedBtn" data-ranked="true" class="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
+    
+    <!-- Lobby Screen -->
+    <div id="lobby" class="screen">
+        <h1 class="text-3xl font-bold mb-8">🏆 Şaşki ELO</h1>
+        
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg w-full max-w-md mb-6">
+            <div class="mb-6">
+                <label for="username" class="block text-gray-300 text-sm font-medium mb-2">Kullanıcı Adı</label>
+                <input type="text" id="username" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white" placeholder="İsminizi girin">
+            </div>
+            
+            <button id="createRankedBtn" class="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95 mb-4">
                 <i class="fas fa-trophy mr-2"></i> Dereceli Oyna
             </button>
             
-            <button id="createCasualBtn" data-ranked="false" class="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
+            <button id="createCasualBtn" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
                 <i class="fas fa-user-friends mr-2"></i> Arkadaşla Oyna
             </button>
-            
-            <button id="showLeaderboardBtn" class="w-full py-4 bg-yellow-600 hover:bg-yellow-500 text-black font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
-                <i class="fas fa-star mr-2"></i> Liderlik Tablosu
-            </button>
         </div>
-        
-        <div class="w-full pt-4 border-t border-gray-700">
-            <p class="text-lg font-bold mb-2 text-gray-300">Mevcut Odaya Katıl</p>
-            <input type="text" id="roomIdInput" class="w-full p-3 text-lg text-center rounded-lg shadow-lg text-black uppercase" placeholder="Oda Kodu" maxlength="4">
-            <button id="joinRoomBtn" class="w-full mt-3 py-3 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-xl transition-all duration-200 active:scale-95">
-                <i class="fas fa-sign-in-alt mr-2"></i> Katıl
+    </div>
+    
+    <!-- Queue Screen -->
+    <div id="queueScreen" class="screen">
+        <div class="text-center">
+            <div class="spinner mb-6"></div>
+            <h2 class="text-2xl font-bold mb-2">Eşleşme Aranıyor</h2>
+            <p id="queueInfo" class="text-gray-300 mb-6">Rakip bekleniyor...</p>
+            
+            <div class="w-full bg-gray-700 rounded-full h-4 mb-6">
+                <div id="queueProgress" class="bg-blue-500 h-4 rounded-full" style="width: 0%;"></div>
+            </div>
+            
+            <button id="cancelQueueBtn" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-all duration-200 active:scale-95">
+                <i class="fas fa-times mr-2"></i> İptal Et
             </button>
         </div>
     </div>
     
-    <div id="queueScreen" class="screen space-y-6">
-        <h2 class="text-3xl font-bold mb-4 text-red-400">Rakip Aranıyor...</h2>
-        <div class="wait-spinner mb-4 text-6xl">⏳</div>
-        
-        <div class="p-4 bg-gray-800 rounded-lg w-full max-w-xs">
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-gray-400">Sıranız:</span>
-                <span id="queuePosition" class="text-2xl font-bold text-yellow-300">-</span>
-            </div>
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-gray-400">Toplam Oyuncu:</span>
-                <span id="totalPlayers" class="text-xl font-semibold">-</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-gray-400">Tahmini Süre:</span>
-                <span id="estimatedTime" class="text-xl font-semibold">-</span>
-            </div>
-        </div>
-        
-        <div class="w-full h-4 bg-gray-700 rounded-full overflow-hidden mt-2">
-            <div id="queueProgress" class="h-full bg-yellow-500 transition-all duration-1000" style="width: 0%"></div>
-        </div>
-        
-        <div class="text-left p-4 bg-gray-700 rounded-lg w-full max-w-xs">
-            <h3 class="font-bold text-lg mb-2 text-blue-300"><i class="fas fa-info-circle"></i> Eşleşme Bilgisi</h3>
-            <p class="text-sm text-gray-300">
-                Sizinle aynı seviyede rakip aranıyor. Eşleşme bulunduğunda otomatik olarak yönlendirileceksiniz.
-            </p>
-            <p class="text-xs text-gray-400 mt-2">
-                <i class="fas fa-lightbulb"></i> Beklerken sayfadan ayrılmayın.
-            </p>
-        </div>
-
-        <div class="flex flex-col space-y-3 w-full max-w-xs">
-            <button id="cancelQueueBtn" class="py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
-                <i class="fas fa-sign-out-alt mr-2"></i> Kuyruktan Ayrıl
-            </button>
-            
-            <div class="text-center">
-                <p id="queueTimer" class="text-sm text-gray-400">Aranıyor: <span class="font-mono">00:00</span></p>
-            </div>
-        </div>
-    </div>
-
-
-    <div id="leaderboardScreen" class="screen">
-        <h2 class="text-3xl font-bold text-yellow-400 mb-4"><i class="fas fa-star mr-2"></i> Liderlik Tablosu</h2>
-        
-        <table class="w-full text-left bg-gray-700 rounded-lg overflow-hidden text-md mb-4">
-            <thead class="bg-gray-800 text-gray-400">
-                <tr><th class="p-3">Sıra</th><th class="p-3">Oyuncu</th><th class="p-3 text-right">ELO</th></tr>
-            </thead>
-            <tbody id="leaderboardBody">
-                </tbody>
-        </table>
-        
-        <div id="userRankInfo" class="p-3 bg-gray-800 rounded-lg text-lg mb-6">
-            Yükleniyor...
-        </div>
-
-        <button id="hideLeaderboardBtn" class="w-full py-3 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all active:scale-95">
-            <i class="fas fa-arrow-left mr-2"></i> Lobiye Dön
-        </button>
-    </div>
-
+    <!-- Wait Screen -->
     <div id="waitScreen" class="screen">
-        <h2 class="text-3xl font-bold mb-4 text-white">Rakip Bekleniyor...</h2>
-        <div class="wait-spinner mb-6 text-6xl">♟️</div>
-        
-        <div class="bg-gray-800 p-4 rounded-lg w-full max-w-xs mb-4">
-            <p class="text-gray-400 text-sm mb-1">Oda Kodu:</p>
-            <div class="flex items-center justify-between bg-gray-700 rounded-md p-3">
-                <span id="waitRoomCode" class="text-2xl font-mono font-bold text-yellow-300 tracking-wider">----</span>
-                <button id="copyRoomCodeBtn" class="ml-2 p-2 text-gray-300 hover:text-white rounded-full hover:bg-gray-600 transition-colors" title="Kodu Kopyala">
-                    <i class="far fa-copy"></i>
+        <div class="text-center">
+            <div class="spinner mb-6"></div>
+            <h2 class="text-2xl font-bold mb-2">Oyun Odası</h2>
+            <p class="text-gray-300 mb-2">Oda Kodu:</p>
+            <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                <p id="roomCode" class="text-3xl font-mono font-bold text-yellow-400">----</p>
+                <button id="copyCodeBtn" class="mt-2 text-blue-400 hover:text-blue-300 text-sm">
+                    <i class="far fa-copy mr-1"></i> Kopyala
+                </button>
+                <span id="copyStatus" class="text-green-400 text-sm ml-2"></span>
+            </div>
+            
+            <p class="text-gray-400 mb-6">Bu kodu arkadaşınızla paylaşın</p>
+            
+            <div class="flex space-x-4 justify-center">
+                <button id="shareCodeBtn" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg">
+                    <i class="fas fa-share-alt mr-2"></i> Paylaş
+                </button>
+                <button id="cancelWaitBtn" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg">
+                    <i class="fas fa-times mr-2"></i> İptal
                 </button>
             </div>
-            <p id="copyStatus" class="text-green-400 text-sm mt-1 h-5"></p>
         </div>
-        
-        <p class="text-md text-gray-400 mb-6" id="waitGameType">Arkadaş Maçı</p>
-        
-        <p class="text-red-300 mb-4 text-center max-w-xs">Bu kodu arkadaşınıza vererek odaya katılmasını sağlayın!</p>
-
-        <div class="mt-4 space-y-3 w-full max-w-xs">
-            <button id="cancelWaitBtn" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
-                <i class="fas fa-times-circle mr-2"></i> Odayı Kapat ve Lobiden Çık
-            </button>
-            <button id="shareRoomBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
-                <i class="fas fa-share-alt mr-2"></i> Kodu Paylaş
-            </button>
-        </div>
-    </div>
-
-    <div id="gameScreen" class="screen justify-start pt-4">
-        <div id="opponentInfo" class="player-info w-full text-left p-2 bg-gray-800 rounded-md"></div>
-        <div id="checkersBoard">
-            </div>
-        <div id="playerInfo" class="player-info w-full text-left p-2 bg-gray-800 rounded-md"></div>
-        <div id="gameStatus" class="mt-4 p-2 bg-gray-700 rounded-lg text-center text-xl font-semibold w-full">Sıra: <span id="currentTurnName"></span></div>
     </div>
     
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+        <!-- Game content will be rendered here by game.js -->
+    </div>
+    
+    <!-- Game Over Screen -->
     <div id="gameOverScreen" class="screen space-y-6">
-        <h2 class="text-4xl font-bold mb-4 text-white" id="gameOverResult">Oyun Bitti!</h2>
+        <h2 class="text-4xl font-bold mb-4 text-white">Oyun Bitti!</h2>
         <p class="text-xl text-gray-300" id="gameOverMessage"></p>
         
-        <button id="playAgainCasualBtn" class="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95" style="display:none;">
-            <i class="fas fa-redo mr-2"></i> Aynı Kişiyle Tekrar Oyna
+        <button id="playAgainBtn" class="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
+            <i class="fas fa-redo mr-2"></i> Tekrar Oyna
         </button>
-
+        
         <button id="returnToLobbyBtn" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
             <i class="fas fa-home mr-2"></i> Lobiye Dön
         </button>
@@ -259,36 +176,11 @@
 
 
     <script>
-        // Global değişkenler - tekrar tanımlanmaması için kontrol ekliyoruz
-        if (typeof socket === 'undefined') {
-            var socket;
-        }
-        if (typeof isConnecting === 'undefined') {
-            var isConnecting = false;
-        }
-        if (typeof CONNECTION_ATTEMPTS === 'undefined') {
-            var CONNECTION_ATTEMPTS = 5;
-        }
-        if (typeof connectionAttempts === 'undefined') {
-            var connectionAttempts = 0;
-        }
-        if (typeof currentRoomId === 'undefined') {
-            var currentRoomId = null;
-        }
-        if (typeof myColor === 'undefined') {
-            var myColor = null;
-        }
-        if (typeof game === 'undefined') {
-            var game = null;
-        }
-        if (typeof TELEGRAM_ID === 'undefined') {
-            // Eğer Telegram WebApp'ten gelen bir ID yoksa rastgele bir ID oluştur
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
-                var TELEGRAM_ID = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-            } else {
-                var TELEGRAM_ID = 'GUEST_' + Math.random().toString(36).substr(2, 9);
-            }
-        }
+        // Global variables for socket connection
+        let socket;
+        let isConnecting = false;
+        const CONNECTION_ATTEMPTS = 5;
+        let connectionAttempts = 0;
         
         // Sayfa yüklendiğinde çalışacak kod
         $(document).ready(function() {
