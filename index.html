@@ -259,23 +259,53 @@
 
 
     <script>
-        // Global değişkenler
-        let socket;
+        // Global değişkenler - tekrar tanımlanmaması için kontrol ekliyoruz
+        if (typeof socket === 'undefined') {
+            var socket;
+        }
+        if (typeof isConnecting === 'undefined') {
+            var isConnecting = false;
+        }
+        if (typeof CONNECTION_ATTEMPTS === 'undefined') {
+            var CONNECTION_ATTEMPTS = 5;
+        }
+        if (typeof connectionAttempts === 'undefined') {
+            var connectionAttempts = 0;
+        }
+        if (typeof currentRoomId === 'undefined') {
+            var currentRoomId = null;
+        }
+        if (typeof myColor === 'undefined') {
+            var myColor = null;
+        }
+        if (typeof game === 'undefined') {
+            var game = null;
+        }
+        if (typeof TELEGRAM_ID === 'undefined') {
+            // Eğer Telegram WebApp'ten gelen bir ID yoksa rastgele bir ID oluştur
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+                var TELEGRAM_ID = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+            } else {
+                var TELEGRAM_ID = 'GUEST_' + Math.random().toString(36).substr(2, 9);
+            }
+        }
         
         // Sayfa yüklendiğinde çalışacak kod
         $(document).ready(function() {
             console.log('Doküman yüklendi, socket bağlantısı başlatılıyor...');
+            
+            // Başlangıçta loading ekranını göster
+            showScreen('loading');
+            
+            // Socket bağlantısını başlat
             initializeSocket();
             
             // Telegram verilerini yükle
             loadTelegramData();
             
-            // Başlangıçta loading ekranını göster
-            showScreen('loading');
+            // Buton eventlerini bağla
+            bindButtonEvents();
         });
-        let isConnecting = false;
-        const CONNECTION_ATTEMPTS = 5;
-        let connectionAttempts = 0;
         
         // Socket bağlantısını başlat
         function initializeSocket() {
@@ -952,24 +982,24 @@
             // İptal butonları
             const cancelQueueBtn = document.getElementById('cancelQueueBtn');
             if (cancelQueueBtn) {
-                cancelQueueBtn.addEventListener('click', function() {
+                cancelQueueBtn.onclick = function() {
                     if (socket && socket.connected) {
                         socket.emit('leaveQueue');
                     }
                     stopQueueTimer();
                     showScreen('lobby');
-                });
+                };
             }
             
             const cancelWaitBtn = document.getElementById('cancelWaitBtn');
             if (cancelWaitBtn) {
-                cancelWaitBtn.addEventListener('click', function() {
+                cancelWaitBtn.onclick = function() {
                     if (socket && socket.connected && currentRoomId) {
                         socket.emit('leaveRoom', { roomId: currentRoomId });
                         currentRoomId = null;
                     }
                     showScreen('lobby');
-                });
+                };
             }
             
             console.log('Buton eventleri başarıyla bağlandı');
@@ -980,10 +1010,26 @@
             console.log(isRanked ? 'Dereceli oyun' : 'Arkadaşla oyun', 'başlatılıyor...');
             
             // Bağlantı kontrolü
-            if (!socket || !socket.connected) {
-                console.error('Socket bağlantısı yok!');
-                showMessage('Sunucu bağlantısı yok. Lütfen sayfayı yenileyin.', true);
-                initializeSocket(); // Otomatik olarak yeniden bağlanmayı dene
+            if (!socket) {
+                console.error('Socket tanımlı değil!');
+                initializeSocket();
+                showMessage('Bağlantı kuruluyor, lütfen bekleyin...', false);
+                return;
+            }
+            
+            if (!socket.connected) {
+                console.log('Bağlantı yok, yeniden bağlanılıyor...');
+                socket.connect();
+                showMessage('Sunucuya bağlanılıyor...', false);
+                
+                // 2 saniye bekle ve tekrar dene
+                setTimeout(() => {
+                    if (socket.connected) {
+                        handleGameStart(isRanked); // Tekrar dene
+                    } else {
+                        showMessage('Bağlantı kurulamadı. Lütfen internet bağlantınızı kontrol edin.', true);
+                    }
+                }, 2000);
                 return;
             }
             
