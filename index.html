@@ -13,7 +13,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
-        /* Ana Ekran Yönetimi */
+        /* Ana Ekran Yönetimi (Aynı Kalır) */
         body { 
             background-color: #1a202c; 
             color: #fff; 
@@ -52,14 +52,14 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Global Message */
+        /* Global Message (Aynı Kalır) */
         #globalMessage {
             position: fixed; top: 0; left: 0; right: 0; padding: 10px; z-index: 999;
             transform: translateY(-100%); transition: transform 0.3s ease-in-out;
         }
         #globalMessage.show { transform: translateY(0); }
 
-        /* Tahta ve Taş Stilleri */
+        /* Tahta ve Taş Stilleri (Aynı Kalır) */
         #checkersBoard {
             display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
             width: 90vw; max-width: 450px; aspect-ratio: 1 / 1; border: 4px solid #4a5568;
@@ -75,23 +75,23 @@
         .dark.selectable { cursor: grab; box-shadow: inset 0 0 0 4px #38a169; }
         .dark.selected { background-color: #4a5568; box-shadow: inset 0 0 0 4px #ffc107; }
 
-        /* ELO Renk Sınıflandırmaları (GÜNCEL SINIFLAR) */
+        /* ELO Renk Sınıflandırmaları (Aynı Kalır) */
         .elo-rank-low, .elo-rank-mid-blue, .elo-rank-purple, .elo-rank-gold {
             color: white !important; 
             padding: 2px 5px; 
             border-radius: 5px; 
-            font-weight: bold; /* İsimlerin belirginliği için */
+            font-weight: bold; 
         }
-        .elo-rank-low { background-color: rgba(255, 255, 255, 0.1); } /* 0 - 150 (Beyaz Şeffaf) */
-        .elo-rank-mid-blue { background-color: rgba(66, 133, 244, 0.3); } /* 150 - 350 (Mavi Şeffaf) */
-        .elo-rank-purple { background-color: rgba(156, 39, 176, 0.3); } /* 350 - 500 (Mor Şeffaf) */
+        .elo-rank-low { background-color: rgba(255, 255, 255, 0.1); } 
+        .elo-rank-mid-blue { background-color: rgba(66, 133, 244, 0.3); } 
+        .elo-rank-purple { background-color: rgba(156, 39, 176, 0.3); } 
         .elo-rank-gold { 
             background-color: rgba(255, 193, 7, 0.3); 
-            color: #ffc107 !important; /* Altın rengi */
+            color: #ffc107 !important; 
             text-shadow: 0 0 2px black; 
-        } /* 500 - 1000+ (Altın Şeffaf) */
+        } 
         
-        /* Buton Devre Dışı Stili */
+        /* Buton Devre Dışı Stili (Aynı Kalır) */
         #createRankedBtn:disabled {
             background-color: #6d6d6d;
             cursor: not-allowed;
@@ -141,6 +141,28 @@
             </button>
         </div>
     </div>
+    
+    <div id="queueScreen" class="screen space-y-6">
+        <h2 class="text-3xl font-bold mb-4 text-red-400">Dereceli Eşleşme Aranıyor...</h2>
+        <div class="wait-spinner mb-4 text-6xl">⏳</div>
+        
+        <div class="p-4 bg-gray-800 rounded-lg w-full">
+            <p class="text-2xl font-bold mb-2">Geçen Süre:</p>
+            <p id="queueTimer" class="text-4xl font-extrabold text-yellow-300">00:00</p>
+        </div>
+        
+        <div class="text-left p-4 bg-gray-700 rounded-lg w-full">
+            <h3 class="font-bold text-lg mb-2 text-red-300"><i class="fas fa-info-circle"></i> Dereceli Bilgilendirme</h3>
+            <p class="text-sm text-gray-300">
+                Bu modda, ELO puanınızı etkileyecek oyuncularla eşleşirsiniz. Galibiyetler puanınızı artırır, mağlubiyetler düşürür. Eşleşme, mevcut ELO aralığınızdaki oyuncularla yapılır.
+            </p>
+        </div>
+
+        <button id="cancelQueueBtn" class="py-3 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
+            <i class="fas fa-ban mr-2"></i> Vazgeç
+        </button>
+    </div>
+
 
     <div id="leaderboardScreen" class="screen">
         <h2 class="text-3xl font-bold text-yellow-400 mb-4"><i class="fas fa-star mr-2"></i> Liderlik Tablosu</h2>
@@ -167,8 +189,11 @@
         <div class="wait-spinner mb-6 text-6xl">♟️</div>
         <p class="text-xl text-gray-300 mb-2" id="waitRoomCode"></p>
         <p class="text-md text-gray-400 mb-6" id="waitGameType"></p>
+        
+        <p class="text-red-300 mb-4">Bu kodu arkadaşınıza vererek odaya katılmasını sağlayın!</p>
+
         <button id="cancelWaitBtn" class="py-3 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
-            <i class="fas fa-times-circle mr-2"></i> İptal Et ve Lobiden Çık
+            <i class="fas fa-times-circle mr-2"></i> Odayı Kapat ve Lobiden Çık
         </button>
     </div>
 
@@ -183,6 +208,11 @@
     <div id="gameOverScreen" class="screen space-y-6">
         <h2 class="text-4xl font-bold mb-4 text-white" id="gameOverResult">Oyun Bitti!</h2>
         <p class="text-xl text-gray-300" id="gameOverMessage"></p>
+        
+        <button id="playAgainCasualBtn" class="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95" style="display:none;">
+            <i class="fas fa-redo mr-2"></i> Aynı Kişiyle Tekrar Oyna
+        </button>
+
         <button id="returnToLobbyBtn" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
             <i class="fas fa-home mr-2"></i> Lobiye Dön
         </button>
@@ -190,7 +220,6 @@
 
 
     <script>
-        // RENDER URL'NİZ SABİTLENDİ
         const RENDER_URL = 'https://mario-io-1.onrender.com'; 
 
         const socket = io(RENDER_URL, {
@@ -205,6 +234,7 @@
         let selectedSquare = null;
         let currentBoardState = [];
         let game = {}; 
+        let queueTimerInterval; // Yeni sayaç değişkeni
 
         // --------------- 1. YARDIMCI VE ARAYÜZ FONKSİYONLARI ---------------
 
@@ -234,8 +264,27 @@
             $('#welcomeMessage').html(`Hoş geldin, <span class="font-bold">${USERNAME}</span>! ${eloSpan}`);
         }
 
-        // --------------- 2. TELEGRAM VERİ YÜKLEME FONKSİYONU ---------------
+        // YENİ: Süre Sayacı Fonksiyonu
+        function startQueueTimer() {
+            let seconds = 0;
+            clearInterval(queueTimerInterval); 
+            $('#queueTimer').text('00:00');
+            
+            queueTimerInterval = setInterval(() => {
+                seconds++;
+                const min = String(Math.floor(seconds / 60)).padStart(2, '0');
+                const sec = String(seconds % 60).padStart(2, '0');
+                $('#queueTimer').text(`${min}:${sec}`);
+            }, 1000);
+        }
 
+        function stopQueueTimer() {
+            clearInterval(queueTimerInterval);
+            $('#queueTimer').text('00:00');
+        }
+
+
+        // --------------- 2. TELEGRAM VERİ YÜKLEME FONKSİYONU (Aynı Kalır) ---------------
         function getUrlParam(name) {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get(name);
@@ -249,7 +298,6 @@
                     const tgUser = initData.user;
                     TELEGRAM_ID = tgUser.id.toString();
                     
-                    // İSİM ÖNCELİĞİ: first_name ve last_name varsa kullanılır
                     let fullName = `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim();
 
                     if (fullName) {
@@ -288,15 +336,38 @@
             fetchLeaderboard(); 
         });
 
+        // YENİ: Kuyruğa Girildiğinde
+        socket.on('queueEntered', () => {
+            showScreen('queueScreen');
+            startQueueTimer();
+        });
+        
+        // YENİ: Kuyruktan Çıkıldığında
+        socket.on('queueLeft', () => {
+            stopQueueTimer();
+            showScreen('lobby');
+            showMessage('Dereceli arama iptal edildi.');
+        });
+
+
         socket.on('disconnect', () => {
+            stopQueueTimer(); // Bağlantı kesilirse sayacı durdur
             showMessage('Bağlantı kesildi. Tekrar deneniyor...', true);
             $('#loadingMessage').fadeIn(300);
             $('#loadingText').text('Bağlantı kesildi, tekrar deneniyor...');
         });
 
-        socket.on('error', (message) => { showMessage(message, true); });
+        socket.on('error', (message) => { 
+            stopQueueTimer(); // Hata alınırsa sayacı durdur
+            showMessage(message, true); 
+            if ($('#queueScreen').hasClass('active')) {
+                showScreen('lobby');
+            }
+        });
+        
         socket.on('rankUpdate', fetchLeaderboard);
 
+        // ODA OLUŞTURMA (Sadece Arkadaşla Oyna Modunda Çalışır)
         socket.on('roomCreated', (data) => {
             currentRoomId = data.roomId;
             myColor = data.color;
@@ -307,12 +378,14 @@
             showScreen('waitScreen');
         });
 
+        // Odaya Katılma (Sadece Arkadaşla Oyna Modunda Çalışır)
         socket.on('roomJoined', (roomId) => {
             currentRoomId = roomId;
             showScreen('waitScreen'); 
         });
 
         socket.on('gameStart', (data) => {
+            stopQueueTimer(); // Oyun başladığında sayacı durdur
             myColor = data.blackName === USERNAME ? 'black' : 'white';
             game = data; 
             showMessage('Rakip bulundu! Oyun Başlıyor.', false);
@@ -327,6 +400,7 @@
         });
 
         socket.on('gameOver', (data) => {
+            stopQueueTimer(); 
             const winnerName = data.winner;
             const isWinner = winnerName === USERNAME;
             
@@ -335,6 +409,9 @@
             if(data.isRanked) {
                 const eloChange = isWinner ? data.winnerEloChange : -data.winnerEloChange;
                 message += ` ELO Puanı: ${eloChange > 0 ? '+' : ''}${eloChange}`;
+                $('#playAgainCasualBtn').hide(); // Derecelide tekrar oyna yok
+            } else {
+                $('#playAgainCasualBtn').show(); // Casual ise tekrar oyna butonu görünür
             }
 
             $('#gameOverResult').text(isWinner ? '🏆 ZAFER!' : '😔 MAĞLUBİYET!');
@@ -345,6 +422,7 @@
         });
         
         socket.on('opponentLeft', (message) => {
+            stopQueueTimer();
             showMessage(message, true);
             socket.emit('leaveRoom', currentRoomId);
             currentRoomId = null;
@@ -352,8 +430,7 @@
         });
 
 
-        // --------------- 4. OYUN TAHTASI VE ARAYÜZ GÜNCELLEMELERİ ---------------
-
+        // --------------- 4. OYUN TAHTASI VE ARAYÜZ GÜNCELLEMELERİ (Aynı Kalır) ---------------
         function drawBoard() {
             const boardElement = $('#checkersBoard');
             boardElement.empty();
@@ -396,13 +473,11 @@
             const myEloSpan = `<span class="${getEloRankClass(myInfo.elo)}">${myInfo.elo} ELO</span>`;
             const oppEloSpan = `<span class="${getEloRankClass(oppInfo.elo)}">${oppInfo.elo} ELO</span>`;
 
-            // Benim Bilgim
             $('#playerInfo').html(`
                 <span class="font-bold">Siz (${myColor === 'black' ? '⚫' : '⚪'}): ${myInfo.name}</span> 
                 (${myEloSpan})
             `).toggleClass('bg-green-600', isMyTurn).toggleClass('bg-gray-800', !isMyTurn);
             
-            // Rakip Bilgisi
             $('#opponentInfo').html(`
                 <span class="font-bold">Rakip (${oppInfo.color === 'black' ? '⚫' : '⚪'}): ${oppInfo.name}</span> 
                 (${oppEloSpan})
@@ -421,7 +496,6 @@
             }
         }
 
-        // Tahta Tıklama Olayı (Hamle Mantığı)
         $('#checkersBoard').on('click', '.square.dark', function() {
             if (!currentRoomId || (game.turn !== myColor)) return showMessage("Sıra sizde değil.", true);
             
@@ -454,8 +528,7 @@
         });
 
 
-        // --------------- 5. SKOR TABLOSU ÇEKME ---------------
-
+        // --------------- 5. SKOR TABLOSU ÇEKME (Aynı Kalır) ---------------
         function fetchLeaderboard() {
             const API_URL = `${RENDER_URL}/api/leaderboard`; 
             
@@ -511,7 +584,7 @@
         $(document).ready(function() {
             loadTelegramData(); 
 
-            // Buton Olayları Tanımları (DOM hazır olduğunda çalışır)
+            // Eşleşme Başlatma
             $('#createRankedBtn, #createCasualBtn').on('click', function() {
                 const isRanked = $(this).data('ranked');
                 
@@ -524,9 +597,12 @@
                     telegramId: TELEGRAM_ID, 
                     isRanked: isRanked 
                 });
-                showMessage(`${isRanked ? 'Dereceli' : 'Eğlence'} oyun aranıyor...`);
+                
+                // Eğer casual ise, bekleme ekranı (waitScreen) açılacak (socket.on('roomCreated') ile)
+                // Eğer dereceliyse, kuyruk ekranı (queueScreen) açılacak (socket.on('queueEntered') ile)
             });
 
+            // Oda Katılımı (Aynı Kalır)
             $('#joinRoomBtn').on('click', function() {
                 const roomId = $('#roomIdInput').val().trim().toUpperCase();
                 if (roomId.length !== 4) {
@@ -540,6 +616,7 @@
                 });
             });
 
+            // Odayı Kapatma (Arkadaşla Oyna) (Aynı Kalır)
             $('#cancelWaitBtn').on('click', function() {
                 if (currentRoomId) {
                     socket.emit('leaveRoom', currentRoomId);
@@ -548,7 +625,13 @@
                 showScreen('lobby');
                 showMessage("Oda kapatıldı.", false);
             });
+            
+            // YENİ: Dereceli Kuyruk İptali
+            $('#cancelQueueBtn').on('click', function() {
+                socket.emit('leaveQueue');
+            });
 
+            // Skor Tablosu ve Lobiye Dönüş (Aynı Kalır)
             $('#showLeaderboardBtn').on('click', function() {
                 showScreen('leaderboardScreen');
                 fetchLeaderboard();
@@ -561,6 +644,20 @@
             $('#returnToLobbyBtn').on('click', function() {
                 currentRoomId = null;
                 showScreen('lobby');
+                $('#playAgainCasualBtn').hide(); 
+            });
+
+            // CASUAL TEKRAR OYNA butonu (Aynı Kalır)
+            $('#playAgainCasualBtn').on('click', function() {
+                socket.emit('leaveRoom', currentRoomId); 
+                
+                socket.emit('createRoom', { 
+                    username: USERNAME, 
+                    telegramId: TELEGRAM_ID, 
+                    isRanked: false 
+                });
+                showMessage('Yeni eğlence oyunu başlatılıyor...');
+                $('#playAgainCasualBtn').hide();
             });
         });
         
