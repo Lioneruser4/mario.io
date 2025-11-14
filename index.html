@@ -11,8 +11,250 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
+    <style>
+        /* Ana Ekran Yönetimi */
+        body { 
+            background-color: #1a202c; 
+            color: #fff; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0;
+            padding: 10px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .btn {
+            background-color: #4a5568;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 8px;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .btn:hover {
+            background-color: #2d3748;
+            transform: translateY(-2px);
+        }
+        
+        .btn-primary {
+            background-color: #4299e1;
+        }
+        
+        .btn-primary:hover {
+            background-color: #3182ce;
+        }
+        
+        .btn-success {
+            background-color: #48bb78;
+        }
+        
+        .btn-success:hover {
+            background-color: #38a169;
+        }
+        
+        .input-group {
+            margin: 16px 0;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #4a5568;
+            background-color: #2d3748;
+            color: white;
+            font-size: 16px;
+        }
+        
+        .status {
+            margin: 20px 0;
+            padding: 12px;
+            background-color: #2d3748;
+            border-radius: 8px;
+            text-align: center;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: pre-line;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        #gameScreen {
+            display: none;
+            width: 100%;
+            max-width: 400px;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        #gameBoard {
+            width: 100%;
+            aspect-ratio: 1/1;
+            background-color: #2d3748;
+            border-radius: 8px;
+            margin: 16px 0;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 2px;
+            padding: 8px;
+        }
+        
+        .cell {
+            background-color: #4a5568;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .cell:hover {
+            opacity: 0.8;
+        }
+        
+        .cell.black {
+            background-color: #2d3748;
+        }
+        
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            margin: 10%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .piece.player1 {
+            background-color: #e53e3e;
+            box-shadow: 0 0 10px rgba(229, 62, 62, 0.5);
+        }
+        
+        .piece.player2 {
+            background-color: #3182ce;
+            box-shadow: 0 0 10px rgba(49, 130, 206, 0.5);
+        }
+        
+        .piece.king {
+            border: 2px solid gold;
+        }
+        
+        #loadingMessage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+            font-size: 20px;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Ana Menü -->
+    <div id="mainMenu" class="flex flex-col items-center">
+        <h1 class="text-3xl font-bold mb-8">🏆 Şaşki ELO</h1>
+        
+        <div id="status" class="status">Sunucuya bağlanılıyor...</div>
+        
+        <button id="rankedButton" class="btn btn-primary">
+            <i class="fas fa-trophy mr-2"></i> Dereceli Maç
+        </button>
+        
+        <button id="privateButton" class="btn">
+            <i class="fas fa-user-friends mr-2"></i> Özel Oda Oluştur
+        </button>
+        
+        <div class="input-group">
+            <input type="text" id="roomCodeInput" placeholder="Oda Kodunu Girin" class="w-full">
+        </div>
+        
+        <button id="joinButton" class="btn btn-success">
+            <i class="fas fa-sign-in-alt mr-2"></i> Odaya Katıl
+        </button>
+        
+        <div id="roomCodeDisplay" class="mt-4 text-lg font-semibold hidden"></div>
+    </div>
+    
+    <!-- Oyun Ekranı -->
+    <div id="gameScreen">
+        <div id="opponentInfo" class="w-full bg-gray-800 p-3 rounded-lg mb-4 text-center">
+            <div id="opponentName" class="font-bold">Rakip: Bekleniyor...</div>
+            <div id="opponentElo" class="text-sm text-gray-400">ELO: -</div>
+        </div>
+        
+        <div id="gameBoard">
+            <!-- Oyun tahtası JavaScript ile oluşturulacak -->
+        </div>
+        
+        <div id="playerInfo" class="w-full bg-gray-800 p-3 rounded-lg mt-4 text-center">
+            <div id="playerName" class="font-bold">Siz: Yükleniyor...</div>
+            <div id="playerElo" class="text-sm text-gray-400">ELO: -</div>
+        </div>
+        
+        <div id="gameStatus" class="mt-4 text-center"></div>
+    </div>
+    
+    <!-- Yükleme Ekranı -->
+    <div id="loadingMessage">
+        <div class="spinner"></div>
+        <div id="loadingText">Yükleniyor...</div>
+    </div>
+    
     <!-- Oyun Yönetimi -->
     <script src="game.js"></script>
+    <script>
+        // Oyunu başlat
+        document.addEventListener('DOMContentLoaded', () => {
+            gameModule.init();
+        });
+    </script>
         
     </script>
     
