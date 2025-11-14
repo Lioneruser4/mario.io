@@ -185,62 +185,114 @@ async function updateEloScores(winnerId, loserId, roomIsRanked) {
 
 // Yeni: Dereceli Kuyruk Kontrolü ve Eşleştirme
 function checkRankedQueue() {
-    if (rankedQueue.length >= 2) {
-        const player1 = rankedQueue.shift(); 
-        const player2 = rankedQueue.shift(); 
+    // Kuyruktaki oyuncuları ELO'ya göre sırala
+    rankedQueue.sort((a, b) => a.elo - b.elo);
+    
+    // Eşleşebilecek oyuncuları bul
+    const matchedPairs = [];
+    
+    // Eşleşmeyen oyuncular için yeni dizi oluştur
+    const remainingPlayers = [];
+    
+    while (rankedQueue.length > 0) {
+        const currentPlayer = rankedQueue.shift();
         
-        // Yeni oda kodu
-        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-
-        // Odayı oluştur ve bilgileri kaydet
-        games[code] = {
-            isRanked: true, 
-            players: { 
+        // Eşleşme bul
+        const matchIndex = rankedQueue.findIndex(p => {
+            const eloDiff = Math.abs(currentPlayer.elo - p.elo);
+            // Bekleme süresine göre ELO farkı toleransını artır
+            const maxEloDiff = 200 + (Math.floor((Date.now() - currentPlayer.joinTime) / 10000) * 5); // Her 10 saniyede 5 puan artan tolerans
+            return eloDiff <= maxEloDiff;
+        });
+        
+        if (matchIndex !== -1) {
+            // Eşleşme bulundu
+            const matchedPlayer = rankedQueue.splice(matchIndex, 1)[0];
+            matchedPairs.push([currentPlayer, matchedPlayer]);
+        } else {
+            // Eşleşme bulunamadı, bir sonraki tur için beklet
+            remainingPlayers.push(currentPlayer);
+        }
+    }
+    
+    // Eşleşmeyen oyuncuları kuyruğa geri ekle
+    rankedQueue.push(...remainingPlayers);
+    
+    // Eşleşen çiftler için oda oluştur
+    for (const [player1, player2] of matchedPairs) {
+        // Oda oluştur
+        const roomId = `ranked_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        
+        // Oyun başlat
+        games[roomId] = {
+            isRanked: true,
+            players: {
                 'black': { 
                     id: player1.socketId, 
                     telegramId: player1.telegramId, 
                     username: player1.username, 
                     elo: player1.elo 
-                }, 
+                },
                 'white': { 
                     id: player2.socketId, 
                     telegramId: player2.telegramId, 
                     username: player2.username, 
                     elo: player2.elo 
-                } 
+                }
             },
             board: initializeCheckersBoard(),
             turn: 'black',
-            lastJump: null, 
+            lastJump: null,
             isGameOver: false,
+            startTime: Date.now()
         };
-
-        // Socket'leri odaya al ve bilgileri eşle
-        const socket1 = io.sockets.sockets.get(player1.socketId);
-        const socket2 = io.sockets.sockets.get(player2.socketId);
         
-        if (socket1 && socket2) {
-            socketToRoom[player1.socketId] = code;
-            socketToRoom[player2.socketId] = code;
-            socket1.join(code);
-            socket2.join(code);
-
-            // Oyuna başla sinyali gönder
-            io.to(code).emit('gameStart', {
-                board: games[code].board,
-                turn: games[code].turn,
-                blackName: games[code].players['black'].username,
-                whiteName: games[code].players['white'].username,
-                isRanked: true,
-                blackElo: games[code].players['black'].elo, 
-                whiteElo: games[code].players['white'].elo 
+        // Socket odalarına katıl
+        io.to(player1.socketId).socketsJoin(roomId);
+        io.to(player2.socketId).socketsJoin(roomId);
+        
+        // Oda bilgilerini kaydet
+        socketToRoom[player1.socketId] = roomId;
+        socketToRoom[player2.socketId] = roomId;
+        
+        // Oyunculara oyunun başladığını bildir
+        io.to(player1.socketId).emit('gameStart', {
+            roomId: roomId,
+            color: 'black',
+            opponent: {
+                username: player2.username,
+                elo: player2.elo,
+                telegramId: player2.telegramId
+            },
+            yourElo: player1.elo
+        });
+        
+        io.to(player2.socketId).emit('gameStart', {
+            roomId: roomId,
+            color: 'white',
+            opponent: {
+                username: player1.username,
+                elo: player1.elo,
+                telegramId: player1.telegramId
+            },
+            yourElo: player2.elo
+        });
+        
+        console.log(`Eşleşme sağlandı: ${player1.username} (${player1.elo} ELO) vs ${player2.username} (${player2.elo} ELO) | ELO Farkı: ${Math.abs(player1.elo - player2.elo)}`);
+    }
+    
+    // Kalan oyuncu sayısını logla
+    if (rankedQueue.length > 0) {
+        console.log(`Kuyrukta bekleyen ${rankedQueue.length} oyuncu var.`);
+        
+        // Kuyruktaki oyunculara güncel durumu bildir
+        rankedQueue.forEach((player, index) => {
+            io.to(player.socketId).emit('queueUpdate', {
+                position: index + 1,
+                totalPlayers: rankedQueue.length,
+                estimatedWaitTime: Math.ceil((index + 1) * 0.5) // Dakika cinsinden tahmini bekleme süresi
             });
-            console.log(`Otomatik Eşleşme Başladı: ${code} (Dereceli)`);
-        } else {
-             // Eğer socket bulunamazsa kuyruğa geri ekle veya logla
-             console.error(`Eşleştirilen oyuncuların socket'leri bulunamadı. ID'ler: ${player1.socketId}, ${player2.socketId}`);
-             // Şu an için kaybetmeyi kabul edip devam ediyoruz
-        }
+        });
     }
 }
 
@@ -262,19 +314,36 @@ io.on('connection', (socket) => {
         const playerStats = await getOrCreatePlayer(telegramId, username);
         
         if (isRanked) {
-            // Dereceli: Kuyruğa ekle ve eşleşme ara
-            const inQueue = rankedQueue.some(p => p.socketId === socket.id);
-            if (inQueue) return socket.emit('error', 'Zaten kuyrukta bekliyorsunuz.');
+            // Önce aynı oyuncunun başka bir yerde kuyrukta olup olmadığını kontrol et
+            const existingIndex = rankedQueue.findIndex(p => p.telegramId === telegramId);
+            if (existingIndex !== -1) {
+                // Eğer aynı oyuncu başka bir sekmede kuyruktaysa, eski kaydı kaldır
+                const oldSocketId = rankedQueue[existingIndex].socketId;
+                io.to(oldSocketId).emit('queueLeft');
+                rankedQueue.splice(existingIndex, 1);
+            }
             
-            rankedQueue.push({
+            // Yeni oyuncuyu kuyruğa ekle
+            const playerData = {
                 socketId: socket.id,
                 telegramId: playerStats.telegram_id,
                 username: playerStats.username,
-                elo: playerStats.elo_score
+                elo: playerStats.elo_score,
+                joinTime: Date.now()
+            };
+            
+            rankedQueue.push(playerData);
+            console.log(`Oyuncu ${username} (${playerData.elo} ELO) kuyruğa eklendi. Kuyruk boyutu: ${rankedQueue.length}`);
+            
+            // Hemen eşleşme kontrolü yap
+            checkRankedQueue();
+            
+            // Kuyruğa alındı bilgisini gönder
+            socket.emit('queueEntered', { 
+                isRanked: true,
+                queuePosition: rankedQueue.length,
+                estimatedWaitTime: Math.floor(rankedQueue.length * 0.5) // Dakika cinsinden tahmini bekleme süresi
             });
-            socket.emit('queueEntered', { isRanked: true }); // Frontend'e kuyruğa girildiği bilgisini ver
-            checkRankedQueue(); // Hemen eşleşme kontrolü yap
-            console.log(`Oyuncu ${username} dereceli kuyruğa girdi. Kuyruk boyutu: ${rankedQueue.length}`);
 
         } else {
             // Arkadaşla Oyna: Hemen oda kur
