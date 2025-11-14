@@ -29,7 +29,7 @@ client.connect().then(() => {
         CREATE TABLE IF NOT EXISTS players (
             telegram_id VARCHAR(50) PRIMARY KEY,
             username VARCHAR(100) NOT NULL,
-            elo_score INTEGER DEFAULT 0, -- ELO 1000 yerine 0 ile başlar
+            elo_score INTEGER DEFAULT 0, -- ELO 0 ile başlar
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0
         );
@@ -45,10 +45,10 @@ client.connect().then(() => {
 
 let games = {}; // Odaları ve oyun durumlarını tutar
 let socketToRoom = {}; // Socket ID'yi Odaya eşlemek için
-const ELO_CHANGE_AMOUNT = 20; // Kazanana +20, Kaybedene -20 (GÜNCEL)
+const ELO_CHANGE_AMOUNT = 20; // Kazanana +20, Kaybedene -20
 
 // ----------------------------------------------------------------------
-// OYUN MANTIĞI FONKSİYONLARI (ŞAŞKİ/DAMA) - (DEĞİŞMEDİ)
+// OYUN MANTIĞI FONKSİYONLARI (ŞAŞKİ/DAMA)
 // ----------------------------------------------------------------------
 function initializeCheckersBoard() {
     const board = Array(8).fill(null).map(() => Array(8).fill(0));
@@ -142,11 +142,10 @@ function hasAnyValidMoves(board, color) {
 async function getOrCreatePlayer(telegramId, username) {
     try {
         const result = await client.query(
-            // ON CONFLICT: Eğer ID varsa sadece kullanıcı adını güncelle (ELO'yu elleme). Yeni kullanıcı ELO'su 0 olacak.
             `INSERT INTO players (telegram_id, username, elo_score) 
              VALUES ($1, $2, 0) 
              ON CONFLICT (telegram_id) 
-             DO UPDATE SET username = $2 
+             DO UPDATE SET username = $2 -- İsim güncellenir
              RETURNING telegram_id, username, elo_score;`,
             [telegramId, username]
         );
@@ -274,14 +273,13 @@ io.on('connection', (socket) => {
         const room = games[roomId];
         if (room) {
             delete games[roomId];
-            // Rakibe bilgi gönderme (Eğer oyun devam ediyorsa disconnect handle edecek)
         }
         delete socketToRoom[socket.id];
     });
 
 
     // ---------------------- HAMLE YAPMA ----------------------
-    socket.on('makeMove', (data) => {
+    socket.on('makeMove', async (data) => {
         const { roomId, from, to } = data;
         const game = games[roomId];
         if (!game || game.isGameOver) return;
@@ -292,7 +290,6 @@ io.on('connection', (socket) => {
         const color = (socket.id === game.players.black.id) ? 'black' : 'white';
         const opponentColor = (color === 'black') ? 'white' : 'black';
         
-        // ... (Hamle Mantığı Kontrolleri, Vezirleme, Yeme zorunluluğu) ...
         if (color !== game.turn) return socket.emit('error', 'Sizin sıranız değil.');
         
         const piece = game.board[fromCoord.r][fromCoord.c];
@@ -356,14 +353,14 @@ io.on('connection', (socket) => {
             const winner = game.players[color];
             const loser = game.players[opponentColor];
             
-            updateEloScores(winner.telegramId, loser.telegramId, game.isRanked);
+            await updateEloScores(winner.telegramId, loser.telegramId, game.isRanked); // Async olmalı
+            
             io.to(roomId).emit('gameOver', { 
                 winner: winner.username, 
                 isRanked: game.isRanked, 
                 winnerEloChange: game.isRanked ? ELO_CHANGE_AMOUNT : 0 
             });
         } else {
-            // Oyun devam ederken ELO puanlarını güncel çekip göndermek gerekir (yoksa güncel ELO'yu görmezler)
             const blackStats = await getOrCreatePlayer(game.players.black.telegramId, game.players.black.username);
             const whiteStats = await getOrCreatePlayer(game.players.white.telegramId, game.players.white.username);
             
@@ -388,13 +385,12 @@ io.on('connection', (socket) => {
         if (room) {
              const playerColor = room.players.black.id === socket.id ? 'black' : 'white';
              
-             // Rakip varsa oyunu sonlandır ve rakibi galip ilan et
              if (room.players.black && room.players.white) {
                 const winnerColor = playerColor === 'black' ? 'white' : 'black';
                 const winner = room.players[winnerColor];
                 const loser = room.players[playerColor];
                 
-                updateEloScores(winner.telegramId, loser.telegramId, room.isRanked);
+                await updateEloScores(winner.telegramId, loser.telegramId, room.isRanked); // Async olmalı
                 
                 io.to(roomId).emit('opponentLeft', `${winner.username} kazandı (Rakip ayrıldı).`);
              } else {
@@ -420,14 +416,12 @@ app.get('/api/leaderboard', async (req, res) => {
     }
 
     try {
-        // TOP 100 Oyuncuyu Çekme (Daha geniş bir liderlik tablosu için)
         const topPlayers = await client.query(
             `SELECT username, elo_score, telegram_id FROM players 
              ORDER BY elo_score DESC 
              LIMIT 100;`
         );
 
-        // Kullanıcının Kendi ELO ve Sırasını Çekme
         const userRankResult = await client.query(
             `SELECT * FROM (
                 SELECT 
@@ -446,8 +440,7 @@ app.get('/api/leaderboard', async (req, res) => {
         const userData = userRankResult.rows.length > 0 ? userRankResult.rows[0] : null;
 
         res.json({
-            top10: topPlayers.rows.slice(0, 10), // İlk 10'u döndür
-            allRanks: topPlayers.rows, // Sıralama için daha fazlasını döndür (isteğe bağlı)
+            top10: topPlayers.rows.slice(0, 10),
             userStats: userData 
         });
 
