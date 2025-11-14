@@ -772,18 +772,63 @@
         // Sayfa yüklendiğinde çalıştır
         // Socket bağlantısını kontrol et
         function checkSocketConnection() {
-            console.log('Socket bağlantı durumu:', {
-                connected: socket.connected,
-                id: socket.id,
-                active: socket.active
-            });
-            
-            if (!socket.connected) {
+            if (!socket || !socket.connected) {
                 console.error('Sunucuya bağlı değil!');
-                showMessage('Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.', true);
+                showMessage('Sunucu bağlantısı kurulamadı. Lütfen sayfayı yenileyin.', true);
                 return false;
             }
             return true;
+        }
+        
+        // Buton eventlerini bağla
+        function bindButtonEvents() {
+            console.log('Buton eventleri bağlanıyor...');
+            
+            // Dereceli Oyun Butonu
+            $('#createRankedBtn').off('click').on('click', function() {
+                console.log('Dereceli oyun butonuna tıklandı');
+                
+                if (!checkSocketConnection()) return;
+                
+                // Misafir kullanıcı kontrolü
+                if (TELEGRAM_ID.startsWith('GUEST_')) {
+                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                }
+                
+                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                showScreen('loading');
+                
+                console.log('Dereceli oyun başlatılıyor...');
+                socket.emit('createRoom', {
+                    username: username,
+                    telegramId: TELEGRAM_ID,
+                    isRanked: true
+                });
+            });
+
+            // Arkadaşla Oyun Butonu
+            $('#createCasualBtn').off('click').on('click', function() {
+                console.log('Arkadaşla oyun butonuna tıklandı');
+                
+                if (!checkSocketConnection()) return;
+                
+                // Misafir kullanıcı kontrolü
+                if (TELEGRAM_ID.startsWith('GUEST_')) {
+                    return showMessage("Arkadaşınla oynamak için Telegram girişi gereklidir.", true);
+                }
+                
+                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                showScreen('loading');
+                
+                console.log('Arkadaşla oyun başlatılıyor...');
+                socket.emit('createRoom', {
+                    username: username,
+                    telegramId: TELEGRAM_ID,
+                    isRanked: false
+                });
+            });
+            
+            console.log('Buton eventleri başarıyla bağlandı');
         }
         
         // Oda kodu kopyalama işlevi
@@ -827,6 +872,7 @@
             console.log('Sunucuya bağlandı! Socket ID:', socket.id);
             document.getElementById('loadingMessage').style.display = 'none';
             showScreen('lobby');
+            bindButtonEvents();
         });
         
         socket.on('disconnect', () => {
@@ -836,23 +882,22 @@
         
         socket.on('connect_error', (error) => {
             console.error('Bağlantı hatası:', error);
-            showMessage('Sunucuya bağlanılamadı. Lütfen daha sonra tekrar deneyin.', true);
+            showMessage('Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.', true);
+            document.getElementById('loadingMessage').style.display = 'flex';
         });
         
         socket.on('roomCreated', (data) => {
             console.log('Oda oluşturuldu:', data);
             currentRoomId = data.roomId;
+            myColor = data.color;
             
-            // Oda kodunu göster
-            const roomCodeElement = document.getElementById('waitRoomCode');
-            roomCodeElement.textContent = data.roomId;
-            roomCodeElement.classList.add('select-all');
-            
-            // Oyun türünü ayarla
-            const gameTypeElement = document.getElementById('waitGameType');
-            gameTypeElement.textContent = data.isRanked ? 'Dereceli Maç' : 'Arkadaş Maçı';
-            
-            // Paylaş butonuna tıklama olayını ekle
+            if (data.isRanked) {
+                showScreen('queueScreen');
+                startQueueTimer();
+            } else {
+                showScreen('waitScreen');
+                document.getElementById('roomCode').textContent = data.roomId;
+            }
             document.getElementById('shareRoomBtn').onclick = () => {
                 shareRoomCode(data.roomId);
             };
@@ -876,58 +921,41 @@
             showMessage(message, true);
         });
 
+        // Uygulama başlatma
         $(document).ready(function() {
+            console.log('Doküman yüklendi, uygulama başlatılıyor...');
+            
+            // Telegram verilerini yükle
             loadTelegramData();
-
-            // Dereceli Oyun Butonu
-            $('#createRankedBtn').on('click', function() {
-                if (!checkSocketConnection()) return;
+            
+            // İlk bağlantıda butonları bağla
+            if (socket.connected) {
+                console.log('Socket zaten bağlı, butonlar bağlanıyor...');
+                bindButtonEvents();
+                showScreen('lobby');
+            } else {
+                console.log('Socket henüz bağlı değil, bağlantı bekleniyor...');
+                // Socket bağlantı olayında butonlar bağlanacak
+            }
+            
+            // Hata mesajı gösterimi
+            window.showMessage = function(message, isError = false) {
+                const messageDiv = document.getElementById('globalMessage');
+                if (!messageDiv) return;
                 
-                // Misafir kullanıcı kontrolü
-                if (TELEGRAM_ID.startsWith('GUEST_')) {
-                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-                }
+                messageDiv.textContent = message;
+                messageDiv.className = isError ? 'bg-red-500' : 'bg-green-500';
+                messageDiv.classList.add('fixed', 'top-4', 'left-1/2', 'transform', '-translate-x-1/2', 'px-4', 'py-2', 'rounded-md', 'text-white', 'shadow-lg', 'z-50', 'transition-opacity', 'duration-300', 'opacity-100');
                 
-                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
-                
-                // Yükleme ekranını göster
-                showScreen('loading');
-                
-                // Oda oluşturma isteği gönder
-                socket.emit('createRoom', {
-                    username: username,
-                    telegramId: TELEGRAM_ID,
-                    isRanked: true
-                });
-            });
-
-            // Arkadaşla Oyun Butonu
-            $('#createCasualBtn').on('click', function() {
-                if (!checkSocketConnection()) return;
-                
-                // Misafir kullanıcı kontrolü
-                if (TELEGRAM_ID.startsWith('GUEST_')) {
-                    return showMessage("Arkadaşınla oynamak için Telegram girişi gereklidir.", true);
-                }
-                
-                console.log('Arkadaşla oyun başlatılıyor...');
-                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
-                
-                // Yükleme ekranını göster
-                showScreen('loading');
-                
-                // Oda oluşturma isteği gönder
-                socket.emit('createRoom', {
-                    username: username,
-                    telegramId: TELEGRAM_ID,
-                    isRanked: false
-                }, (response) => {
-                    if (response && response.error) {
-                        showScreen('lobby');
-                        showMessage(response.error, true);
-                    }
-                });
-            });
+                setTimeout(() => {
+                    messageDiv.classList.remove('opacity-100');
+                    messageDiv.classList.add('opacity-0');
+                    setTimeout(() => {
+                        messageDiv.textContent = '';
+                        messageDiv.className = '';
+                    }, 300);
+                }, 3000);
+            };
 
             // Oda Katılımı
             $('#joinRoomBtn').on('click', function() {
