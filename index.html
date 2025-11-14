@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <style>
         /* Ana Ekran Yönetimi */
         body { 
@@ -24,7 +26,7 @@
             padding: 10px;
         }
         .screen { 
-            display: none; /* Varsayılan olarak tüm ekranlar gizli */
+            display: none; 
             width: 100%; 
             max-width: 450px; 
             padding: 20px;
@@ -72,13 +74,19 @@
         
         .dark.selectable { cursor: grab; box-shadow: inset 0 0 0 4px #38a169; }
         .dark.selected { background-color: #4a5568; box-shadow: inset 0 0 0 4px #ffc107; }
-        .dark.highlighted { background-color: #3f51b5; box-shadow: 0 0 10px 3px #3f51b5; }
 
         /* ELO Renkleri */
         .elo-rank-low { color: #bdbdbd; } 
         .elo-rank-mid { color: #4caf50; } 
         .elo-rank-high { color: #2196f3; } 
         .elo-rank-pro { color: #ff9800; text-shadow: 0 0 4px black; }
+        
+        /* Buton Devre Dışı Stili */
+        #createRankedBtn:disabled {
+            background-color: #6d6d6d;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
     </style>
 </head>
 
@@ -164,33 +172,23 @@
 
 
     <script>
-        // --------------- 1. TELEGRAM ve KULLANICI BİLGİLERİNİ ALMA ---------------
+        // RENDER URL'NİZ BURAYA OTOMATİK OLARAK EKLENDİ.
+        const RENDER_URL = 'https://mario-io-1.onrender.com'; 
 
-        function getUrlParam(name) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(name);
-        }
-
-        // TELEGRAM KİMLİĞİ VE İSMİ (Otomatik Giriş)
-        const USERNAME = getUrlParam('name') || 'Misafir_' + Math.floor(Math.random() * 1000);
-        const TELEGRAM_ID = getUrlParam('id') || `GUEST_${Date.now()}`;
-        let CURRENT_ELO = 1000; 
-
-        // --------------- 2. SOCKET BAĞLANTISI ---------------
-
-        // !!! KENDİ RENDER URL'NİZİ BURAYA YAPIŞTIRIN! !!!
-        const RENDER_URL = 'https://mario-io-1.onrender.com'; // Burayı DEĞİŞTİRİN
         const socket = io(RENDER_URL, {
             transports: ['websocket', 'polling'] 
         });
 
-        let selectedSquare = null;
+        let USERNAME = 'Misafir';
+        let TELEGRAM_ID = `GUEST_${Date.now()}`;
+        let CURRENT_ELO = 1000; 
         let myColor = null;
-        let currentBoardState = [];
         let currentRoomId = null;
-        let game = {}; // Oyun durumu verileri burada tutulacak
+        let selectedSquare = null;
+        let currentBoardState = [];
+        let game = {}; 
 
-        // --------------- 3. YARDIMCI FONKSİYONLAR ---------------
+        // --------------- 1. YARDIMCI VE ARAYÜZ FONKSİYONLARI ---------------
 
         function showScreen(screenId) {
             $('.screen').removeClass('active');
@@ -200,16 +198,12 @@
         function showMessage(text, isError = false) {
             const messageElement = $('#globalMessage');
             const messageTextElement = $('#globalMessageText');
-            
             messageTextElement.text(text);
             messageElement.removeClass('bg-red-600 bg-green-600').addClass(isError ? 'bg-red-600' : 'bg-green-600');
             messageElement.addClass('show');
-
-            setTimeout(() => {
-                messageElement.removeClass('show');
-            }, 3000);
+            setTimeout(() => { messageElement.removeClass('show'); }, 3000);
         }
-
+        
         function getEloRankClass(elo) {
             if (elo >= 1300) return 'elo-rank-pro';
             if (elo >= 1200) return 'elo-rank-high';
@@ -217,15 +211,65 @@
             return 'elo-rank-low';
         }
 
-        // --------------- 4. BAĞLANTI OLAYLARI ---------------
+        function updateWelcomeMessage() {
+            $('#welcomeMessage').html(`Hoş geldin, <span class="${getEloRankClass(CURRENT_ELO)}">${USERNAME}</span>! ELO: ${CURRENT_ELO}`);
+        }
+
+        // --------------- 2. TELEGRAM VERİ YÜKLEME FONKSİYONU ---------------
+        // Bu fonksiyon, Telegram WebApp'ten ID ve ismi otomatik ve güvenli bir şekilde alır.
+
+        function getUrlParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        function loadTelegramData() {
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
+                const initData = window.Telegram.WebApp.initDataUnsafe;
+                
+                if (initData.user) {
+                    const tgUser = initData.user;
+                    TELEGRAM_ID = tgUser.id.toString();
+                    
+                    // Kullanıcı adı (username) varsa öncelik ver
+                    USERNAME = (tgUser.username || `${tgUser.first_name} ${tgUser.last_name || ''}`).trim();
+                    
+                    // Hiçbir isim yoksa Telegram ID'sini kullan
+                    if (USERNAME === "") {
+                         USERNAME = `Oyuncu_${tgUser.id}`;
+                    }
+                    console.log(`Telegram'dan giriş yapıldı: ${USERNAME} (${TELEGRAM_ID})`);
+                } else {
+                    console.warn("Telegram verileri yüklendi ancak 'user' bilgisi boş. Misafir olarak kalınıyor.");
+                }
+            } else {
+                // Webview dışından veya test amaçlı giriliyorsa URL parametresi
+                const urlId = getUrlParam('id');
+                const urlName = getUrlParam('name');
+
+                if (urlId && urlName) {
+                    TELEGRAM_ID = urlId;
+                    USERNAME = urlName;
+                    console.log(`URL parametresi ile giriş yapıldı: ${USERNAME}`);
+                }
+            }
+            
+            // Misafir ise Dereceli Butonunu Kapat
+            if (TELEGRAM_ID.startsWith('GUEST_')) {
+                $('#createRankedBtn')
+                    .prop('disabled', true)
+                    .text('Dereceli Oyna (Telegram Girişi Gerekli)');
+            }
+        }
+        
+        // --------------- 3. SOCKET BAĞLANTI OLAYLARI ---------------
 
         socket.on('connect', () => {
             console.log('Sunucuya bağlandı!');
             $('#loadingMessage').fadeOut(300);
             showScreen('lobby');
             
-            $('#welcomeMessage').html(`Hoş geldin, <span class="${getEloRankClass(CURRENT_ELO)}">${USERNAME}</span>! ELO: ${CURRENT_ELO}`);
-            
+            updateWelcomeMessage(); 
             fetchLeaderboard();
         });
 
@@ -242,14 +286,14 @@
         socket.on('rankUpdate', fetchLeaderboard);
 
 
-        // --------------- 5. OYUN YÖNETİMİ OLAYLARI ---------------
+        // --------------- 4. OYUN YÖNETİMİ OLAYLARI ---------------
 
         socket.on('roomCreated', (data) => {
             currentRoomId = data.roomId;
             myColor = data.color;
             CURRENT_ELO = data.elo;
             
-            $('#welcomeMessage').html(`Hoş geldin, <span class="${getEloRankClass(CURRENT_ELO)}">${USERNAME}</span>! ELO: ${CURRENT_ELO}`);
+            updateWelcomeMessage();
             
             $('#waitRoomCode').text(`Oda Kodu: ${data.roomId}`);
             $('#waitGameType').text(data.isRanked ? 'Dereceli Oyun' : 'Eğlence Oyunu');
@@ -258,13 +302,12 @@
 
         socket.on('roomJoined', (roomId) => {
             currentRoomId = roomId;
-            showScreen('waitScreen'); // Bekleme ekranı
+            showScreen('waitScreen'); 
         });
 
         socket.on('gameStart', (data) => {
-            // Renk kararı isme göre verilir
             myColor = data.blackName === USERNAME ? 'black' : 'white';
-            game = data; // Oyun verilerini sakla
+            game = data; 
             
             showMessage('Rakip bulundu! Oyun Başlıyor.', false);
             showScreen('gameScreen');
@@ -274,7 +317,7 @@
         });
 
         socket.on('boardUpdate', (data) => {
-            game = { ...game, ...data }; // Oyun verilerini güncelle
+            game = { ...game, ...data };
             updateBoard(game);
         });
 
@@ -297,7 +340,7 @@
         });
 
 
-        // --------------- 6. OYUN TAHTASI ÇİZİMİ VE ETKİLEŞİM ---------------
+        // --------------- 5. OYUN TAHTASI ÇİZİMİ VE ETKİLEŞİM ---------------
 
         function drawBoard() {
             const boardElement = $('#checkersBoard');
@@ -326,7 +369,6 @@
         function updateBoard(data) {
             currentBoardState = data.board;
             
-            // İsimler/ELO'lar boardUpdate'ten gelmezse (Sadece turn, board gelirse) eski değerleri kullanır
             const blackName = data.blackName || game.blackName;
             const whiteName = data.whiteName || game.whiteName;
             const blackElo = data.blackElo || game.blackElo;
@@ -356,7 +398,6 @@
                 (<span class="${getEloRankClass(oppInfo.elo)}">${oppInfo.elo} ELO</span>)
             `).toggleClass('bg-green-600', !isMyTurn).toggleClass('bg-gray-800', isMyTurn);
             
-            // Tahtayı Güncelle
             $('.dark').removeClass('selectable selected highlighted');
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
@@ -387,12 +428,10 @@
                               (myColor === 'white' && (piece === 2 || piece === 4));
             
             if (selectedSquare) {
-                // İKİNCİ TIKLAMA (Hedef Kare Seçimi)
                 if (clickedId === selectedSquare) {
                     $(this).removeClass('selected');
                     selectedSquare = null;
                 } else {
-                    // Hamleyi Sunucuya Gönder
                     socket.emit('makeMove', {
                         roomId: currentRoomId,
                         from: selectedSquare,
@@ -403,7 +442,6 @@
                     selectedSquare = null;
                 }
             } else if (isMyPiece) {
-                // İLK TIKLAMA (Taş Seçimi)
                 $('.dark').removeClass('selected');
                 selectedSquare = clickedId;
                 $(this).addClass('selected');
@@ -413,15 +451,15 @@
         });
 
 
-        // --------------- 7. LOBİ VE EŞLEŞME BUTONLARI ---------------
+        // --------------- 6. LOBİ VE EŞLEŞME BUTONLARI ---------------
 
         $('#createRankedBtn, #createCasualBtn').on('click', function() {
             const isRanked = $(this).data('ranked');
             
-            if (TELEGRAM_ID.startsWith('GUEST_')) {
-                 return showMessage("Dereceli oynamak için Telegram Webview üzerinden giriş yapın.", true);
+            if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
+                return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
             }
-            
+
             socket.emit('createRoom', { 
                 username: USERNAME, 
                 telegramId: TELEGRAM_ID, 
@@ -461,11 +499,16 @@
         });
 
 
-        // --------------- 8. SKOR TABLOSU ÇEKME ---------------
+        // --------------- 7. SKOR TABLOSU ÇEKME ---------------
 
         function fetchLeaderboard() {
             const API_URL = `${RENDER_URL}/api/leaderboard`; 
             
+            // Misafirler için sadece ilk 10'u çek, kendi istatistiklerini çekme
+            if (TELEGRAM_ID.startsWith('GUEST_')) {
+                // Misafir ELO'su 1000 olarak kalır, isteği sadece top 10 için gönderir
+            }
+
             fetch(`${API_URL}?id=${TELEGRAM_ID}`)
                 .then(res => {
                     if (!res.ok) throw new Error('API yanıtı hatalı.');
@@ -497,7 +540,7 @@
                     if (userStats) {
                          const rankClass = getEloRankClass(userStats.elo_score);
                          CURRENT_ELO = userStats.elo_score;
-                         $('#welcomeMessage').html(`Hoş geldin, <span class="${rankClass}">${USERNAME}</span>! ELO: ${CURRENT_ELO}`);
+                         updateWelcomeMessage(); 
                         userRankInfo.html(`
                             Sıranız: <span class="font-extrabold text-white">#${userStats.rank_number}</span> 
                             <span class="text-gray-400">|</span> 
@@ -512,6 +555,12 @@
                     showMessage("Skor Tablosu API'ına ulaşılamadı. (Sunucu hatası)", true);
                 });
         }
+        
+        // --------------- 8. BAŞLANGIÇ AKIŞI ---------------
+        
+        $(document).ready(function() {
+            loadTelegramData(); // Sayfa yüklendiğinde Telegram verilerini otomatik alır
+        });
         
     </script>
 </body>
