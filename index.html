@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🏆 Online Şaşki (Dama)</title>
+    <title>🏆 Şaşki ELO (Dama)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -11,108 +11,20 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     
     <style>
-        /* Global Ayarlar */
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100vh; 
-            overflow: hidden;
-            font-family: 'Inter', sans-serif;
-            -webkit-user-select: none; /* Safari */
-            -ms-user-select: none; /* IE 10+ */
-            user-select: none; /* Standard syntax */
-        }
-        body {
-            background-color: #1a202c; 
-            color: #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Ekran Geçişleri */
-        .screen {
-            width: 100%;
-            height: 100vh;
-            max-width: 100%;
-            max-height: 100%;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start; 
-            padding: 1.5rem;
-            padding-top: env(safe-area-inset-top, 2.5rem);
-            padding-bottom: env(safe-area-inset-bottom, 1.5rem);
-            box-sizing: border-box;
-            text-align: center;
-            background-color: #1a202c;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        .screen.active {
-            display: flex;
-        }
-
-        /* Lobi Animasyonları */
-        @keyframes screenFadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .screen.active {
-            animation: screenFadeIn 0.5s ease-out forwards;
-        }
-        @keyframes slideInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animated-item {
-            opacity: 0;
-            animation: slideInUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-        }
-
-        /* Bekleme Ekranı Spinner */
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        .wait-spinner {
-            font-size: 4rem;
-            color: #63b3ed;
-            animation: spin 1.5s linear infinite;
-        }
-
-        /* Global Mesaj (Hata/Bilgi) */
-        #globalMessage {
-            display: none;
-            position: fixed;
-            top: env(safe-area-inset-top, 20px);
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            padding: 1rem 1.5rem;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            font-weight: 600;
-        }
-        #globalMessage.show {
-            display: block;
-            animation: screenFadeIn 0.3s ease-out;
-        }
-
+        /* (Önceki index.html dosyanızdaki tüm CSS kodlarını buraya yapıştırın) */
+        /* ... CSS Kodları ... */
+        
         /* OYUN EKRANI (ŞAŞKİ) ÖZEL STİLLERİ */
         #checkersBoard {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             grid-template-rows: repeat(8, 1fr);
-            width: 90vw; /* Görsel genişlik */
-            max-width: 450px; /* Maksimum genişlik */
-            height: auto; /* Yüksekliği genişliğe oranla ayarla */
-            aspect-ratio: 1 / 1; /* Kare olmasını sağlar */
+            width: 90vw;
+            max-width: 450px; 
+            aspect-ratio: 1 / 1; 
             border: 4px solid #4a5568;
             margin: 1rem 0;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
         }
         .square {
             width: 100%;
@@ -120,84 +32,39 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: clamp(1.5rem, 6vw, 2.5rem); /* Emoji boyutu */
+            font-size: clamp(1.5rem, 6vw, 2.5rem);
             cursor: pointer;
-            transition: background-color 0.2s ease;
+            transition: background-color 0.1s ease;
         }
-        .light { background-color: #cbd5e0; } /* Açık gri */
-        .dark { background-color: #2d3748; } /* Koyu gri */
+        .light { background-color: #cbd5e0; } 
+        .dark { background-color: #2d3748; } 
         
         .dark.selectable {
             cursor: grab;
-            box-shadow: 0 0 10px 3px rgba(100, 250, 100, 0.7); /* Yeşil kenarlık */
+            box-shadow: inset 0 0 0 4px #38a169; /* Yeşil kalın iç çerçeve */
         }
         .dark.selected {
-            background-color: #4a5568; /* Seçilen taşın rengi */
-            box-shadow: 0 0 15px 5px rgba(255, 255, 0, 0.8); /* Sarı kenarlık */
+            background-color: #4a5568; 
+            box-shadow: inset 0 0 0 4px #ffc107; /* Sarı kalın iç çerçeve */
         }
         .dark.highlighted {
-            background-color: #5d6d7e; /* Gidilebilecek yer rengi */
-            box-shadow: 0 0 10px 3px rgba(100, 150, 250, 0.7); /* Mavi kenarlık */
+            background-color: #3f51b5; /* Hedef kare mavisi */
+            box-shadow: 0 0 10px 3px #3f51b5;
         }
 
-        /* Taş Görünümü */
-        .piece {
-            line-height: 1; /* Emoji dikey hizalama */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .piece.white { color: white; text-shadow: 0 0 3px black; }
-        .piece.black { color: black; text-shadow: 0 0 3px white; }
-
-        /* Sırası gelen oyuncu vurgusu */
-        .player-info {
-            width: 90vw;
-            max-width: 450px;
-            text-align: center;
-            padding: 0.75rem;
-            border-radius: 8px;
-            transition: box-shadow 0.3s ease, background-color 0.3s ease;
-            background-color: #2d3748;
-            border: 1px solid #4a5568;
-        }
-        .active-turn {
-            background-color: #38a169; /* Yeşil */
-            box-shadow: 0 0 15px 5px #38a169;
-        }
-        
-        /* Yükleme Ekranı */
-        #loadingMessage {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 20px 30px;
-            border-radius: 10px;
-            text-align: center;
-            z-index: 1001;
-            backdrop-filter: blur(5px);
-        }
-        .spinner {
-            width: 30px;
-            height: 30px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            margin-bottom: 15px;
-            animation: spin 1s ease-in-out infinite;
-        }
+        /* ELO Renkleri için özel sınıflar */
+        .elo-rank-low { color: #bdbdbd; text-shadow: 0 0 2px black; } /* Gri (1000-1099) */
+        .elo-rank-mid { color: #4caf50; text-shadow: 0 0 2px black; } /* Yeşil (1100-1199) */
+        .elo-rank-high { color: #2196f3; text-shadow: 0 0 2px black; } /* Mavi (1200-1299) */
+        .elo-rank-pro { color: #ff9800; text-shadow: 0 0 4px black; } /* Turuncu/Altın (1300+) */
     </style>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@700&display=swap" rel="stylesheet">
 </head>
 
 <body class="select-none">
     
     <div id="loadingMessage">
         <div class="spinner"></div>
-        <p>Sunucuya bağlanılıyor...</p>
+        <p id="loadingText">Sunucuya bağlanılıyor...</p>
     </div>
 
     <div id="globalMessage" class="bg-red-600 text-white">
@@ -205,30 +72,428 @@
     </div>
 
     <div id="lobby" class="screen active space-y-4">
-        <h1 class="text-5xl font-black animated-item text-blue-400" style="animation-delay: 0s;">
-            <i class="fas fa-gamepad"></i> Online Şaşki (Dama)
+        <h1 class="text-3xl font-black text-blue-400">
+            <i class="fas fa-chess-board"></i> Şaşki ELO (Dama)
         </h1>
-        <p class="text-lg text-gray-400 animated-item" style="animation-delay: 0.1s;">
-            Arkadaşlarınla online Şaşki oyna!
+        <p class="text-lg text-gray-400" id="welcomeMessage">
+            Hoş geldin, **Misafir**! ELO: 1000
         </p>
 
-        <div class="w-full max-w-md pt-4 animated-item" style="animation-delay: 0.3s;">
-            <h2 class="text-2xl font-bold text-white mb-3">Online Mod</h2>
+        <div class="w-full max-w-md pt-4">
+            <h2 class="text-2xl font-bold text-white mb-3">Oda Seçimi</h2>
             
-            <button id="createRoomBtn" class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-lg shadow-lg transform transition-all duration-200 active:scale-95 mb-4">
-                <i class="fas fa-plus-circle mr-2"></i> Yeni Oda Kur
-            </button>
+            <div class="flex flex-col space-y-4">
+                <button id="createRankedBtn" data-ranked="true" class="w-full py-4 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-lg shadow-lg transform transition-all duration-200 active:scale-95">
+                    <i class="fas fa-trophy mr-2"></i> Dereceli Oyna (ELO Kazan)
+                </button>
+                
+                <button id="createCasualBtn" data-ranked="false" class="w-full py-4 px-6 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl text-lg shadow-lg transform transition-all duration-200 active:scale-95">
+                    <i class="fas fa-user-friends mr-2"></i> Arkadaşla Oyna (Eğlence)
+                </button>
+            </div>
             
-            <p class="text-center text-lg font-bold mb-2 text-white mt-4">
-                Veya Odaya Katıl
+            <p class="text-center text-lg font-bold mb-2 text-white mt-6">
+                Veya Mevcut Odaya Katıl
             </p>
-            <input type="text" id="roomIdInput" class="w-full p-3 text-lg text-center rounded-lg shadow-lg text-black uppercase" placeholder="Oda Kodu" maxlength="6" style="color: #000000 !important;">
+            <input type="text" id="roomIdInput" class="w-full p-3 text-lg text-center rounded-lg shadow-lg text-black uppercase" placeholder="Oda Kodu" maxlength="6">
             
             <button id="joinRoomBtn" class="w-full mt-3 py-4 px-6 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-xl text-lg shadow-lg transform transition-all duration-200 active:scale-95">
                 <i class="fas fa-sign-in-alt mr-2"></i> Odaya Katıl
             </button>
         </div>
+
+        <div id="leaderboardContainer" class="w-full max-w-md pt-6">
+            <h2 class="text-2xl font-bold text-yellow-400 mb-3"><i class="fas fa-star mr-2"></i> Liderlik Tablosu</h2>
+            <table class="w-full text-left bg-gray-700 rounded-lg overflow-hidden text-sm">
+                <thead class="bg-gray-800 text-gray-400">
+                    <tr><th class="p-3">Sıra</th><th class="p-3">Oyuncu</th><th class="p-3 text-right">ELO</th></tr>
+                </thead>
+                <tbody id="leaderboardBody">
+                    </tbody>
+            </table>
+            
+            <div id="userRankInfo" class="mt-3 p-3 bg-gray-800 rounded-lg text-lg">
+                </div>
+        </div>
     </div>
 
     <div id="waitScreen" class="screen p-4">
-        <div class="flex flex-col items-center justify
+        <h2 class="text-3xl font-bold mb-4 text-white">Rakip Bekleniyor...</h2>
+        <div class="wait-spinner mb-6">♟️</div>
+        <p class="text-xl text-gray-300 mb-2" id="waitRoomCode"></p>
+        <p class="text-md text-gray-400 mb-6" id="waitGameType"></p>
+        <button id="cancelWaitBtn" class="py-3 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 active:scale-95">
+            <i class="fas fa-times-circle mr-2"></i> İptal Et ve Lobiden Çık
+        </button>
+    </div>
+
+    <div id="gameScreen" class="screen p-2 justify-start">
+        <div class="w-full max-w-md space-y-3">
+            <div id="opponentInfo" class="player-info"></div>
+            <div id="checkersBoard">
+                </div>
+            <div id="playerInfo" class="player-info"></div>
+            <div id="gameStatus" class="mt-4 p-2 bg-gray-700 rounded-lg text-center text-xl font-semibold">Sıra: <span id="currentTurnName"></span></div>
+        </div>
+    </div>
+
+    <script>
+        // --------------- 1. TELEGRAM ve KULLANICI BİLGİLERİNİ ALMA ---------------
+
+        function getUrlParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // TELEGRAM KİMLİĞİ VE İSMİ (Otomatik Giriş)
+        // Eğer Telegram'dan gelmiyorsa Misafir olarak ayarla
+        const USERNAME = getUrlParam('name') || 'Misafir_' + Math.floor(Math.random() * 1000);
+        const TELEGRAM_ID = getUrlParam('id') || `GUEST_${Date.now()}`;
+        let CURRENT_ELO = 1000; // Başlangıç ELO
+
+        // --------------- 2. SOCKET BAĞLANTISI ---------------
+
+        // **KENDİ RENDER URL'NİZİ BURAYA YAPIŞTIRIN!**
+        const RENDER_URL = 'https://mario-io-1.onrender.com'; 
+        // Not: Eğer tarayıcınızdan bağlanma hatası alıyorsanız, URL'nin doğru olduğuna emin olun.
+        const socket = io(RENDER_URL, {
+            // Sunucudaki ayarları yansıtıyoruz
+            transports: ['websocket', 'polling'] 
+        });
+
+        let selectedSquare = null;
+        let myColor = null;
+        let currentBoardState = [];
+        let currentRoomId = null;
+
+        // --------------- 3. YARDIMCI FONKSİYONLAR ---------------
+
+        function showScreen(screenId) {
+            $('.screen').removeClass('active');
+            $('#' + screenId).addClass('active');
+        }
+
+        function showMessage(text, isError = false) {
+            const messageElement = $('#globalMessage');
+            const messageTextElement = $('#globalMessageText');
+            
+            messageTextElement.text(text);
+            messageElement.removeClass('bg-red-600 bg-green-600').addClass(isError ? 'bg-red-600' : 'bg-green-600');
+            messageElement.addClass('show');
+
+            setTimeout(() => {
+                messageElement.removeClass('show');
+            }, 3000);
+        }
+
+        function getEloRankClass(elo) {
+            if (elo >= 1300) return 'elo-rank-pro';
+            if (elo >= 1200) return 'elo-rank-high';
+            if (elo >= 1100) return 'elo-rank-mid';
+            return 'elo-rank-low';
+        }
+
+        // --------------- 4. BAĞLANTI OLAYLARI ---------------
+
+        socket.on('connect', () => {
+            console.log('Sunucuya bağlandı!');
+            // Bağlantı başarılıysa yükleme ekranını kaldır, lobiyi göster
+            $('#loadingMessage').fadeOut(300);
+            showScreen('lobby');
+            
+            $('#welcomeMessage').html(`Hoş geldin, <span class="${getEloRankClass(CURRENT_ELO)}">${USERNAME}</span>! ELO: ${CURRENT_ELO}`);
+            
+            // Bağlantı kurulur kurulmaz skor tablosunu çek
+            fetchLeaderboard();
+        });
+
+        socket.on('disconnect', () => {
+            showMessage('Bağlantı kesildi. Tekrar deneniyor...', true);
+            // Bağlantı kesilirse tekrar yükleme ekranına dön
+            $('#loadingMessage').fadeIn(300);
+            $('#loadingText').text('Bağlantı kesildi, tekrar deneniyor...');
+        });
+
+        socket.on('error', (message) => {
+            showMessage(message, true);
+        });
+        
+        // ELO güncelleme sinyali gelirse skor tablosunu yenile
+        socket.on('rankUpdate', fetchLeaderboard);
+
+
+        // --------------- 5. OYUN YÖNETİMİ OLAYLARI ---------------
+
+        socket.on('roomCreated', (data) => {
+            currentRoomId = data.roomId;
+            myColor = data.color;
+            CURRENT_ELO = data.elo;
+            
+            $('#welcomeMessage').html(`Hoş geldin, <span class="${getEloRankClass(CURRENT_ELO)}">${USERNAME}</span>! ELO: ${CURRENT_ELO}`);
+            
+            $('#waitRoomCode').text(`Oda Kodu: ${data.roomId}`);
+            $('#waitGameType').text(data.isRanked ? 'Dereceli Oyun' : 'Eğlence Oyunu');
+            showScreen('waitScreen');
+        });
+        
+        socket.on('roomJoined', (roomId) => {
+             // Odaya katılınca da bekleme ekranı tetiklenebilir
+             currentRoomId = roomId;
+        });
+
+        socket.on('gameStart', (data) => {
+            // Rakip katıldığında oyun başlar
+            myColor = data.blackName === USERNAME ? 'black' : 'white';
+            
+            showMessage('Rakip bulundu! Oyun Başlıyor.', false);
+            showScreen('gameScreen');
+            
+            // Tahtayı çiz ve ilk durumu güncelle
+            drawBoard(); 
+            updateBoard(data.board, data.turn, data.blackName, data.whiteName, data.blackElo, data.whiteElo);
+        });
+
+        socket.on('boardUpdate', (data) => {
+            // Sunucudan gelen tahta ve sıra bilgisiyle arayüzü güncelle
+            updateBoard(data.board, data.turn);
+        });
+        
+        socket.on('gameOver', (data) => {
+            const eloChangeMsg = data.isRanked ? ` (ELO: ${data.winnerEloChange > 0 ? '+' : ''}${data.winnerEloChange})` : '';
+            showMessage(`${data.winner} kazandı!${eloChangeMsg}`, data.winner === USERNAME);
+            
+            // Kısa bir süre sonra lobie dön
+            setTimeout(() => {
+                showScreen('lobby');
+                currentRoomId = null;
+                fetchLeaderboard(); // Yeni ELO ile skor tablosunu yenile
+            }, 5000);
+        });
+        
+        socket.on('opponentLeft', (message) => {
+            showMessage(message, true);
+            socket.emit('leaveRoom', currentRoomId);
+            currentRoomId = null;
+            showScreen('lobby');
+        });
+
+
+        // --------------- 6. OYUN TAHTASI ÇİZİMİ VE ETKİLEŞİM ---------------
+
+        function drawBoard() {
+            // Basit Şaşki tahtasını HTML tablosuyla çizme mantığı (8x8)
+            const boardElement = $('#checkersBoard');
+            boardElement.empty();
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    // Sadece koyu kareler kullanılır (r+c tek sayı ise koyu kare)
+                    const colorClass = (r + c) % 2 === 0 ? 'light' : 'dark'; 
+                    const squareId = `r-${r}-c-${c}`;
+                    boardElement.append(`<div id="${squareId}" class="square ${colorClass}"></div>`);
+                }
+            }
+        }
+        
+        function updatePiece(r, c, pieceCode) {
+            const squareElement = $(`#r-${r}-c-${c}`);
+            let content = '';
+            
+            // 0: boş, 1: Siyah Piyon, 2: Beyaz Piyon, 3: Siyah Vezir, 4: Beyaz Vezir
+            if (pieceCode === 1) content = '<span class="piece black">⚫</span>';
+            else if (pieceCode === 2) content = '<span class="piece white">⚪</span>';
+            else if (pieceCode === 3) content = '<span class="piece black">⚫👑</span>';
+            else if (pieceCode === 4) content = '<span class="piece white">⚪👑</span>';
+            
+            squareElement.html(content);
+        }
+
+        function updateBoard(boardArray, turnColor, blackName, whiteName, blackElo, whiteElo) {
+            currentBoardState = boardArray;
+            $('#currentTurnName').text(turnColor === 'black' ? blackName : whiteName);
+            
+            // Oyuncu Bilgilerini Güncelle
+            const isMyTurn = turnColor === myColor;
+            
+            const myInfo = myColor === 'black' 
+                ? { name: blackName, elo: blackElo, color: 'black' } 
+                : { name: whiteName, elo: whiteElo, color: 'white' };
+                
+            const oppInfo = myColor === 'black' 
+                ? { name: whiteName, elo: whiteElo, color: 'white' } 
+                : { name: blackName, elo: blackElo, color: 'black' };
+
+            // Benim Bilgim
+            $('#playerInfo').html(`
+                <span class="font-bold">Siz (${myColor === 'black' ? '⚫' : '⚪'}): ${myInfo.name}</span> 
+                (<span class="${getEloRankClass(myInfo.elo)}">${myInfo.elo} ELO</span>)
+            `).toggleClass('active-turn', isMyTurn);
+            
+            // Rakip Bilgisi
+            $('#opponentInfo').html(`
+                <span class="font-bold">Rakip (${oppInfo.color === 'black' ? '⚫' : '⚪'}): ${oppInfo.name}</span> 
+                (<span class="${getEloRankClass(oppInfo.elo)}">${oppInfo.elo} ELO</span>)
+            `).toggleClass('active-turn', !isMyTurn);
+            
+            // Tahtayı Güncelle
+            $('.dark').removeClass('selectable selected highlighted');
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    updatePiece(r, c, boardArray[r][c]);
+                    
+                    // Seçilebilir taşları vurgula (Sadece senin sıran ve senin rengin ise)
+                    const piece = boardArray[r][c];
+                    const isMyPiece = (myColor === 'black' && (piece === 1 || piece === 3)) ||
+                                      (myColor === 'white' && (piece === 2 || piece === 4));
+                    
+                    if (isMyTurn && isMyPiece) {
+                        $(`#r-${r}-c-${c}`).addClass('selectable');
+                    }
+                }
+            }
+        }
+        
+        // Tahta Tıklama Olayı (Hamle Mantığı)
+        $('#checkersBoard').on('click', '.square.dark', function() {
+            const clickedId = $(this).attr('id');
+            const [_, rStr, __, cStr] = clickedId.split('-');
+            const r = parseInt(rStr);
+            const c = parseInt(cStr);
+            
+            const piece = currentBoardState[r][c];
+            const isMyPiece = (myColor === 'black' && (piece === 1 || piece === 3)) ||
+                              (myColor === 'white' && (piece === 2 || piece === 4));
+            
+            if (selectedSquare) {
+                // İKİNCİ TIKLAMA (Hedef Kare Seçimi)
+                if (clickedId === selectedSquare) {
+                    // Aynı kareye tekrar tıklandı, seçimi iptal et
+                    $(this).removeClass('selected');
+                    selectedSquare = null;
+                    $('.dark').removeClass('highlighted');
+                } else {
+                    // Hamleyi Sunucuya Gönder
+                    socket.emit('makeMove', {
+                        roomId: currentRoomId,
+                        from: selectedSquare,
+                        to: clickedId 
+                    });
+                    
+                    // Seçimi temizle
+                    $(`#${selectedSquare}`).removeClass('selected');
+                    selectedSquare = null;
+                    $('.dark').removeClass('highlighted');
+                }
+                
+            } else if (isMyPiece) {
+                // İLK TIKLAMA (Taş Seçimi)
+                
+                // Vurguları temizle
+                $('.dark').removeClass('selected highlighted');
+                
+                // Yeni taşı seç
+                selectedSquare = clickedId;
+                $(this).addClass('selected');
+                
+                // Not: Gidilebilecek yerleri vurgulama (highlighted class)
+                // Bu mantık sunucudan hamleleri çekmeyi gerektirdiği için şimdilik atlıyoruz.
+                // Hamlenin geçerliliğini tamamen sunucu kontrol edecektir.
+                
+            } else {
+                showMessage("Önce kendi taşınızı seçmelisiniz.", true);
+            }
+        });
+
+
+        // --------------- 7. LOBİ VE EŞLEŞME BUTONLARI ---------------
+
+        // Oda Kurma Butonları (Dereceli/Normal)
+        $('#createRankedBtn, #createCasualBtn').on('click', function() {
+            const isRanked = $(this).data('ranked');
+            
+            // Otomatik Eşleştirme yapmıyoruz, sadece oda kuruyoruz.
+            socket.emit('createRoom', { 
+                username: USERNAME, 
+                telegramId: TELEGRAM_ID, 
+                isRanked: isRanked 
+            });
+        });
+
+        // Odaya Katıl Butonu
+        $('#joinRoomBtn').on('click', function() {
+            const roomId = $('#roomIdInput').val().trim().toUpperCase();
+            if (roomId.length !== 4) {
+                return showMessage("Oda kodu 4 karakter olmalıdır.", true);
+            }
+            
+            socket.emit('joinRoom', { 
+                username: USERNAME, 
+                telegramId: TELEGRAM_ID, 
+                roomCode: roomId 
+            });
+        });
+        
+        // Bekleme İptal Butonu
+        $('#cancelWaitBtn').on('click', function() {
+            if (currentRoomId) {
+                socket.emit('leaveRoom', currentRoomId);
+            }
+            currentRoomId = null;
+            showScreen('lobby');
+        });
+
+        // --------------- 8. SKOR TABLOSU ÇEKME ---------------
+        
+        function fetchLeaderboard() {
+            // Skor tablosu API rotasına istek at
+            const API_URL = `${RENDER_URL}/api/leaderboard`; 
+            
+            fetch(`${API_URL}?id=${TELEGRAM_ID}`)
+                .then(res => {
+                    if (!res.ok) throw new Error('API yanıtı hatalı.');
+                    return res.json();
+                })
+                .then(data => {
+                    const top10 = data.top10 || [];
+                    const userStats = data.userStats;
+                    const tbody = $('#leaderboardBody');
+                    const userRankInfo = $('#userRankInfo');
+                    tbody.empty();
+
+                    // TOP 10 DOLDURMA
+                    if (top10.length === 0) {
+                        tbody.append('<tr><td colspan="3" class="p-3 text-center text-gray-400">Henüz kimse ELO kazanmadı.</td></tr>');
+                    } else {
+                        top10.forEach((player, index) => {
+                            const rankClass = getEloRankClass(player.elo_score);
+                            tbody.append(`
+                                <tr class="${player.telegram_id === TELEGRAM_ID ? 'bg-blue-900 font-bold' : ''}">
+                                    <td class="p-3">${index + 1}.</td>
+                                    <td class="p-3">${player.username}</td>
+                                    <td class="p-3 text-right ${rankClass}">${player.elo_score}</td>
+                                </tr>
+                            `);
+                        });
+                    }
+
+                    // KULLANICININ KENDİ İSTATİSTİKLERİ
+                    if (userStats) {
+                         const rankClass = getEloRankClass(userStats.elo_score);
+                        userRankInfo.html(`
+                            Sıranız: <span class="font-extrabold text-white">#${userStats.rank_number}</span> 
+                            <span class="text-gray-400">|</span> 
+                            <span class="font-extrabold ${rankClass}">${userStats.elo_score} ELO</span>
+                        `);
+                    } else {
+                        userRankInfo.html('Dereceli oynamak için ELO kaydınız bulunmuyor.');
+                    }
+                })
+                .catch(error => {
+                    console.error("Liderlik tablosu yüklenemedi:", error);
+                    // Sunucu bağlantısı var ama API patlıyor olabilir.
+                    $('#loadingText').text('Sunucuya bağlandı, ancak veriler yüklenemiyor. (API Hatası)');
+                });
+        }
+        
+    </script>
+</body>
+</html>
