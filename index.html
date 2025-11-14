@@ -571,49 +571,43 @@
         
         // --------------- 3. SOCKET BAĞLANTI VE OYUN OLAYLARI ---------------
         
-        // Socket.IO bağlantı ayarları - Basitleştirilmiş versiyon
+        // Socket.IO bağlantısı - Basit ve doğrudan bağlantı
         const socket = io({
             reconnection: true,
             reconnectionAttempts: 3,
             reconnectionDelay: 1000,
             timeout: 10000,
-            transports: ['websocket']
+            transports: ['websocket', 'polling']
         });
 
-        // 10 saniye içinde bağlantı sağlanamazsa loading ekranını kaldır
-        const connectionTimeout = setTimeout(() => {
-            if (!socket.connected) {
-                $('#loadingMessage').fadeOut(500, function() {
+        // 3 saniye sonra loading ekranını kaldır
+        setTimeout(() => {
+            if ($('#loadingMessage').is(':visible')) {
+                $('#loadingMessage').fadeOut(300, function() {
                     showScreen('lobby');
                     fetchLeaderboard();
                 });
             }
-        }, 10000);
+        }, 3000);
 
         // Bağlantı başarılı olduğunda
         socket.on('connect', () => {
-            clearTimeout(connectionTimeout);
-            $('#loadingMessage').fadeOut(500, function() {
+            console.log('Sunucuya bağlandı!');
+            $('#loadingMessage').fadeOut(300, function() {
                 showScreen('lobby');
                 fetchLeaderboard();
             });
         });
 
         // Hata durumunda
-        socket.on('connect_error', () => {
-            // Hata durumunda bile loading ekranını kaldır
-            clearTimeout(connectionTimeout);
-            $('#loadingMessage').fadeOut(500, function() {
-                showScreen('lobby');
-                fetchLeaderboard();
-            });
-        });
-
-        // Bağlantı başarılı olduğunda
-        socket.on('connect', () => {
-            console.log('Sunucuya bağlandı!');
-            $('#loadingMessage').fadeOut(300);
-            showScreen('lobby');
+        socket.on('connect_error', (error) => {
+            console.error('Bağlantı hatası:', error);
+            if ($('#loadingMessage').is(':visible')) {
+                $('#loadingMessage').fadeOut(300, function() {
+                    showScreen('lobby');
+                    fetchLeaderboard();
+                });
+            }
             fetchLeaderboard();
         });
 
