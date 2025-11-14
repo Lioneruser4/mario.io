@@ -75,11 +75,21 @@
         .dark.selectable { cursor: grab; box-shadow: inset 0 0 0 4px #38a169; }
         .dark.selected { background-color: #4a5568; box-shadow: inset 0 0 0 4px #ffc107; }
 
-        /* ELO Renk Sınıflandırmaları (GÜNCEL) */
-        .elo-rank-low { background-color: rgba(255, 255, 255, 0.1); color: white; padding: 2px 5px; border-radius: 5px; } /* 0 - 150 */
-        .elo-rank-mid-blue { background-color: rgba(66, 133, 244, 0.3); color: #4285f4; padding: 2px 5px; border-radius: 5px; } /* 150 - 350 */
-        .elo-rank-purple { background-color: rgba(156, 39, 176, 0.3); color: #9c27b0; padding: 2px 5px; border-radius: 5px; } /* 350 - 500 */
-        .elo-rank-gold { background-color: rgba(255, 193, 7, 0.3); color: #ffc107; padding: 2px 5px; border-radius: 5px; text-shadow: 0 0 2px black; } /* 500 - 1000+ */
+        /* ELO Renk Sınıflandırmaları (GÜNCEL SINIFLAR) */
+        .elo-rank-low, .elo-rank-mid-blue, .elo-rank-purple, .elo-rank-gold {
+            color: white !important; 
+            padding: 2px 5px; 
+            border-radius: 5px; 
+            font-weight: bold; /* İsimlerin belirginliği için */
+        }
+        .elo-rank-low { background-color: rgba(255, 255, 255, 0.1); } /* 0 - 150 (Beyaz Şeffaf) */
+        .elo-rank-mid-blue { background-color: rgba(66, 133, 244, 0.3); } /* 150 - 350 (Mavi Şeffaf) */
+        .elo-rank-purple { background-color: rgba(156, 39, 176, 0.3); } /* 350 - 500 (Mor Şeffaf) */
+        .elo-rank-gold { 
+            background-color: rgba(255, 193, 7, 0.3); 
+            color: #ffc107 !important; /* Altın rengi */
+            text-shadow: 0 0 2px black; 
+        } /* 500 - 1000+ (Altın Şeffaf) */
         
         /* Buton Devre Dışı Stili */
         #createRankedBtn:disabled {
@@ -189,7 +199,7 @@
 
         let USERNAME = 'Misafir';
         let TELEGRAM_ID = `GUEST_${Date.now()}`;
-        let CURRENT_ELO = 0; // ELO 0 ile başlar
+        let CURRENT_ELO = 0; 
         let myColor = null;
         let currentRoomId = null;
         let selectedSquare = null;
@@ -212,7 +222,6 @@
             setTimeout(() => { messageElement.removeClass('show'); }, 3000);
         }
         
-        // ELO'ya göre CSS sınıfı döndürür (GÜNCEL SINIFLAR)
         function getEloRankClass(elo) {
             if (elo >= 500) return 'elo-rank-gold'; 
             if (elo >= 350) return 'elo-rank-purple';
@@ -221,7 +230,6 @@
         }
 
         function updateWelcomeMessage() {
-            // ELO'yu span içine sınıfı ile yazar
             const eloSpan = `<span class="${getEloRankClass(CURRENT_ELO)}">${CURRENT_ELO} ELO</span>`;
             $('#welcomeMessage').html(`Hoş geldin, <span class="font-bold">${USERNAME}</span>! ${eloSpan}`);
         }
@@ -241,7 +249,7 @@
                     const tgUser = initData.user;
                     TELEGRAM_ID = tgUser.id.toString();
                     
-                    // İSİM ÖNCELİĞİ: first_name ve last_name varsa username'i kullanma
+                    // İSİM ÖNCELİĞİ: first_name ve last_name varsa kullanılır
                     let fullName = `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim();
 
                     if (fullName) {
@@ -253,7 +261,6 @@
                     }
                 }
             } else {
-                // URL parametresi ile Misafir/Test girişi
                 const urlId = getUrlParam('id');
                 const urlName = getUrlParam('name');
 
@@ -263,22 +270,21 @@
                 }
             }
             
-            // Misafir ise Dereceli Butonunu Kapat
             if (TELEGRAM_ID.startsWith('GUEST_')) {
                 $('#createRankedBtn')
                     .prop('disabled', true)
                     .text('Dereceli Oyna (Telegram Girişi Gerekli)');
             }
+            
+            updateWelcomeMessage(); 
         }
         
-        // --------------- 3. SOCKET BAĞLANTI OLAYLARI ---------------
+        // --------------- 3. SOCKET BAĞLANTI VE OYUN OLAYLARI ---------------
 
         socket.on('connect', () => {
             console.log('Sunucuya bağlandı!');
             $('#loadingMessage').fadeOut(300);
             showScreen('lobby');
-            
-            // Kullanıcının ELO'sunu çekmek için çağrılır
             fetchLeaderboard(); 
         });
 
@@ -288,22 +294,14 @@
             $('#loadingText').text('Bağlantı kesildi, tekrar deneniyor...');
         });
 
-        socket.on('error', (message) => {
-            showMessage(message, true);
-        });
-
+        socket.on('error', (message) => { showMessage(message, true); });
         socket.on('rankUpdate', fetchLeaderboard);
-
-
-        // --------------- 4. OYUN YÖNETİMİ OLAYLARI ---------------
 
         socket.on('roomCreated', (data) => {
             currentRoomId = data.roomId;
             myColor = data.color;
             CURRENT_ELO = data.elo;
-            
             updateWelcomeMessage();
-            
             $('#waitRoomCode').text(`Oda Kodu: ${data.roomId}`);
             $('#waitGameType').text(data.isRanked ? 'Dereceli Oyun' : 'Eğlence Oyunu');
             showScreen('waitScreen');
@@ -317,10 +315,8 @@
         socket.on('gameStart', (data) => {
             myColor = data.blackName === USERNAME ? 'black' : 'white';
             game = data; 
-            
             showMessage('Rakip bulundu! Oyun Başlıyor.', false);
             showScreen('gameScreen');
-            
             drawBoard(); 
             updateBoard(data);
         });
@@ -345,17 +341,9 @@
             $('#gameOverMessage').html(`Kazanan: <span class="font-bold text-lg text-yellow-300">${winnerName}</span><br>${message}`);
             
             showScreen('gameOverScreen');
-            
-            // ELO'nun güncellenmesi için skor tablosunu tekrar çek
             fetchLeaderboard();
         });
         
-        // Oyun sonrası lobiye dönüş butonu
-        $('#returnToLobbyBtn').on('click', function() {
-            currentRoomId = null;
-            showScreen('lobby');
-        });
-
         socket.on('opponentLeft', (message) => {
             showMessage(message, true);
             socket.emit('leaveRoom', currentRoomId);
@@ -364,7 +352,7 @@
         });
 
 
-        // --------------- 5. OYUN TAHTASI ÇİZİMİ VE ETKİLEŞİM ---------------
+        // --------------- 4. OYUN TAHTASI VE ARAYÜZ GÜNCELLEMELERİ ---------------
 
         function drawBoard() {
             const boardElement = $('#checkersBoard');
@@ -381,31 +369,26 @@
         function updatePiece(r, c, pieceCode) {
             const squareElement = $(`#r-${r}-c-${c}`);
             let content = '';
-            
             if (pieceCode === 1) content = '<span class="piece black">⚫</span>';
             else if (pieceCode === 2) content = '<span class="piece white">⚪</span>';
             else if (pieceCode === 3) content = '<span class="piece black">⚫👑</span>';
             else if (pieceCode === 4) content = '<span class="piece white">⚪👑</span>';
-            
             squareElement.html(content);
         }
 
         function updateBoard(data) {
             currentBoardState = data.board;
-            
             const blackName = data.blackName || game.blackName;
             const whiteName = data.whiteName || game.whiteName;
             const blackElo = data.blackElo || game.blackElo;
             const whiteElo = data.whiteElo || game.whiteElo;
 
             $('#currentTurnName').text(data.turn === 'black' ? blackName : whiteName);
-            
             const isMyTurn = data.turn === myColor;
             
             const myInfo = myColor === 'black' 
                 ? { name: blackName, elo: blackElo, color: 'black' } 
                 : { name: whiteName, elo: whiteElo, color: 'white' };
-                
             const oppInfo = myColor === 'black' 
                 ? { name: whiteName, elo: whiteElo, color: 'white' } 
                 : { name: blackName, elo: blackElo, color: 'black' };
@@ -429,11 +412,8 @@
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     updatePiece(r, c, data.board[r][c]);
-                    
                     const piece = data.board[r][c];
-                    const isMyPiece = (myColor === 'black' && (piece === 1 || piece === 3)) ||
-                                      (myColor === 'white' && (piece === 2 || piece === 4));
-                    
+                    const isMyPiece = (myColor === 'black' && (piece === 1 || piece === 3)) || (myColor === 'white' && (piece === 2 || piece === 4));
                     if (isMyTurn && isMyPiece) {
                         $(`#r-${r}-c-${c}`).addClass('selectable');
                     }
@@ -452,23 +432,16 @@
                     $(this).removeClass('selected');
                     selectedSquare = null;
                 } else {
-                    socket.emit('makeMove', {
-                        roomId: currentRoomId,
-                        from: selectedSquare,
-                        to: clickedId 
-                    });
-                    
+                    socket.emit('makeMove', { roomId: currentRoomId, from: selectedSquare, to: clickedId });
                     $(`#${selectedSquare}`).removeClass('selected');
                     selectedSquare = null;
                 }
             } else {
-                // Sadece kendi taşımızı seçme kontrolü
                 const [_, rStr, __, cStr] = clickedId.split('-');
                 const r = parseInt(rStr);
                 const c = parseInt(cStr);
                 const piece = currentBoardState[r][c];
-                const isMyPiece = (myColor === 'black' && (piece === 1 || piece === 3)) ||
-                                  (myColor === 'white' && (piece === 2 || piece === 4));
+                const isMyPiece = (myColor === 'black' && (piece === 1 || piece === 3)) || (myColor === 'white' && (piece === 2 || piece === 4));
 
                 if (isMyPiece) {
                     $('.dark').removeClass('selected');
@@ -481,55 +454,7 @@
         });
 
 
-        // --------------- 6. LOBİ VE EŞLEŞME BUTONLARI ---------------
-
-        $('#createRankedBtn, #createCasualBtn').on('click', function() {
-            const isRanked = $(this).data('ranked');
-            
-            if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
-                return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-            }
-
-            socket.emit('createRoom', { 
-                username: USERNAME, 
-                telegramId: TELEGRAM_ID, 
-                isRanked: isRanked 
-            });
-        });
-
-        $('#joinRoomBtn').on('click', function() {
-            const roomId = $('#roomIdInput').val().trim().toUpperCase();
-            if (roomId.length !== 4) {
-                return showMessage("Oda kodu 4 karakter olmalıdır.", true);
-            }
-            
-            socket.emit('joinRoom', { 
-                username: USERNAME, 
-                telegramId: TELEGRAM_ID, 
-                roomCode: roomId 
-            });
-        });
-
-        $('#cancelWaitBtn').on('click', function() {
-            if (currentRoomId) {
-                socket.emit('leaveRoom', currentRoomId);
-            }
-            currentRoomId = null;
-            showScreen('lobby');
-            showMessage("Oda kapatıldı.", false);
-        });
-
-        $('#showLeaderboardBtn').on('click', function() {
-            showScreen('leaderboardScreen');
-            fetchLeaderboard();
-        });
-
-        $('#hideLeaderboardBtn').on('click', function() {
-            showScreen('lobby');
-        });
-
-
-        // --------------- 7. SKOR TABLOSU ÇEKME ---------------
+        // --------------- 5. SKOR TABLOSU ÇEKME ---------------
 
         function fetchLeaderboard() {
             const API_URL = `${RENDER_URL}/api/leaderboard`; 
@@ -581,10 +506,62 @@
                 });
         }
         
-        // --------------- 8. BAŞLANGIÇ AKIŞI ---------------
+        // --------------- 6. BAŞLANGIÇ AKIŞI VE OLAY TANIMLARI ---------------
         
         $(document).ready(function() {
-            loadTelegramData(); // Sayfa yüklendiğinde Telegram verilerini otomatik alır
+            loadTelegramData(); 
+
+            // Buton Olayları Tanımları (DOM hazır olduğunda çalışır)
+            $('#createRankedBtn, #createCasualBtn').on('click', function() {
+                const isRanked = $(this).data('ranked');
+                
+                if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
+                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                }
+
+                socket.emit('createRoom', { 
+                    username: USERNAME, 
+                    telegramId: TELEGRAM_ID, 
+                    isRanked: isRanked 
+                });
+                showMessage(`${isRanked ? 'Dereceli' : 'Eğlence'} oyun aranıyor...`);
+            });
+
+            $('#joinRoomBtn').on('click', function() {
+                const roomId = $('#roomIdInput').val().trim().toUpperCase();
+                if (roomId.length !== 4) {
+                    return showMessage("Oda kodu 4 karakter olmalıdır.", true);
+                }
+                
+                socket.emit('joinRoom', { 
+                    username: USERNAME, 
+                    telegramId: TELEGRAM_ID, 
+                    roomCode: roomId 
+                });
+            });
+
+            $('#cancelWaitBtn').on('click', function() {
+                if (currentRoomId) {
+                    socket.emit('leaveRoom', currentRoomId);
+                }
+                currentRoomId = null;
+                showScreen('lobby');
+                showMessage("Oda kapatıldı.", false);
+            });
+
+            $('#showLeaderboardBtn').on('click', function() {
+                showScreen('leaderboardScreen');
+                fetchLeaderboard();
+            });
+
+            $('#hideLeaderboardBtn').on('click', function() {
+                showScreen('lobby');
+            });
+            
+            $('#returnToLobbyBtn').on('click', function() {
+                currentRoomId = null;
+                showScreen('lobby');
+            });
         });
         
     </script>
