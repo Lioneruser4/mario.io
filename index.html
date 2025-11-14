@@ -468,10 +468,6 @@
     <script>
         const RENDER_URL = 'https://mario-io-1.onrender.com'; 
 
-        const socket = io(RENDER_URL, {
-            transports: ['websocket', 'polling'] 
-        });
-
         let USERNAME = 'Misafir';
         let TELEGRAM_ID = `GUEST_${Date.now()}`;
         let CURRENT_ELO = 0; 
@@ -574,12 +570,48 @@
         }
         
         // --------------- 3. SOCKET BAĞLANTI VE OYUN OLAYLARI ---------------
+        
+        // Socket.IO bağlantı ayarları
+        const socketConfig = {
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            timeout: 20000,
+            transports: ['websocket', 'polling'],
+            withCredentials: true,
+            extraHeaders: {
+                "my-custom-header": "mario-io"
+            }
+        };
 
+        // Eğer localhost'ta çalışıyorsa local adresi, değilse Render URL'sini kullan
+        const socketUrl = window.location.hostname === 'localhost' ? 
+            'http://localhost:3000' : 
+            'https://mario-io-1.onrender.com';
+            
+        // Socket bağlantısını oluştur
+        const socket = io(socketUrl, socketConfig);
+
+        // Hata ayıklama için log ekle
+        socket.on('connect_error', (error) => {
+            console.error('Bağlantı hatası:', error);
+            $('#loadingText').text('Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.');
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('Bağlantı kesildi:', reason);
+            if (reason === 'io server disconnect') {
+                // Sunucu bağlantıyı kesti, tekrar bağlanmayı dene
+                socket.connect();
+            }
+        });
+
+        // Bağlantı başarılı olduğunda
         socket.on('connect', () => {
             console.log('Sunucuya bağlandı!');
             $('#loadingMessage').fadeOut(300);
             showScreen('lobby');
-            fetchLeaderboard(); 
+            fetchLeaderboard();
         });
 
         // YENİ: Kuyruğa Girildiğinde
