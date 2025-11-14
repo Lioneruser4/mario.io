@@ -57,7 +57,7 @@
             display: flex;
         }
 
-        /* Lobi Animasyonları (Temadan Alındı) */
+        /* Lobi Animasyonları */
         @keyframes screenFadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -256,9 +256,8 @@
         $(document).ready(function() {
             
             // === DEĞİŞKENLER ===
-            // !! Render sunucunuzun adresini buraya girin !!
-            // Örnek: 'https://mario-io-1.onrender.com'
-            const RENDER_URL = 'https://mario-io-1.onrender.com'; // <-- BURAYI DEĞİŞTİRİN
+            // !! SİZİN SUNUCU ADRESİNİZE AYARLANDI !!
+            const RENDER_URL = 'https://mario-io-1.onrender.com'; 
             
             let socket;
             let board = null;
@@ -358,17 +357,14 @@
             // === SATRANÇ TAHTASI OLAYLARI ===
 
             function onDragStart(square, piece) {
-                // Oyun bittiyse taşıma
                 if (game.isGameOver()) return false;
 
                 if (gameMode === 'offline') {
-                    // Offline mod: Sadece sırası gelen rengi oyna
                     if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
                         (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
                         return false;
                     }
                 } else if (gameMode === 'online') {
-                    // Online mod: Sadece kendi rengini ve kendi sıranı oyna
                     if ((game.turn() !== playerColor) ||
                         (playerColor === 'w' && piece.search(/^b/) !== -1) ||
                         (playerColor === 'b' && piece.search(/^w/) !== -1)) {
@@ -389,27 +385,21 @@
                     promotion: 'q' // Şimdilik hep vezir
                 };
                 
-                // Hamleyi dene
                 const validMove = game.move(move);
                 
-                if (validMove === null) return 'snapback'; // Geçersizse geri al
+                if (validMove === null) return 'snapback';
 
-                // Hamle geçerli
                 if (gameMode === 'offline') {
-                    // Offline: Hamle yapıldı, tahtayı güncelle, sırayı değiştir
                     board.position(game.fen());
                     updateTurnHighlight();
                     checkGameOver();
                 } else if (gameMode === 'online') {
-                    // Online: Hamleyi sunucuya gönder.
-                    // (Hamleyi geçici yaptık, sunucu onayı için geri alıyoruz)
                     game.undo(); 
                     socket.emit('makeMove', { roomId: currentRoomId, move: move });
                 }
             }
 
             function onSnapEnd() {
-                // Tahtayı FEN durumuna göre güncelle (özellikle online için)
                 if (gameMode === 'online') {
                     board.position(game.fen());
                 }
@@ -417,29 +407,24 @@
 
             // === BUTON VE EKRAN OLAYLARI ===
             
-            // Lobi: Offline 1v1
             $('#startOfflineBtn').on('click', () => {
                 gameMode = 'offline';
-                game.reset(); // Oyunu sıfırla
-                playerColor = null; // Renk kısıtlaması yok
-                
+                game.reset(); 
+                playerColor = null;
                 showScreen('gameScreen');
                 $('#game-mode-title').text('Offline 1v1');
-                
                 if (board === null) {
-                    initializeBoard(); // Tahtayı ilk kez kur
+                    initializeBoard();
                 } else {
-                    board.position('start'); // Tahtayı sıfırla
+                    board.position('start');
                 }
                 updateTurnHighlight();
             });
 
-            // Lobi: Oda Kur
             $('#createRoomBtn').on('click', () => {
                 if(socket) socket.emit('createRoom');
             });
 
-            // Lobi: Odaya Katıl
             $('#joinRoomBtn').on('click', () => {
                 const roomId = $('#roomIdInput').val().trim().toUpperCase();
                 if (roomId && socket) {
@@ -449,16 +434,13 @@
                 }
             });
 
-            // Bekleme: İptal
             $('#cancelBtn').on('click', () => {
                 if(socket && currentRoomId) {
                     socket.emit('leaveRoom', currentRoomId);
                 }
-                // Sayfayı yenileyerek temiz bir lobiye dön
                 location.reload(); 
             });
 
-            // Bekleme: Kopyala
             $('#copyCodeBtn').on('click', () => {
                 const code = $('#roomCodeDisplay').text();
                 navigator.clipboard.writeText(code)
@@ -466,9 +448,8 @@
                     .catch(() => showGlobalMessage('Kopyalama başarısız.', true));
             });
             
-            // Oyun: Lobiye Dön
             $('#backToLobbyBtn').on('click', () => {
-                location.reload(); // En temiz yol
+                location.reload(); 
             });
 
             // === SOCKET.IO BAĞLANTISI VE OLAYLARI ===
@@ -489,7 +470,6 @@
                         showGlobalMessage('Sunucuya bağlanılamadı!', true);
                     });
 
-                    // Sunucudan gelen 'Oda Kuruldu' mesajı
                     socket.on('roomCreated', (data) => {
                         currentRoomId = data.roomId;
                         playerColor = data.color; // 'w'
@@ -497,12 +477,10 @@
                         showScreen('waitScreen');
                     });
                     
-                    // Sunucudan gelen 'Oyun Başladı' mesajı
                     socket.on('gameStart', (data) => {
                         gameMode = 'online';
                         game.load(data.startFEN);
                         
-                        // Odaya katılan (Siyah) ise rengini ayarla
                         if (!playerColor) { 
                             playerColor = 'b';
                         }
@@ -516,20 +494,17 @@
                             board.position(data.startFEN);
                         }
                         
-                        // Tahtayı oyuncunun rengine göre çevir
                         board.orientation(playerColor === 'w' ? 'white' : 'black');
                         updateTurnHighlight();
                     });
 
-                    // Sunucudan gelen 'Hamle Yapıldı' mesajı
                     socket.on('moveMade', (data) => {
                         game.move(data.move);
                         board.position(game.fen());
                         updateTurnHighlight();
-                        checkGameOver(); // Online modda da oyun bitişini kontrol et
+                        checkGameOver();
                     });
 
-                    // Sunucudan gelen 'Oyun Bitti' mesajı
                     socket.on('gameOver', (reason) => {
                         $status.text(`Oyun Bitti! ${reason}`);
                         $whitePlayer.removeClass('active-turn');
@@ -537,16 +512,13 @@
                         showGlobalMessage(`Oyun Bitti! ${reason}`, false);
                     });
                     
-                    // Rakip ayrıldı
                     socket.on('opponentLeft', () => {
                         showGlobalMessage('Rakip oyundan ayrıldı.', true);
                         $status.text('Rakip ayrıldı. Lobiye dönebilirsiniz.');
                     });
 
-                    // Sunucudan gelen 'Hata' mesajı
                     socket.on('error', (msg) => {
                         showGlobalMessage(msg, true);
-                        // Eğer bekleme ekranındaysak lobiye geri at
                         if ($waitScreen.hasClass('active')) {
                             showScreen('lobby');
                         }
@@ -558,8 +530,6 @@
                     showGlobalMessage('Kritik bir hata oluştu.', true);
                 }
             }
-
-            // Başlangıç
             connectToServer();
         });
     </script>
