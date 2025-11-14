@@ -15,9 +15,10 @@ const io = new Server(server, {
 });
 
 // Oyun odalarını ve oyuncuları tutacak yapılar
-const rooms = {};
-const players = {};
-const socketToRoom = {};
+const rooms = {}; // Tüm oyun odaları
+const players = {}; // Tüm bağlı oyuncular
+const socketToRoom = {}; // Socket ID'den oda bilgisine erişim
+const waitingPlayers = []; // Eşleşmeyi bekleyen oyuncular
 
 // HTTP sunucusunu başlat
 const SERVER_PORT = process.env.PORT || 3000;
@@ -25,65 +26,221 @@ server.listen(SERVER_PORT, () => {
     console.log(`Sunucu ${SERVER_PORT} portunda çalışıyor...`);
 });
 
+// Oda oluşturma yardımcı fonksiyonu
+function createRoom(player1, player2 = null) {
+    const roomId = 'room_' + Math.random().toString(36).substr(2, 9);
+    const room = {
+        id: roomId,
+        players: [player1],
+        status: player2 ? 'waiting' : 'matching',
+        code: Math.floor(1000 + Math.random() * 9000).toString(),
+        createdAt: Date.now()
+    };
+    
+    if (player2) {
+        room.players.push(player2);
+        room.status = 'playing';
+    }
+    
+    rooms[roomId] = room;
+    return room;
+}
+
+// Eşleştirme kuyruğuna oyuncu ekle
+function addToMatchmaking(player) {
+    waitingPlayers.push(player);
+    
+    // Eğer en az iki oyuncu varsa eşleştir
+    if (waitingPlayers.length >= 2) {
+        const player1 = waitingPlayers.shift();
+        const player2 = waitingPlayers.shift();
+        
+        const room = createRoom(player1, player2);
+        
+        // Oyuncuları odaya yönlendir
+        player1.socket.join(room.id);
+        player2.socket.join(room.id);
+        
+        // Oyun başlatma bilgisini gönder
+        io.to(room.id).emit('gameStart', {
+            roomId: room.id,
+            players: [
+                { id: player1.id, number: 1 },
+                { id: player2.id, number: 2 }
+            ]
+        });
+        
+        console.log(`Yeni oyun başlatıldı: ${room.id}`);
+    }
+}
+
+// Odaya katılma işlemi
+function joinRoomWithCode(player, code) {
+    const room = Object.values(rooms).find(r => r.code === code && r.status === 'waiting');
+    
+    if (room) {
+        // Odaya katıl
+        room.players.push(player);
+        room.status = 'playing';
+        player.socket.join(room.id);
+        
+        // Oyun başlatma bilgisini gönder
+        io.to(room.id).emit('gameStart', {
+            roomId: room.id,
+            players: [
+                { id: room.players[0].id, number: 1 },
+                { id: player.id, number: 2 }
+            ]
+        });
+        
+        return { success: true, room };
+    }
+    
+    return { success: false, message: 'Geçersiz oda kodu veya oda dolu' };
+}
+
 // Socket bağlantılarını dinle
 io.on('connection', (socket) => {
     console.log('Yeni bir kullanıcı bağlandı:', socket.id);
     
-    // Odaya katılma
-    socket.on('joinRoom', (roomId) => {
-        if (!rooms[roomId]) {
-            rooms[roomId] = { players: [] };
+    // Yeni oyuncu oluştur
+    const player = {
+        id: socket.id,
+        socket: socket,
+        name: 'Oyuncu_' + Math.floor(Math.random() * 1000),
+        elo: 1000
+    };
+    
+    players[socket.id] = player;
+    
+    // Dereceli maç başlat
+    socket.on('startRankedMatch', () => {
+        console.log(`${player.name} (${socket.id}) dereceli maç aramaya başladı`);
+        addToMatchmaking(player);
+        socket.emit('matchmaking', { status: 'searching' });
+    });
+    
+    // Özel oda oluştur
+    socket.on('createPrivateRoom', () => {
+        // Eğer zaten bir odada ise çık
+        if (socketToRoom[socket.id]) {
+            const roomId = socketToRoom[socket.id];
+            if (rooms[roomId]) {
+                socket.leave(roomId);
+                delete socketToRoom[socket.id];
+            }
         }
         
-        const room = rooms[roomId];
-        if (room.players.length < 2) { // Maksimum 2 oyuncu
-            socket.join(roomId);
-            room.players.push(socket.id);
-            socketToRoom[socket.id] = roomId;
-            
-            // Odaya katıldı mesajı gönder
-            socket.emit('roomJoined', { 
-                roomId,
-                playerId: socket.id,
-                playerNumber: room.players.length
+        // Yeni oda oluştur
+        const room = createRoom(player);
+        socket.join(room.id);
+        socketToRoom[socket.id] = room.id;
+        
+        console.log(`Özel oda oluşturuldu: ${room.id} (Kod: ${room.code})`);
+        
+        // Oyuncuya oda bilgisini gönder
+        socket.emit('roomCreated', {
+            roomId: room.id,
+            code: room.code,
+            status: 'waiting'
+        });
+    });
+    
+    // Özel odaya katıl
+    socket.on('joinPrivateRoom', (data) => {
+        const { code } = data;
+        
+        // Eğer zaten bir odada ise çık
+        if (socketToRoom[socket.id]) {
+            const oldRoomId = socketToRoom[socket.id];
+            if (rooms[oldRoomId]) {
+                socket.leave(oldRoomId);
+                // Eğer oda boşsa sil
+                if (rooms[oldRoomId].players.length <= 1) {
+                    delete rooms[oldRoomId];
+                }
+            }
+            delete socketToRoom[socket.id];
+        }
+        
+        // Odaya katıl
+        const result = joinRoomWithCode(player, code);
+        if (result.success) {
+            socketToRoom[socket.id] = result.room.id;
+            socket.emit('roomJoined', {
+                roomId: result.room.id,
+                code: result.room.code,
+                status: 'playing',
+                playerNumber: 2
             });
             
-            // İki oyuncu da hazırsa oyunu başlat
-            if (room.players.length === 2) {
-                io.to(roomId).emit('startGame', {
-                    player1: room.players[0],
-                    player2: room.players[1]
+            // Oda sahibine yeni oyuncu bilgisini gönder
+            const owner = result.room.players[0];
+            if (owner && owner.socket) {
+                owner.socket.emit('playerJoined', {
+                    playerId: player.id,
+                    playerName: player.name
                 });
             }
         } else {
-            socket.emit('roomFull', { roomId });
+            socket.emit('joinError', { message: result.message });
         }
     });
     
-    // Oyun hareketlerini ilet
-    socket.on('playerMove', (data) => {
+    // Oyun hamlesi yap
+    socket.on('makeMove', (data) => {
         const roomId = socketToRoom[socket.id];
-        if (roomId) {
-            socket.to(roomId).emit('playerMoved', data);
+        if (roomId && rooms[roomId]) {
+            // Hamleyi diğer oyuncuya ilet
+            socket.to(roomId).emit('moveMade', data);
+        }
+    });
+    
+    // Oyun bitti
+    socket.on('gameOver', (data) => {
+        const roomId = socketToRoom[socket.id];
+        if (roomId && rooms[roomId]) {
+            // Diğer oyuncuya oyunun bittiğini bildir
+            socket.to(roomId).emit('gameEnded', data);
+            
+            // Odayı temizle
+            rooms[roomId].players.forEach(playerId => {
+                if (players[playerId] && players[playerId].socket) {
+                    players[playerId].socket.leave(roomId);
+                    delete socketToRoom[playerId];
+                }
+            });
+            
+            delete rooms[roomId];
         }
     });
     
     // Bağlantı kesildiğinde
     socket.on('disconnect', () => {
         console.log('Kullanıcı ayrıldı:', socket.id);
+        
         const roomId = socketToRoom[socket.id];
         if (roomId && rooms[roomId]) {
             // Oyuncuyu odadan çıkar
-            rooms[roomId].players = rooms[roomId].players.filter(id => id !== socket.id);
-            // Oda boşsa sil
-            if (rooms[roomId].players.length === 0) {
+            rooms[roomId].players = rooms[roomId].players.filter(p => p.id !== socket.id);
+            
+            // Diğer oyunculara ayrılan oyuncu bilgisini gönder
+            socket.to(roomId).emit('playerLeft', { playerId: socket.id });
+            
+            // Eğer oda boşsa veya oyun devam ediyorsa odayı sil
+            if (rooms[roomId].players.length === 0 || rooms[roomId].status === 'playing') {
                 delete rooms[roomId];
-            } else {
-                // Diğer oyuncuya haber ver
-                io.to(roomId).emit('playerDisconnected', { playerId: socket.id });
             }
-            delete socketToRoom[socket.id];
         }
+        
+        // Eşleşme kuyruğundan çıkar
+        const waitingIndex = waitingPlayers.findIndex(p => p.id === socket.id);
+        if (waitingIndex !== -1) {
+            waitingPlayers.splice(waitingIndex, 1);
+        }
+        
+        delete socketToRoom[socket.id];
+        delete players[socket.id];
     });
 });
 
