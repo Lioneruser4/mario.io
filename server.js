@@ -20,9 +20,9 @@ const players = {};
 const socketToRoom = {};
 
 // HTTP sunucusunu başlat
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor...`);
+const SERVER_PORT = process.env.PORT || 3000;
+server.listen(SERVER_PORT, () => {
+    console.log(`Sunucu ${SERVER_PORT} portunda çalışıyor...`);
 });
 
 // Socket bağlantılarını dinle
