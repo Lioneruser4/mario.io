@@ -3,16 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🏆 Online Satranç</title>
+    <title>🏆 Online Şaşki (Dama)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-    <script src="https://code.jquery.com/3.6.0.min.js"></script>
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     
     <style>
         /* Global Ayarlar */
@@ -23,6 +19,9 @@
             height: 100vh; 
             overflow: hidden;
             font-family: 'Inter', sans-serif;
+            -webkit-user-select: none; /* Safari */
+            -ms-user-select: none; /* IE 10+ */
+            user-select: none; /* Standard syntax */
         }
         body {
             background-color: #1a202c; 
@@ -103,18 +102,53 @@
             animation: screenFadeIn 0.3s ease-out;
         }
 
-        /* OYUN EKRANI (SATRANÇ) ÖZEL STİLLERİ */
-        #myBoard {
-            width: 90vw; 
-            max-width: 450px; 
+        /* OYUN EKRANI (ŞAŞKİ) ÖZEL STİLLERİ */
+        #checkersBoard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 90vw; /* Görsel genişlik */
+            max-width: 450px; /* Maksimum genişlik */
+            height: auto; /* Yüksekliği genişliğe oranla ayarla */
+            aspect-ratio: 1 / 1; /* Kare olmasını sağlar */
+            border: 4px solid #4a5568;
             margin: 1rem 0;
         }
-
-        /* Geçerli hamle vurgusu */
-        .highlight-valid {
-            background: radial-gradient(circle, rgba(0,255,0,0.5) 20%, rgba(0,0,0,0) 25%);
-            border-radius: 50%;
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.5rem, 6vw, 2.5rem); /* Emoji boyutu */
+            cursor: pointer;
+            transition: background-color 0.2s ease;
         }
+        .light { background-color: #cbd5e0; } /* Açık gri */
+        .dark { background-color: #2d3748; } /* Koyu gri */
+        
+        .dark.selectable {
+            cursor: grab;
+            box-shadow: 0 0 10px 3px rgba(100, 250, 100, 0.7); /* Yeşil kenarlık */
+        }
+        .dark.selected {
+            background-color: #4a5568; /* Seçilen taşın rengi */
+            box-shadow: 0 0 15px 5px rgba(255, 255, 0, 0.8); /* Sarı kenarlık */
+        }
+        .dark.highlighted {
+            background-color: #5d6d7e; /* Gidilebilecek yer rengi */
+            box-shadow: 0 0 10px 3px rgba(100, 150, 250, 0.7); /* Mavi kenarlık */
+        }
+
+        /* Taş Görünümü */
+        .piece {
+            line-height: 1; /* Emoji dikey hizalama */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .piece.white { color: white; text-shadow: 0 0 3px black; }
+        .piece.black { color: black; text-shadow: 0 0 3px white; }
 
         /* Sırası gelen oyuncu vurgusu */
         .player-info {
@@ -172,22 +206,13 @@
 
     <div id="lobby" class="screen active space-y-4">
         <h1 class="text-5xl font-black animated-item text-blue-400" style="animation-delay: 0s;">
-            <i class="fas fa-chess-king"></i> Online Satranç
+            <i class="fas fa-gamepad"></i> Online Şaşki (Dama)
         </h1>
         <p class="text-lg text-gray-400 animated-item" style="animation-delay: 0.1s;">
-            Arkadaşlarınla veya tek başına oyna.
+            Arkadaşlarınla online Şaşki oyna!
         </p>
 
-        <div class="w-full max-w-md pt-4 animated-item" style="animation-delay: 0.2s;">
-            <h2 class="text-2xl font-bold text-white mb-3">Offline Mod</h2>
-            <p class="text-gray-400 mb-3 text-sm">Aynı cihaz üzerinden 2 kişi oynayın.</p>
-            <button id="startOfflineBtn" class="w-full py-4 px-6 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl text-lg shadow-lg transform transition-all duration-200 active:scale-95">
-                <i class="fas fa-user-friends mr-2"></i> Offline 1v1 Başlat
-            </button>
-        </div>
-
         <div class="w-full max-w-md pt-4 animated-item" style="animation-delay: 0.3s;">
-            <div class="w-full border-t border-gray-700 my-4"></div>
             <h2 class="text-2xl font-bold text-white mb-3">Online Mod</h2>
             
             <button id="createRoomBtn" class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-lg shadow-lg transform transition-all duration-200 active:scale-95 mb-4">
@@ -206,333 +231,4 @@
     </div>
 
     <div id="waitScreen" class="screen p-4">
-        <div class="flex flex-col items-center justify-center h-full max-w-md mx-auto">
-            <div class="wait-spinner mb-6">
-                <i class="fas fa-spinner fa-spin text-4xl text-blue-400"></i>
-            </div>
-            <h2 class="text-2xl font-bold mb-6">Oda Hazırlandı!</h2>
-            
-            <div class="w-full mb-6">
-                <p class="text-lg text-gray-300 mb-2">Bu kodu arkadaşınla paylaş:</p>
-                <div id="roomCodeDisplay" class="text-4xl font-bold bg-gray-800 p-4 rounded-lg mb-4 text-center tracking-widest text-white">
-                    </div>
-                <button id="copyCodeBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-lg">
-                    <i class="fas fa-copy mr-2"></i> Kodu Kopyala
-                </button>
-            </div>
-            
-            <p class="text-xl text-gray-300 mb-6">Rakip bekleniyor...</p>
-            
-            <button id="cancelBtn" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-lg">
-                <i class="fas fa-times-circle mr-2"></i> İptal Et / Lobiye Dön
-            </button>
-        </div>
-    </div>
-
-    <div id="gameScreen" class="screen">
-        <div id="game-container" class="flex flex-col items-center justify-center">
-            
-            <h2 id="game-mode-title" class="text-2xl font-bold text-blue-300">Oyun Modu</h2>
-            <p id="game-status" class="text-lg text-yellow-300 font-semibold h-6 my-2">Durum</p>
-
-            <div id="black-player" class="player-info mb-2">
-                <h3 class="font-bold text-lg">Siyah Oyuncu</h3>
-            </div>
-
-            <div id="myBoard"></div>
-
-            <div id="white-player" class="player-info mt-2">
-                <h3 class="font-bold text-lg">Beyaz Oyuncu</h3>
-            </div>
-            
-            <button id="backToLobbyBtn" class="w-full max-w-md mt-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-lg">
-                <i class="fas fa-arrow-left mr-2"></i> Lobbiye Dön
-            </button>
-        </div>
-    </div>
-
-
-    <script>
-        $(document).ready(function() {
-            
-            // === DEĞİŞKENLER ===
-            // !! BU ADRES SİZİN TALEBİNİZE GÖRE AYARLANMIŞTIR !!
-            const RENDER_URL = 'https://mario-io-1.onrender.com'; 
-            
-            let socket;
-            let board = null;
-            let game = new Chess();
-            let playerColor = null; 
-            let currentRoomId = null;
-            let gameMode = null; 
-
-            // UI Elementleri
-            const $lobby = $('#lobby');
-            const $waitScreen = $('#waitScreen');
-            const $gameScreen = $('#gameScreen');
-            const $loading = $('#loadingMessage');
-            const $status = $('#game-status');
-            const $whitePlayer = $('#white-player');
-            const $blackPlayer = $('#black-player');
-
-            // === TEMEL FONKSİYONLAR ===
-            
-            function showScreen(screenId) {
-                $('.screen').removeClass('active');
-                $('#' + screenId).addClass('active');
-            }
-
-            function showGlobalMessage(message, isError = false) {
-                const $msg = $('#globalMessage');
-                $('#globalMessageText').text(message);
-                
-                if (isError) {
-                    $msg.removeClass('bg-green-600').addClass('bg-red-600');
-                } else {
-                    $msg.removeClass('bg-red-600').addClass('bg-green-600');
-                }
-                
-                $msg.addClass('show');
-                setTimeout(() => $msg.removeClass('show'), 3000);
-            }
-
-            // Sırası gelen oyuncuyu vurgulama
-            function updateTurnHighlight() {
-                $whitePlayer.removeClass('active-turn');
-                $blackPlayer.removeClass('active-turn');
-
-                const turn = game.turn(); 
-                if (turn === 'w') {
-                    $whitePlayer.addClass('active-turn');
-                    $status.text("Sıra Beyazda");
-                } else {
-                    $blackPlayer.addClass('active-turn');
-                    $status.text("Sıra Siyahta");
-                }
-            }
-
-            // Geçerli hamleleri vurgulamayı kaldır
-            function removeValidMoveHighlights() {
-                $('#myBoard .square-55d63').removeClass('highlight-valid');
-            }
-
-            // Geçerli hamleleri göster
-            function highlightValidMoves(square) {
-                removeValidMoveHighlights();
-                let moves = game.moves({ square: square, verbose: true });
-                if (moves.length === 0) return;
-                moves.forEach(move => {
-                    $(`#myBoard .square-${move.to}`).addClass('highlight-valid');
-                });
-            }
-
-            // Tahtayı kur
-            function initializeBoard() {
-                const boardConfig = {
-                    draggable: true,
-                    position: 'start',
-                    onDragStart: onDragStart,
-                    onDrop: onDrop,
-                    onSnapEnd: onSnapEnd
-                };
-                board = Chessboard('myBoard', boardConfig);
-                updateTurnHighlight();
-            }
-
-            // Oyun bitti mi kontrolü
-            function checkGameOver() {
-                if (game.isGameOver()) {
-                    let reason = 'Oyun bitti.';
-                    if (game.isCheckmate()) reason = 'Şah Mat!';
-                    if (game.isStalemate()) reason = 'Pat!';
-                    if (game.isThreefoldRepetition()) reason = '3 kez tekrar!';
-                    
-                    $status.text(`Oyun Bitti! ${reason}`);
-                    showGlobalMessage(`Oyun Bitti! ${reason}`, false);
-                    $whitePlayer.removeClass('active-turn');
-                    $blackPlayer.removeClass('active-turn');
-                }
-            }
-
-            // === SATRANÇ TAHTASI OLAYLARI ===
-
-            function onDragStart(square, piece) {
-                if (game.isGameOver()) return false;
-
-                if (gameMode === 'offline') {
-                    if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-                        (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
-                        return false;
-                    }
-                } else if (gameMode === 'online') {
-                    if ((game.turn() !== playerColor) ||
-                        (playerColor === 'w' && piece.search(/^b/) !== -1) ||
-                        (playerColor === 'b' && piece.search(/^w/) !== -1)) {
-                        return false;
-                    }
-                }
-                
-                highlightValidMoves(square);
-                return true;
-            }
-
-            function onDrop(source, target) {
-                removeValidMoveHighlights();
-                
-                let move = {
-                    from: source,
-                    to: target,
-                    promotion: 'q' 
-                };
-                
-                const validMove = game.move(move);
-                
-                if (validMove === null) return 'snapback';
-
-                if (gameMode === 'offline') {
-                    board.position(game.fen());
-                    updateTurnHighlight();
-                    checkGameOver();
-                } else if (gameMode === 'online') {
-                    game.undo(); 
-                    socket.emit('makeMove', { roomId: currentRoomId, move: move });
-                }
-            }
-
-            function onSnapEnd() {
-                if (gameMode === 'online') {
-                    board.position(game.fen());
-                }
-            }
-
-            // === BUTON VE EKRAN OLAYLARI ===
-            
-            $('#startOfflineBtn').on('click', () => {
-                gameMode = 'offline';
-                game.reset(); 
-                playerColor = null;
-                showScreen('gameScreen');
-                $('#game-mode-title').text('Offline 1v1');
-                if (board === null) {
-                    initializeBoard();
-                } else {
-                    board.position('start');
-                }
-                updateTurnHighlight();
-            });
-
-            $('#createRoomBtn').on('click', () => {
-                if(socket) socket.emit('createRoom');
-            });
-
-            $('#joinRoomBtn').on('click', () => {
-                const roomId = $('#roomIdInput').val().trim().toUpperCase();
-                if (roomId && socket) {
-                    socket.emit('joinRoom', roomId);
-                } else {
-                    showGlobalMessage('Lütfen geçerli bir oda kodu girin.', true);
-                }
-            });
-
-            $('#cancelBtn').on('click', () => {
-                if(socket && currentRoomId) {
-                    socket.emit('leaveRoom', currentRoomId);
-                }
-                location.reload(); 
-            });
-
-            $('#copyCodeBtn').on('click', () => {
-                const code = $('#roomCodeDisplay').text();
-                navigator.clipboard.writeText(code)
-                    .then(() => showGlobalMessage('Oda Kodu Kopyalandı!', false))
-                    .catch(() => showGlobalMessage('Kopyalama başarısız.', true));
-            });
-            
-            $('#backToLobbyBtn').on('click', () => {
-                location.reload(); 
-            });
-
-            // === SOCKET.IO BAĞLANTISI VE OLAYLARI ===
-            
-            function connectToServer() {
-                try {
-                    // Bağlantı adresi: https://mario-io-1.onrender.com
-                    socket = io(RENDER_URL, {
-                        transports: ['websocket', 'polling']
-                    });
-
-                    socket.on('connect', () => {
-                        $loading.hide();
-                        showScreen('lobby');
-                    });
-
-                    socket.on('connect_error', () => {
-                        $loading.find('p').text('Sunucuya bağlanılamadı. Lütfen Render durumunu kontrol edin.');
-                        showGlobalMessage('Sunucuya bağlanılamadı!', true);
-                    });
-
-                    socket.on('roomCreated', (data) => {
-                        currentRoomId = data.roomId;
-                        playerColor = data.color; 
-                        $('#roomCodeDisplay').text(currentRoomId);
-                        showScreen('waitScreen');
-                    });
-                    
-                    socket.on('gameStart', (data) => {
-                        gameMode = 'online';
-                        game.load(data.startFEN);
-                        
-                        if (!playerColor) { 
-                            playerColor = 'b';
-                        }
-                        
-                        showScreen('gameScreen');
-                        $('#game-mode-title').text(`Online Oda: ${currentRoomId}`);
-                        
-                        if (board === null) {
-                            initializeBoard();
-                        } else {
-                            board.position(data.startFEN);
-                        }
-                        
-                        board.orientation(playerColor === 'w' ? 'white' : 'black');
-                        updateTurnHighlight();
-                    });
-
-                    socket.on('moveMade', (data) => {
-                        game.move(data.move);
-                        board.position(game.fen());
-                        updateTurnHighlight();
-                        checkGameOver();
-                    });
-
-                    socket.on('gameOver', (reason) => {
-                        $status.text(`Oyun Bitti! ${reason}`);
-                        $whitePlayer.removeClass('active-turn');
-                        $blackPlayer.removeClass('active-turn');
-                        showGlobalMessage(`Oyun Bitti! ${reason}`, false);
-                    });
-                    
-                    socket.on('opponentLeft', () => {
-                        showGlobalMessage('Rakip oyundan ayrıldı.', true);
-                        $status.text('Rakip ayrıldı. Lobiye dönebilirsiniz.');
-                    });
-
-                    socket.on('error', (msg) => {
-                        showGlobalMessage(msg, true);
-                        if ($waitScreen.hasClass('active')) {
-                            showScreen('lobby');
-                        }
-                    });
-
-                } catch (e) {
-                    console.error('Socket.IO hatası:', e);
-                    $loading.hide();
-                    showGlobalMessage('Kritik bir hata oluştu.', true);
-                }
-            }
-            connectToServer();
-        });
-    </script>
-</body>
-</html>
+        <div class="flex flex-col items-center justify
