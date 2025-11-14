@@ -1,302 +1,224 @@
-// Oyun durumu
-const gameState = {
-    roomId: null,
-    playerId: null,
-    playerNumber: null,
-    isGameStarted: false,
-    isSearching: false,
-    socket: null,
-    opponent: null,
-    roomCode: null
+// Game Logic for Mario.io
+
+// Game state
+let gameState = {
+    isConnected: false,
+    currentScreen: 'loading',
+    currentRoom: null,
+    player: {
+        id: null,
+        username: '',
+        isGuest: true,
+        telegramId: null
+    },
+    game: null,
+    socket: null
 };
 
-// HTML elementleri
-const elements = {
-    loadingMessage: document.getElementById('loadingMessage'),
-    loadingText: document.getElementById('loadingText'),
-    status: document.getElementById('status'),
-    gameScreen: document.getElementById('gameScreen'),
-    rankedButton: document.getElementById('rankedButton'),
-    privateButton: document.getElementById('privateButton'),
-    roomCodeInput: document.getElementById('roomCodeInput'),
-    joinButton: document.getElementById('joinButton'),
-    roomCodeDisplay: document.getElementById('roomCodeDisplay'),
-    opponentInfo: document.getElementById('opponentInfo'),
-    playerInfo: document.getElementById('playerInfo')
-};
-
-// Socket.IO bağlantısı
-function initializeSocket() {
-    // Eğer zaten bir socket bağlantısı varsa kapat
-    if (gameState.socket) {
-        gameState.socket.disconnect();
-    }
-    
-    // Yeni bir socket bağlantısı oluştur
-    gameState.socket = io('http://localhost:3000', {
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        transports: ['websocket', 'polling']
-    });
-    
-    // Socket olaylarını dinle
-    setupSocketListeners();
-    
-    return gameState.socket;
-}
-
-// Socket olaylarını ayarla
-function setupSocketListeners() {
-    const socket = gameState.socket;
-    
-    // Sunucuya bağlanıldığında
-    socket.on('connect', () => {
-        console.log('Sunucuya bağlandı:', socket.id);
-        gameState.playerId = socket.id;
-        updateStatus('Sunucuya bağlanıldı');
-        showLoading(false);
-    });
-    
-    // Bağlantı hatası
-    socket.on('connect_error', (error) => {
-        console.error('Bağlantı hatası:', error);
-        updateStatus('Sunucuya bağlanılamadı. Tekrar deneniyor...');
-    });
-    
-    // Eşleşme durumu
-    socket.on('matchmaking', (data) => {
-        if (data.status === 'searching') {
-            gameState.isSearching = true;
-            updateStatus('Rakip aranıyor...');
-        }
-    });
-    
-    // Oda oluşturuldu
-    socket.on('roomCreated', (data) => {
-        gameState.roomId = data.roomId;
-        gameState.roomCode = data.code;
-        gameState.playerNumber = 1;
-        updateStatus(`Oda kodu: ${data.code}\nRakibinizin bu kodu girmesini bekleyin...`);
-        showRoomCode(data.code);
-    });
-    
-    // Oyuncu odaya katıldı
-    socket.on('playerJoined', (data) => {
-        gameState.opponent = {
-            id: data.playerId,
-            name: data.playerName
-        };
-        updateStatus(`Rakip katıldı: ${data.playerName}`);
-        startGame();
-    });
-    
-    // Oyun başlatıldı
-    socket.on('gameStart', (data) => {
-        gameState.roomId = data.roomId;
-        gameState.playerNumber = data.players.find(p => p.id === gameState.playerId)?.number || null;
-        gameState.opponent = data.players.find(p => p.id !== gameState.playerId) || null;
-        
-        if (gameState.playerNumber) {
-            updateStatus(`Oyun başlıyor! Sen Oyuncu ${gameState.playerNumber}`);
-            startGame();
-        }
-    });
-    
-    // Rakip ayrıldı
-    socket.on('playerLeft', (data) => {
-        updateStatus('Rakip oyundan ayrıldı. Ana menüye yönlendiriliyorsunuz...');
-        setTimeout(resetGame, 3000);
-    });
-    
-    // Oyun bitti
-    socket.on('gameEnded', (data) => {
-        updateStatus(data.winner === gameState.playerId ? 'Tebrikler, kazandınız!' : 'Mağlup oldunuz!');
-        setTimeout(resetGame, 5000);
-    });
-}
-
-// Durum mesajını güncelleme fonksiyonu
-function updateStatus(message) {
-    const statusElement = document.getElementById('status');
-    if (statusElement) {
-        statusElement.textContent = message;
-    }
-    console.log('Durum:', message);
-}
-
-// Odaya katılma fonksiyonu
-function joinRoom(roomId) {
-    console.log('Odaya katılıyor:', roomId);
-    if (gameState.socket && gameState.socket.connected) {
-        gameState.socket.emit('joinRoom', roomId);
-    } else {
-        console.error('Socket bağlantısı yok! Tekrar bağlanılıyor...');
-        initializeSocket();
-        // 1 saniye sonra tekrar dene
-        setTimeout(() => joinRoom(roomId), 1000);
-    }
-}
-
-function startGame() {
-    if (gameState.isGameStarted) return;
-    
-    console.log('Oyun başlatılıyor...');
-    gameState.isGameStarted = true;
-    showLoading(false);
-    
-    // Oyun alanını göster
-    if (elements.gameScreen) {
-        elements.gameScreen.classList.add('active');
-    }
-    
-    // Oyun tahtasını başlat
-    initializeBoard();
-}
-
-// Oyun tahtasını başlat
-function initializeBoard() {
-    // Burada oyun tahtası ve oyun mantığı başlatılacak
-    console.log('Oyun tahtası başlatılıyor...');
-    updateStatus('Oyun başladı!');
-}
-
-// Oda kodunu göster
-function showRoomCode(code) {
-    if (elements.roomCodeDisplay) {
-        elements.roomCodeDisplay.textContent = `Oda Kodu: ${code}`;
-        elements.roomCodeDisplay.style.display = 'block';
-    }
-}
-
-// Yükleme ekranını göster/gizle
-function showLoading(show, message = '') {
-    if (elements.loadingMessage && elements.loadingText) {
-        if (show) {
-            elements.loadingMessage.style.display = 'flex';
-            elements.loadingText.textContent = message || 'Yükleniyor...';
-        } else {
-            elements.loadingMessage.style.display = 'none';
-        }
-    }
-}
-
-// Durum mesajını güncelle
-function updateStatus(message) {
-    if (elements.status) {
-        elements.status.textContent = message;
-    }
-    console.log('Durum:', message);
-}
-
-// Oyunu sıfırla
-function resetGame() {
-    gameState.roomId = null;
-    gameState.playerNumber = null;
-    gameState.isGameStarted = false;
-    gameState.isSearching = false;
-    gameState.opponent = null;
-    gameState.roomCode = null;
-    
-    if (elements.gameScreen) {
-        elements.gameScreen.classList.remove('active');
-    }
-    
-    if (elements.roomCodeDisplay) {
-        elements.roomCodeDisplay.style.display = 'none';
-    }
-    
-    updateStatus('Ana menüye dönülüyor...');
-    setTimeout(() => {
-        updateStatus('Dereceli maç veya özel oda seçin');
-    }, 1000);
-}
-
-// Oyunu başlat
+// Initialize the game
 function initGame() {
-    // Socket bağlantısını başlat
-    initializeSocket();
+    console.log('Game initializing...');
     
-    // Buton olaylarını ayarla
-    setupEventListeners();
+    // Load player data
+    loadPlayerData();
     
-    // Sayfa yüklendiğinde
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('Oyun başlatılıyor...');
-        showLoading(true, 'Sunucuya bağlanılıyor...');
+    // Initialize UI
+    initUI();
+    
+    // Show loading screen
+    showScreen('loading');
+    
+    console.log('Game initialized');
+}
+
+// Load player data
+function loadPlayerData() {
+    // Try to get Telegram ID if available
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+        gameState.player.telegramId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+        gameState.player.isGuest = false;
+        
+        // Try to get username
+        if (window.Telegram.WebApp.initDataUnsafe.user.username) {
+            gameState.player.username = window.Telegram.WebApp.initDataUnsafe.user.username;
+        } else if (window.Telegram.WebApp.initDataUnsafe.user.first_name) {
+            gameState.player.username = window.Telegram.WebApp.initDataUnsafe.user.first_name;
+        }
+    }
+    
+    // If no Telegram data, create guest account
+    if (gameState.isGuest) {
+        gameState.player.id = 'GUEST_' + Math.random().toString(36).substr(2, 9);
+        gameState.player.username = 'Misafir' + Math.floor(Math.random() * 1000);
+    }
+    
+    console.log('Player data loaded:', gameState.player);
+}
+
+// Initialize UI elements and event listeners
+function initUI() {
+    console.log('Initializing UI...');
+    
+    // Set username in the UI if available
+    const usernameInput = document.getElementById('username');
+    if (usernameInput && gameState.player.username) {
+        usernameInput.value = gameState.player.username;
+    }
+    
+    // Bind button events
+    bindButtonEvents();
+}
+
+// Bind button events
+function bindButtonEvents() {
+    console.log('Binding button events...');
+    
+    // Ranked Game Button
+    const rankedBtn = document.getElementById('createRankedBtn');
+    if (rankedBtn) {
+        rankedBtn.onclick = () => startGame(true);
+    }
+    
+    // Casual Game Button
+    const casualBtn = document.getElementById('createCasualBtn');
+    if (casualBtn) {
+        casualBtn.onclick = () => startGame(false);
+    }
+    
+    // Cancel Queue Button
+    const cancelQueueBtn = document.getElementById('cancelQueueBtn');
+    if (cancelQueueBtn) {
+        cancelQueueBtn.onclick = cancelQueue;
+    }
+    
+    // Cancel Wait Button
+    const cancelWaitBtn = document.getElementById('cancelWaitBtn');
+    if (cancelWaitBtn) {
+        cancelWaitBtn.onclick = cancelWaiting;
+    }
+    
+    // Return to Lobby Button
+    const returnToLobbyBtn = document.getElementById('returnToLobbyBtn');
+    if (returnToLobbyBtn) {
+        returnToLobbyBtn.onclick = returnToLobby;
+    }
+    
+    // Play Again Button
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    if (playAgainBtn) {
+        playAgainBtn.onclick = playAgain;
+    }
+    
+    console.log('Button events bound');
+}
+
+// Start a new game (ranked or casual)
+function startGame(isRanked) {
+    console.log('Starting', isRanked ? 'ranked' : 'casual', 'game...');
+    
+    // Check if socket is connected
+    if (!gameState.socket || !gameState.socket.connected) {
+        showMessage('Sunucuya bağlanılıyor...', false);
+        // Try to reconnect
+        if (window.socket) {
+            gameState.socket = window.socket;
+            gameState.socket.connect();
+        } else {
+            showMessage('Sunucu bağlantısı yok. Lütfen sayfayı yenileyin.', true);
+            return;
+        }
+    }
+    
+    // Get username from input or use default
+    const usernameInput = document.getElementById('username');
+    if (usernameInput && usernameInput.value.trim() !== '') {
+        gameState.player.username = usernameInput.value.trim();
+    }
+    
+    // Show loading screen
+    showScreen('loading');
+    
+    // Emit createRoom event
+    gameState.socket.emit('createRoom', {
+        username: gameState.player.username,
+        telegramId: gameState.player.telegramId,
+        isRanked: isRanked
     });
 }
 
-// Buton olaylarını ayarla
-function setupEventListeners() {
-    // Dereceli maç butonu
-    if (elements.rankedButton) {
-        elements.rankedButton.addEventListener('click', startRankedMatch);
+// Cancel queue
+function cancelQueue() {
+    if (gameState.socket && gameState.socket.connected) {
+        gameState.socket.emit('leaveQueue');
     }
-    
-    // Özel oda oluştur butonu
-    if (elements.privateButton) {
-        elements.privateButton.addEventListener('click', createPrivateRoom);
+    stopQueueTimer();
+    showScreen('lobby');
+}
+
+// Cancel waiting in room
+function cancelWaiting() {
+    if (gameState.socket && gameState.socket.connected && gameState.currentRoom) {
+        gameState.socket.emit('leaveRoom', { roomId: gameState.currentRoom });
+        gameState.currentRoom = null;
     }
-    
-    // Odaya katıl butonu
-    if (elements.joinButton) {
-        elements.joinButton.addEventListener('click', joinPrivateRoom);
+    showScreen('lobby');
+}
+
+// Return to lobby
+function returnToLobby() {
+    showScreen('lobby');
+}
+
+// Play again
+function playAgain() {
+    if (gameState.socket && gameState.socket.connected) {
+        gameState.socket.emit('playAgain');
+        showScreen('loading');
     }
 }
 
-// Dereceli maç başlat
-function startRankedMatch() {
-    if (!gameState.socket || !gameState.socket.connected) {
-        updateStatus('Sunucuya bağlı değil!');
-        return;
+// Show a specific screen
+function showScreen(screenName) {
+    // Hide all screens
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+    
+    // Show the requested screen
+    const screen = document.getElementById(screenName);
+    if (screen) {
+        screen.classList.add('active');
+        gameState.currentScreen = screenName;
     }
     
-    gameState.isSearching = true;
-    updateStatus('Rakip aranıyor...');
-    gameState.socket.emit('startRankedMatch');
-    showLoading(true, 'Rakip aranıyor...');
+    console.log('Showing screen:', screenName);
 }
 
-// Özel oda oluştur
-function createPrivateRoom() {
-    if (!gameState.socket || !gameState.socket.connected) {
-        updateStatus('Sunucuya bağlı değil!');
-        return;
+// Show message to user
+function showMessage(message, isError = false) {
+    const messageDiv = document.getElementById('message');
+    if (messageDiv) {
+        messageDiv.textContent = message;
+        messageDiv.className = isError ? 'error' : 'info';
+        messageDiv.style.display = 'block';
+        
+        // Hide message after 5 seconds
+        setTimeout(() => {
+            messageDiv.style.display = 'none';
+        }, 5000);
     }
     
-    gameState.socket.emit('createPrivateRoom');
-    showLoading(true, 'Oda oluşturuluyor...');
+    console.log(isError ? 'Error:' : 'Info:', message);
 }
 
-// Özel odaya katıl
-function joinPrivateRoom() {
-    if (!gameState.socket || !gameState.socket.connected) {
-        updateStatus('Sunucuya bağlı değil!');
-        return;
-    }
-    
-    const code = elements.roomCodeInput?.value?.trim();
-    if (!code) {
-        updateStatus('Lütfen geçerli bir oda kodu girin!');
-        return;
-    }
-    
-    gameState.socket.emit('joinPrivateRoom', { code });
-    showLoading(true, 'Odaya katılılıyor...');
-}
+// Start the game when the page loads
+window.addEventListener('DOMContentLoaded', initGame);
 
-// Global olarak erişilebilir yap
-window.gameModule = {
+// Make functions available globally
+window.game = {
     init: initGame,
     start: startGame,
-    joinRoom: joinRoom,
+    showScreen: showScreen,
+    showMessage: showMessage,
     state: gameState
 };
-
-// Oyunu başlat
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initGame);
-} else {
-    initGame();
-}
