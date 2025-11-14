@@ -571,39 +571,42 @@
         
         // --------------- 3. SOCKET BAĞLANTI VE OYUN OLAYLARI ---------------
         
-        // Socket.IO bağlantı ayarları
-        const socketConfig = {
+        // Socket.IO bağlantı ayarları - Basitleştirilmiş versiyon
+        const socket = io({
             reconnection: true,
-            reconnectionAttempts: 5,
+            reconnectionAttempts: 3,
             reconnectionDelay: 1000,
-            timeout: 20000,
-            transports: ['websocket', 'polling'],
-            withCredentials: true,
-            extraHeaders: {
-                "my-custom-header": "mario-io"
-            }
-        };
-
-        // Eğer localhost'ta çalışıyorsa local adresi, değilse Render URL'sini kullan
-        const socketUrl = window.location.hostname === 'localhost' ? 
-            'http://localhost:3000' : 
-            'https://mario-io-1.onrender.com';
-            
-        // Socket bağlantısını oluştur
-        const socket = io(socketUrl, socketConfig);
-
-        // Hata ayıklama için log ekle
-        socket.on('connect_error', (error) => {
-            console.error('Bağlantı hatası:', error);
-            $('#loadingText').text('Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.');
+            timeout: 10000,
+            transports: ['websocket']
         });
 
-        socket.on('disconnect', (reason) => {
-            console.log('Bağlantı kesildi:', reason);
-            if (reason === 'io server disconnect') {
-                // Sunucu bağlantıyı kesti, tekrar bağlanmayı dene
-                socket.connect();
+        // 10 saniye içinde bağlantı sağlanamazsa loading ekranını kaldır
+        const connectionTimeout = setTimeout(() => {
+            if (!socket.connected) {
+                $('#loadingMessage').fadeOut(500, function() {
+                    showScreen('lobby');
+                    fetchLeaderboard();
+                });
             }
+        }, 10000);
+
+        // Bağlantı başarılı olduğunda
+        socket.on('connect', () => {
+            clearTimeout(connectionTimeout);
+            $('#loadingMessage').fadeOut(500, function() {
+                showScreen('lobby');
+                fetchLeaderboard();
+            });
+        });
+
+        // Hata durumunda
+        socket.on('connect_error', () => {
+            // Hata durumunda bile loading ekranını kaldır
+            clearTimeout(connectionTimeout);
+            $('#loadingMessage').fadeOut(500, function() {
+                showScreen('lobby');
+                fetchLeaderboard();
+            });
         });
 
         // Bağlantı başarılı olduğunda
