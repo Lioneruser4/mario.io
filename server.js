@@ -6,11 +6,10 @@ const { Chess } = require('chess.js');
 const app = express();
 const server = http.createServer(app);
 
-// !!!!!!!!! ÇÖZÜM: CORS Ayarı, TÜM ADRESLERE İZİN VERİR (*) !!!!!!!!!
-// !! Güvenlik için daha sonra burayı kendi GitHub Pages adresinizle değiştirmelisiniz. !!
+// TÜM ALANLARA İZİN VERİLDİ (*)
 const io = new Server(server, {
   cors: {
-    origin: "*", // HERKESE İZİN VERİLDİ
+    origin: "*", 
     methods: ["GET", "POST"]
   }
 });
@@ -21,6 +20,7 @@ let socketToRoom = {};
 function cleanupRoom(roomId) {
   if (games[roomId]) {
     delete games[roomId];
+    console.log(`Oda ${roomId} temizlendi.`);
   }
   for (const socketId in socketToRoom) {
     if (socketToRoom[socketId] === roomId) {
