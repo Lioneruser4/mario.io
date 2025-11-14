@@ -261,6 +261,18 @@
     <script>
         // Global değişkenler
         let socket;
+        
+        // Sayfa yüklendiğinde çalışacak kod
+        $(document).ready(function() {
+            console.log('Doküman yüklendi, socket bağlantısı başlatılıyor...');
+            initializeSocket();
+            
+            // Telegram verilerini yükle
+            loadTelegramData();
+            
+            // Başlangıçta loading ekranını göster
+            showScreen('loading');
+        });
         let isConnecting = false;
         const CONNECTION_ATTEMPTS = 5;
         let connectionAttempts = 0;
@@ -299,26 +311,54 @@
         
         // Socket olaylarını ayarla
         function setupSocketEvents() {
-            if (!socket) return;
+            if (!socket) {
+                console.error('Socket tanımlı değil!');
+                return;
+            }
             
+            // Bağlantı başarılı olduğunda
             socket.on('connect', function() {
-                console.log('Sunucuya bağlanıldı!');
+                console.log('Sunucuya bağlanıldı! Socket ID:', socket.id);
                 isConnecting = false;
+                connectionAttempts = 0;
                 showMessage('Sunucuya bağlanıldı!', false);
+                
+                // Kullanıcı adını kontrol et ve güncelle
+                const usernameElement = document.getElementById('username');
+                if (usernameElement && usernameElement.value) {
+                    socket.emit('updateUsername', { 
+                        username: usernameElement.value,
+                        telegramId: TELEGRAM_ID 
+                    });
+                }
+                
+                // Lobi ekranını göster
                 showScreen('lobby');
             });
             
-            socket.on('disconnect', function() {
-                console.warn('Sunucu bağlantısı kesildi!');
+            // Bağlantı koptuğunda
+            socket.on('disconnect', function(reason) {
+                console.warn('Sunucu bağlantısı kesildi. Sebep:', reason);
                 showMessage('Sunucu bağlantısı kesildi. Yeniden bağlanılıyor...', true);
-                attemptReconnect();
+                
+                // Eğer kullanıcı manuel olarak bağlantıyı kesmediyse yeniden bağlanmayı dene
+                if (reason !== 'io client disconnect') {
+                    attemptReconnect();
+                }
             });
             
+            // Bağlantı hatası olduğunda
             socket.on('connect_error', function(error) {
                 console.error('Bağlantı hatası:', error);
                 isConnecting = false;
                 showMessage('Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.', true);
-                attemptReconnect();
+                
+                // 3 saniye sonra yeniden bağlanmayı dene
+                setTimeout(function() {
+                    if (!socket.connected) {
+                        attemptReconnect();
+                    }
+                }, 3000);
             });
             
             // Oda oluşturulduğunda
