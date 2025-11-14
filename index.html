@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🏆 Şaşki ELO (Dama)</title>
+    <title>🏆 Şaşki Game ELO (Dama)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -187,14 +187,30 @@
     <div id="waitScreen" class="screen">
         <h2 class="text-3xl font-bold mb-4 text-white">Rakip Bekleniyor...</h2>
         <div class="wait-spinner mb-6 text-6xl">♟️</div>
-        <p class="text-xl text-gray-300 mb-2" id="waitRoomCode"></p>
-        <p class="text-md text-gray-400 mb-6" id="waitGameType"></p>
         
-        <p class="text-red-300 mb-4">Bu kodu arkadaşınıza vererek odaya katılmasını sağlayın!</p>
+        <div class="bg-gray-800 p-4 rounded-lg w-full max-w-xs mb-4">
+            <p class="text-gray-400 text-sm mb-1">Oda Kodu:</p>
+            <div class="flex items-center justify-between bg-gray-700 rounded-md p-3">
+                <span id="waitRoomCode" class="text-2xl font-mono font-bold text-yellow-300 tracking-wider">----</span>
+                <button id="copyRoomCodeBtn" class="ml-2 p-2 text-gray-300 hover:text-white rounded-full hover:bg-gray-600 transition-colors" title="Kodu Kopyala">
+                    <i class="far fa-copy"></i>
+                </button>
+            </div>
+            <p id="copyStatus" class="text-green-400 text-sm mt-1 h-5"></p>
+        </div>
+        
+        <p class="text-md text-gray-400 mb-6" id="waitGameType">Arkadaş Maçı</p>
+        
+        <p class="text-red-300 mb-4 text-center max-w-xs">Bu kodu arkadaşınıza vererek odaya katılmasını sağlayın!</p>
 
-        <button id="cancelWaitBtn" class="py-3 px-6 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
-            <i class="fas fa-times-circle mr-2"></i> Odayı Kapat ve Lobiden Çık
-        </button>
+        <div class="mt-4 space-y-3 w-full max-w-xs">
+            <button id="cancelWaitBtn" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
+                <i class="fas fa-times-circle mr-2"></i> Odayı Kapat ve Lobiden Çık
+            </button>
+            <button id="shareRoomBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95">
+                <i class="fas fa-share-alt mr-2"></i> Kodu Paylaş
+            </button>
+        </div>
     </div>
 
     <div id="gameScreen" class="screen justify-start pt-4">
@@ -701,6 +717,42 @@
             return true;
         }
         
+        // Oda kodu kopyalama işlevi
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const status = document.getElementById('copyStatus');
+                status.textContent = 'Kopyalandı!';
+                status.classList.remove('text-red-400', 'text-green-400');
+                status.classList.add('text-green-400');
+                setTimeout(() => {
+                    status.textContent = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Kopyalama hatası:', err);
+                const status = document.getElementById('copyStatus');
+                status.textContent = 'Kopyalama başarısız!';
+                status.classList.remove('text-red-400', 'text-green-400');
+                status.classList.add('text-red-400');
+            });
+        }
+
+        // Oda kodu paylaşma işlevi
+        async function shareRoomCode(code) {
+            const shareData = {
+                title: 'Dama Oyunu - Odaya Katıl',
+                text: `Dama oyununa katılın! Oda Kodu: ${code}`,
+                url: window.location.href
+            };
+
+            try {
+                await navigator.share(shareData);
+                console.log('Başarıyla paylaşıldı');
+            } catch (err) {
+                console.error('Paylaşım hatası:', err);
+                copyToClipboard(code);
+            }
+        }
+
         // Socket event listener'larını ekle
         socket.on('connect', () => {
             console.log('Sunucuya bağlandı! Socket ID:', socket.id);
@@ -721,8 +773,26 @@
         socket.on('roomCreated', (data) => {
             console.log('Oda oluşturuldu:', data);
             currentRoomId = data.roomId;
-            document.getElementById('waitRoomCode').textContent = `Oda Kodu: ${data.roomId}`;
-            document.getElementById('waitGameType').textContent = data.isRanked ? 'Dereceli Maç' : 'Arkadaş Maçı';
+            
+            // Oda kodunu göster
+            const roomCodeElement = document.getElementById('waitRoomCode');
+            roomCodeElement.textContent = data.roomId;
+            roomCodeElement.classList.add('select-all');
+            
+            // Oyun türünü ayarla
+            const gameTypeElement = document.getElementById('waitGameType');
+            gameTypeElement.textContent = data.isRanked ? 'Dereceli Maç' : 'Arkadaş Maçı';
+            
+            // Paylaş butonuna tıklama olayını ekle
+            document.getElementById('shareRoomBtn').onclick = () => {
+                shareRoomCode(data.roomId);
+            };
+            
+            // Kopyala butonuna tıklama olayını ekle
+            document.getElementById('copyRoomCodeBtn').onclick = () => {
+                copyToClipboard(data.roomId);
+            };
+            
             showScreen('waitScreen');
         });
         
@@ -763,20 +833,26 @@
                 
                 // Misafir kullanıcı kontrolü
                 if (TELEGRAM_ID.startsWith('GUEST_')) {
-                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                    return showMessage("Arkadaşınla oynamak için Telegram girişi gereklidir.", true);
                 }
                 
                 console.log('Arkadaşla oyun başlatılıyor...');
                 const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
                 
+                // Yükleme ekranını göster
+                showScreen('loading');
+                
+                // Oda oluşturma isteği gönder
                 socket.emit('createRoom', {
                     username: username,
                     telegramId: TELEGRAM_ID,
                     isRanked: false
+                }, (response) => {
+                    if (response && response.error) {
+                        showScreen('lobby');
+                        showMessage(response.error, true);
+                    }
                 });
-                
-                // Bekleme ekranını göster
-                showScreen('waitScreen');
             });
 
             // Oda Katılımı
