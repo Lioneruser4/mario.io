@@ -201,7 +201,7 @@
     <div id="mainMenu" class="flex flex-col items-center">
         <h1 class="text-3xl font-bold mb-8">🏆 Şaşki ELO</h1>
         
-        <div id="status" class="status">Sunucuya bağlanılıyor...</div>
+        <div id="status" class="status" style="display: none;"></div>
         
         <button id="rankedButton" class="btn btn-primary">
             <i class="fas fa-trophy mr-2"></i> Dereceli Maç
@@ -348,9 +348,9 @@
 
 <body>
     
-    <div id="loadingMessage">
+    <div id="loadingMessage" style="display: none;">
         <div class="spinner"></div>
-        <p id="loadingText">Sunucuya bağlanılıyor...</p>
+        <p id="loadingText">Yükleniyor...</p>
     </div>
 
     <div id="globalMessage">
