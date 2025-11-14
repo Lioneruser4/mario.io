@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>🏆 Şaşki ELO (Dama)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -911,146 +911,53 @@
             showMessage(message, true);
         });
 
-        // iOS ve Telegram WebView için touch event desteği
-        function isIOS() {
-            return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        }
-        
-        function isInTelegram() {
-            return window.Telegram && window.Telegram.WebApp;
-        }
-        
-        // iOS veya Telegram'da isek touch event'lerini optimize et
-        if (isIOS() || isInTelegram()) {
-            // Butonlara touch event'leri ekle
-            function addTouchSupport(selector) {
-                const elements = document.querySelectorAll(selector);
-                elements.forEach(el => {
-                    el.style.cursor = 'pointer';
-                    el.addEventListener('touchstart', function() {
-                        this.classList.add('active-scale-95');
-                    }, false);
-                    el.addEventListener('touchend', function() {
-                        this.classList.remove('active-scale-95');
-                    }, false);
-                    el.addEventListener('touchcancel', function() {
-                        this.classList.remove('active-scale-95');
-                    }, false);
-                });
-            }
-            
-            // Sayfa yüklendiğinde tüm butonlara touch desteği ekle
-            document.addEventListener('DOMContentLoaded', function() {
-                addTouchSupport('button');
-                addTouchSupport('.btn');
-                addTouchSupport('[role="button"]');
-                
-                // iOS için viewport ayarı
-                const viewport = document.querySelector('meta[name="viewport"]');
-                if (viewport) {
-                    viewport.content = viewport.content + ', interactive-widget=resizes-content';
-                }
-            });
-        }
-        
         $(document).ready(function() {
-            // iOS veya Telegram'da ise bazı optimizasyonlar yap
-            if (isIOS() || isInTelegram()) {
-                // iOS'te :active durumu için gerekli stil
-                const style = document.createElement('style');
-                style.textContent = `
-                    button:active, .btn:active, [role="button"]:active {
-                        transform: scale(0.95) !important;
-                        opacity: 0.9 !important;
-                    }
-                    .active-scale-95 {
-                        transform: scale(0.95) !important;
-                        opacity: 0.9 !important;
-                    }
-                `;
-                document.head.appendChild(style);
-                
-                // iOS için 300ms gecikmeyi kaldır
-                document.addEventListener('touchstart', function() {}, {passive: true});
-            }
-            
             loadTelegramData();
 
-            // Buton tıklamalarını yönet
-            setupGameButtons();
-            
-            function setupGameButtons() {
-                // Dereceli Oyun Butonu
-                document.getElementById('createRankedBtn').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    console.log('Dereceli oyun butonuna tıklandı');
-                    
-                    try {
-                        if (!checkSocketConnection()) {
-                            console.error('Bağlantı hatası: Socket bağlı değil');
-                            return;
-                        }
-                        
-                        if (TELEGRAM_ID.startsWith('GUEST_')) {
-                            showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-                            return;
-                        }
-                        
-                        const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
-                        showScreen('loading');
-                        
-                        console.log('Dereceli oyun başlatılıyor...');
-                        socket.emit('createRoom', {
-                            username: username,
-                            telegramId: TELEGRAM_ID,
-                            isRanked: true
-                        });
-                    } catch (error) {
-                        console.error('Dereceli oyun başlatma hatası:', error);
-                        showMessage('Bir hata oluştu. Lütfen tekrar deneyin.', true);
+            // Ortak buton işleyici fonksiyonu
+            function handleGameButtonClick(isRanked) {
+                if (!checkSocketConnection()) {
+                    console.error('Bağlantı hatası: Socket bağlı değil');
+                    return false;
+                }
+                
+                // Misafir kullanıcı kontrolü
+                if (TELEGRAM_ID.startsWith('GUEST_')) {
+                    const message = isRanked 
+                        ? "Dereceli oynamak için Telegram girişi gereklidir."
+                        : "Arkadaşınla oynamak için Telegram girişi gereklidir.";
+                    showMessage(message, true);
+                    return false;
+                }
+                
+                const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
+                
+                // Yükleme ekranını göster
+                showScreen('loading');
+                
+                console.log(isRanked ? 'Dereceli oyun başlatılıyor...' : 'Arkadaşla oyun başlatılıyor...');
+                
+                // Oda oluşturma isteği gönder
+                socket.emit('createRoom', {
+                    username: username,
+                    telegramId: TELEGRAM_ID,
+                    isRanked: isRanked
+                }, (response) => {
+                    if (response && response.error) {
+                        console.error('Oda oluşturma hatası:', response.error);
                         showScreen('lobby');
+                        showMessage(response.error, true);
                     }
                 });
                 
-                // Arkadaşla Oyun Butonu
-                document.getElementById('createCasualBtn').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    console.log('Arkadaşla oyun butonuna tıklandı');
-                    
-                    try {
-                        if (!checkSocketConnection()) {
-                            console.error('Bağlantı hatası: Socket bağlı değil');
-                            return;
-                        }
-                        
-                        if (TELEGRAM_ID.startsWith('GUEST_')) {
-                            showMessage("Arkadaşınla oynamak için Telegram girişi gereklidir.", true);
-                            return;
-                        }
-                        
-                        const username = document.getElementById('username')?.value || 'Oyuncu' + Math.floor(Math.random() * 1000);
-                        showScreen('loading');
-                        
-                        console.log('Arkadaşla oyun başlatılıyor...');
-                        socket.emit('createRoom', {
-                            username: username,
-                            telegramId: TELEGRAM_ID,
-                            isRanked: false
-                        });
-                    } catch (error) {
-                        console.error('Arkadaşla oyun başlatma hatası:', error);
-                        showMessage('Bir hata oluştu. Lütfen tekrar deneyin.', true);
-                        showScreen('lobby');
-                    }
-                });
-                
-                console.log('Butonlar başarıyla ayarlandı');
+                return true;
             }
+            
+            // Dereceli Oyun Butonu
+            $('#createRankedBtn').on('click', () => handleGameButtonClick(true));
+
+            // Arkadaşla Oyun Butonu
+            $('#createCasualBtn').on('click', () => handleGameButtonClick(false));
 
             // Oda Katılımı
             $('#joinRoomBtn').on('click', function() {
