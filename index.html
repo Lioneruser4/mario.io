@@ -571,7 +571,7 @@
         
         // --------------- 3. SOCKET BAĞLANTI VE OYUN OLAYLARI ---------------
         
-        // Socket.IO bağlantısı - Basit ve doğrudan bağlantı
+        // Socket.IO bağlantısı - Doğrudan bağlantı
         const socket = io({
             reconnection: true,
             reconnectionAttempts: 3,
@@ -580,34 +580,21 @@
             transports: ['websocket', 'polling']
         });
 
-        // 3 saniye sonra loading ekranını kaldır
-        setTimeout(() => {
-            if ($('#loadingMessage').is(':visible')) {
-                $('#loadingMessage').fadeOut(300, function() {
-                    showScreen('lobby');
-                    fetchLeaderboard();
-                });
-            }
-        }, 3000);
+        // Sayfa yüklendiğinde doğrudan lobby ekranını göster
+        $(document).ready(function() {
+            $('#loadingMessage').hide();
+            showScreen('lobby');
+            fetchLeaderboard();
+        });
 
         // Bağlantı başarılı olduğunda
         socket.on('connect', () => {
             console.log('Sunucuya bağlandı!');
-            $('#loadingMessage').fadeOut(300, function() {
-                showScreen('lobby');
-                fetchLeaderboard();
-            });
         });
 
         // Hata durumunda
         socket.on('connect_error', (error) => {
             console.error('Bağlantı hatası:', error);
-            if ($('#loadingMessage').is(':visible')) {
-                $('#loadingMessage').fadeOut(300, function() {
-                    showScreen('lobby');
-                    fetchLeaderboard();
-                });
-            }
             fetchLeaderboard();
         });
 
