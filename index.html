@@ -2,31 +2,319 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Online Dama Oyunu</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 </head>
 <body>
-    <div id="lobby">
-        <h1>🎲 Online Dama</h1>
-        <div id="status">Sunucuya bağlanılıyor...</div>
-        <input type="text" id="roomIdInput" placeholder="Oda Kodunu Gir">
-        <button id="joinBtn">Odaya Katıl</button>
-        <button id="createBtn">Oda Oluştur</button>
-        <p id="roomCodeDisplay" style="margin-top: 10px; font-weight: bold;"></p>
-    </div>
-
-    <div id="game" style="display: none;">
-        <h2 id="turnIndicator">Sıra: Bekleniyor...</h2>
-        <div id="board">
+    <div id="app-container">
+        <div id="lobby" class="screen active">
+            <h1 class="logo-text">CHEC<span class="logo-span">KERS</span> ONLINE</h1>
+            <p id="status" class="info-text status-conn">Sunucuya bağlanılıyor...</p>
+            
+            <div id="auth-status">
+                <p id="player-name">Giriş Yapılıyor...</p>
             </div>
-        <button id="leaveBtn">Oyundan Ayrıl</button>
+            
+            <div class="lobby-controls">
+                <button id="createBtn" class="main-btn" disabled>
+                    <i class="fas fa-plus-circle"></i> Yeni Oda Kur
+                </button>
+                
+                <div class="join-group">
+                    <input type="text" id="roomIdInput" placeholder="Oda Kodunu Girin (4 Haneli)" maxlength="4">
+                    <button id="joinBtn" class="main-btn" disabled>
+                        <i class="fas fa-sign-in-alt"></i> Katıl
+                    </button>
+                </div>
+                
+                <p id="roomCodeDisplay" class="info-text"></p>
+            </div>
+
+            <script async src="https://telegram.org/js/telegram-widget.js?24" 
+                data-telegram-login="[BOT_KULLANICI_ADINIZ]" 
+                data-size="large" 
+                data-auth-url="https://mario-io-1.onrender.com/telegram-auth" 
+                data-request-access="write"></script>
+        </div>
+        
+        <div id="game" class="screen">
+            <div class="game-header">
+                <p id="playerRoleDisplay" class="role-text"></p>
+                <h2 id="turnIndicator">Sıra: Bekleniyor...</h2>
+                <button id="leaveBtn" class="secondary-btn"><i class="fas fa-times-circle"></i> Ayrıl</button>
+            </div>
+            
+            <div class="board-wrapper">
+                <div id="board">
+                    </div>
+            </div>
+        </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script>
-        // Sunucu adresiniz
-        const SERVER_URL = 'https://mario-io-1.onrender.com:10000'; 
+        // Sunucu adresiniz (Render URL'niz)
+        const SERVER_URL = 'https://mario-io-1.onrender.com'; 
+        const socket = io(SERVER_URL);
+
+        const lobbyDiv = document.getElementById('lobby');
+        const gameDiv = document.getElementById('game');
+        const statusDiv = document.getElementById('status');
+        const boardDiv = document.getElementById('board');
+        const turnIndicator = document.getElementById('turnIndicator');
+        const roomIdInput = document.getElementById('roomIdInput');
+        const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+        const createBtn = document.getElementById('createBtn');
+        const joinBtn = document.getElementById('joinBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        const playerNameDisplay = document.getElementById('player-name');
+        const playerRoleDisplay = document.getElementById('playerRoleDisplay');
+        
+        let currentRoomId = null;
+        let playerRole = null; 
+        let currentUsername = null; 
+        let currentBoard = null;
+        let selectedPiece = null; // Seçili taşın {r, c} konumu
+        
+        // --- TELEGRAM KULLANICI ADI ALMA ---
+        function getUsernameFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const username = urlParams.get('username');
+            if (username) {
+                currentUsername = username;
+                playerNameDisplay.textContent = `Hoş Geldin, @${username}`;
+                // Butonları aktif et
+                createBtn.disabled = false;
+                joinBtn.disabled = false;
+            } else {
+                playerNameDisplay.textContent = 'Lütfen Telegram Widget ile giriş yapın.';
+            }
+        }
+        getUsernameFromUrl(); // Sayfa yüklendiğinde çalıştır
+
+        // --- SOCKET BAĞLANTILARI ---
+
+        socket.on('connect', () => {
+            statusDiv.textContent = '✅ Sunucuya bağlandı.';
+            if (currentUsername) {
+                createBtn.disabled = false;
+                joinBtn.disabled = false;
+            }
+        });
+
+        socket.on('disconnect', () => {
+            statusDiv.textContent = '❌ Sunucu bağlantısı kesildi.';
+        });
+
+        socket.on('gameStart', (data) => {
+            lobbyDiv.classList.remove('active');
+            gameDiv.classList.add('active');
+            
+            const myColor = playerRole === 'player1' ? 'Siyah' : 'Beyaz';
+            const opponentName = playerRole === 'player1' ? data.player2Name : data.player1Name;
+            
+            playerRoleDisplay.textContent = `Siz: ${myColor} | Rakip: ${opponentName}`;
+            currentRoomId = data.roomId;
+            updateBoard(data.board);
+            updateTurn(data.turn);
+        });
+
+        socket.on('boardUpdate', (data) => {
+            updateBoard(data.board);
+            updateTurn(data.turn);
+        });
+
+        socket.on('opponentDisconnected', (message) => {
+            alert(message);
+            resetGame();
+        });
+
+        // --- LOBİ BUTONLARI ---
+
+        createBtn.addEventListener('click', () => {
+            socket.emit('createGame', { username: currentUsername }, (response) => {
+                if (response.success) {
+                    currentRoomId = response.roomId;
+                    playerRole = response.role;
+                    roomCodeDisplay.textContent = `Oda Kodunuz: ${currentRoomId}. Rakip bekleniyor...`;
+                } else {
+                    alert('Oda oluşturulamadı.');
+                }
+            });
+        });
+
+        joinBtn.addEventListener('click', () => {
+            const roomId = roomIdInput.value.trim();
+            if (roomId.length === 4) {
+                socket.emit('joinGame', { roomId: roomId, username: currentUsername }, (response) => {
+                    if (response.success) {
+                        playerRole = response.role;
+                        // Oyunun başlaması 'gameStart' ile sunucudan gelecek.
+                    } else {
+                        alert(response.message);
+                    }
+                });
+            } else {
+                alert('Lütfen 4 haneli oda kodu girin.');
+            }
+        });
+
+        leaveBtn.addEventListener('click', () => {
+            socket.disconnect();
+            socket.connect();
+            resetGame();
+        });
+
+        // --- OYUN ARAYÜZÜ VE HAREKET MANTIĞI ---
+
+        function handleSquareClick(event) {
+            const square = event.currentTarget;
+            const target = {
+                row: parseInt(square.dataset.row),
+                col: parseInt(square.dataset.col)
+            };
+
+            // Eğer bir taş seçiliyse ve tıklanan kare geçerli bir hamleyse
+            if (selectedPiece && square.classList.contains('possible-move')) {
+                // Hamleyi sunucuya gönder
+                socket.emit('move', { 
+                    roomId: currentRoomId, 
+                    from: selectedPiece, 
+                    to: target 
+                });
+                
+                // Seçimi temizle
+                clearSelections();
+            }
+        }
+        
+        function handlePieceClick(event) {
+            event.stopPropagation(); // Kare tıklamasını engelle
+            const piece = event.currentTarget;
+            const square = piece.parentElement;
+            const clickedPos = {
+                row: parseInt(square.dataset.row),
+                col: parseInt(square.dataset.col)
+            };
+
+            const isMyPiece = (playerRole === 'player1' && (currentBoard[clickedPos.row][clickedPos.col] === 1 || currentBoard[clickedPos.row][clickedPos.col] === 3)) ||
+                             (playerRole === 'player2' && (currentBoard[clickedPos.row][clickedCcol] === 2 || currentBoard[clickedPos.row][clickedPos.col] === 4));
+
+            if (currentTurn === playerRole && isMyPiece) {
+                clearSelections();
+                
+                // Yeni taşı seç
+                selectedPiece = clickedPos;
+                piece.classList.add('selected');
+
+                // Olası hamleleri hesapla ve vurgula (İSTEMCİ TARAFI GÖRSEL İÇİN BASİT KURALLAR)
+                // Bu kısım sunucuda da kontrol edildiği için burada sadece görsel geri bildirim verilir.
+                const pieceType = currentBoard[clickedPos.row][clickedPos.col];
+                const direction = (playerRole === 'player1') ? -1 : 1; // Siyah (Player 1) yukarı gider
+                const possibleMoves = getPossibleMoves(clickedPos, pieceType, direction);
+                
+                possibleMoves.forEach(move => {
+                    const targetSquare = document.querySelector(`[data-row="${move.r}"][data-col="${move.c}"]`);
+                    if (targetSquare) {
+                        targetSquare.classList.add('possible-move');
+                    }
+                });
+
+            } else {
+                clearSelections();
+            }
+        }
+        
+        function clearSelections() {
+            selectedPiece = null;
+            document.querySelectorAll('.piece.selected').forEach(p => p.classList.remove('selected'));
+            document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
+        }
+
+        // Basitleştirilmiş Hareket Hesaplayıcı (Sadece görsel geri bildirim için)
+        function getPossibleMoves(pos, type, dir) {
+            const moves = [];
+            const isKing = type === 3 || type === 4;
+
+            const check = (r, c) => {
+                if (r >= 0 && r < 8 && c >= 0 && c < 8 && currentBoard[r][c] === 0) {
+                    moves.push({ r, c });
+                }
+            };
+
+            // Normal hareketler
+            if (!isKing) {
+                check(pos.row + dir, pos.col - 1);
+                check(pos.row + dir, pos.col + 1);
+            } else {
+                check(pos.row - 1, pos.col - 1);
+                check(pos.row - 1, pos.col + 1);
+                check(pos.row + 1, pos.col - 1);
+                check(pos.row + 1, pos.col + 1);
+            }
+            
+            // Vurma hareketleri (Bu kısım çok daha karmaşıktır, basitleştirildi)
+            // İhmal edildi. Sunucuya bırakıldı.
+            return moves;
+        }
+        
+        // --- ARAYÜZ GÜNCELLEME ---
+
+        function updateBoard(board) {
+            currentBoard = board;
+            boardDiv.innerHTML = '';
+            clearSelections();
+            
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                    square.dataset.row = r;
+                    square.dataset.col = c;
+                    square.addEventListener('click', handleSquareClick); // Kare tıklama
+                    
+                    const pieceType = board[r][c];
+                    if (pieceType !== 0) {
+                        const piece = document.createElement('div');
+                        let pieceClass = '';
+                        let isKing = false;
+
+                        if (pieceType === 1 || pieceType === 3) pieceClass = 'black';
+                        if (pieceType === 2 || pieceType === 4) pieceClass = 'white';
+                        if (pieceType === 3 || pieceType === 4) isKing = true;
+                        
+                        piece.className = `piece ${pieceClass} ${isKing ? 'king' : ''}`;
+                        piece.addEventListener('click', handlePieceClick); // Taş tıklama
+                        square.appendChild(piece);
+                    }
+
+                    boardDiv.appendChild(square);
+                }
+            }
+        }
+
+        function updateTurn(turn) {
+            currentTurn = turn;
+            const isMyTurn = playerRole === turn;
+            
+            turnIndicator.textContent = isMyTurn ? 'SIRA SİZDE! 🟢' : 'Rakibinizin sırası... 🔴';
+            turnIndicator.className = isMyTurn ? 'turn-mine' : 'turn-opponent';
+        }
+
+        function resetGame() {
+            currentRoomId = null;
+            playerRole = null;
+            currentBoard = null;
+            
+            gameDiv.classList.remove('active');
+            lobbyDiv.classList.add('active');
+            roomCodeDisplay.textContent = '';
+            boardDiv.innerHTML = '';
+            turnIndicator.textContent = 'Sıra: Bekleniyor...';
+        }
     </script>
-    <script src="client.js"></script>
 </body>
 </html>
