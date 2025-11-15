@@ -853,25 +853,25 @@
         $(document).ready(function() {
             loadTelegramData(); 
 
-            // Eşleşme Başlatma - Bu butonlar artık kullanılmıyor
-            // $('#createRankedBtn, #createCasualBtn').on('click', function() {
-            //     const isRanked = $(this).data('ranked');
-            //     
-            //     if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
-            //         return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-            //     }
-
-            //     socket.emit('createRoom', { 
-            //         username: USERNAME, 
-                    telegramId: TELEGRAM_ID, 
-                    isRanked: isRanked 
-                });
+            // Eşleşme Başlatma
+            $('#createRankedBtn, #createCasualBtn').off('click').on('click', function() {
+                const isRanked = $(this).data('ranked');
                 
-                // Eğer casual ise, bekleme ekranı (waitScreen) açılacak (socket.on('roomCreated') ile)
-                // Eğer dereceliyse, kuyruk ekranı (queueScreen) açılacak (socket.on('queueEntered') ile)
+                if (isRanked && TELEGRAM_ID && TELEGRAM_ID.startsWith('GUEST_')) {
+                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+                }
+
+                // Oyun moduna göre işlem yap
+                if (isRanked) {
+                    // Dereceli oyun başlat
+                    startRankedMatch();
+                } else {
+                    // Özel oda oluştur
+                    createPrivateRoom();
+                }
             });
 
-            // Oda Katılımı (Aynı Kalır)
+            // Odaya Katılma
             $('#joinRoomBtn').on('click', function() {
                 const roomId = $('#roomIdInput').val().trim().toUpperCase();
                 if (roomId.length !== 4) {
