@@ -10,38 +10,37 @@ const server = http.createServer(app);
 // CORS ayarı her origin'den bağlantıya izin verir.
 const io = socketio(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
-const users = {}; 
-let rankedQueue = []; 
-const games = {}; 
+const users = {}; // Tüm kullanıcıların ID ve isimlerini tutar
+let rankedQueue = []; // Dereceli arama kuyruğu
+const games = {}; // Aktif oyun odaları
 
-// --- DAMA MANTIĞI FONKSİYONLARI (Aynı Kalır, Stabil) ---
+// --- DAMA MANTIĞI FONKSİYONLARI ---
+
 function initializeBoard() {
     const board = Array(8).fill(0).map(() => Array(8).fill(0));
+    // Beyaz (P2)
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 8; c++) {
-            if ((r + c) % 2 !== 0) board[r][c] = 2; // Beyaz (P2)
+            if ((r + c) % 2 !== 0) board[r][c] = 2; 
         }
     }
+    // Siyah (P1)
     for (let r = 5; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-            if ((r + c) % 2 !== 0) board[r][c] = 1; // Siyah (P1)
+            if ((r + c) % 2 !== 0) board[r][c] = 1; 
         }
     }
     return board;
 }
+
 function generateRoomId() {
     let roomId;
     do {
+        // 4 haneli rastgele kod
         roomId = Math.floor(1000 + Math.random() * 9000).toString();
     } while (games[roomId]);
     return roomId;
 }
-function getValidMoves(board, r, c, player) { /* ... (Önceki yanıttaki kod buraya gelir) ... */ return []; }
-function getForcedJumps(board, player) { /* ... (Önceki yanıttaki kod buraya gelir) ... */ return []; }
-function checkWinCondition(board, nextTurn) { /* ... (Önceki yanıttaki kod buraya gelir) ... */ return null; }
-function applyMove(game, from, to) { /* ... (Önceki yanıttaki kod buraya gelir) ... */ return { success: false, message: 'Kural hatası' }; }
-
-// --- SOCKET.IO BAĞLANTILARI ---
 
 function removeFromQueue(socketId) {
     const index = rankedQueue.indexOf(socketId);
@@ -64,7 +63,6 @@ function attemptMatchmaking() {
         const player1 = users[player1Id];
         const player2 = users[player2Id];
 
-        // Son bir kez null kontrolü
         if (!player1 || !player2) {
              attemptMatchmaking(); 
              return;
@@ -77,6 +75,7 @@ function attemptMatchmaking() {
 
         // OYUN OLUŞTURMA
         games[roomId] = {
+            roomId: roomId,
             player1Id: player1Id,
             player1Name: player1.username,
             player2Id: player2Id,
@@ -85,40 +84,54 @@ function attemptMatchmaking() {
             turn: 'player1'
         };
         
-        io.sockets.sockets.get(player1Id).join(roomId);
-        io.sockets.sockets.get(player2Id).join(roomId);
+        // Odalara katılım
+        io.sockets.sockets.get(player1Id)?.join(roomId);
+        io.sockets.sockets.get(player2Id)?.join(roomId);
 
-        // İstemcilere bildir ve oyunu başlat
+        // İstemcilere rolleri bildir
         io.to(player1Id).emit('matchFound', { roomId: roomId, role: 'player1' });
         io.to(player2Id).emit('matchFound', { roomId: roomId, role: 'player2' });
 
+        // Oyunu Başlat
         io.to(roomId).emit('gameStart', { 
+            roomId: roomId,
             board: games[roomId].board, 
             turn: games[roomId].turn,
             player1Name: player1.username,
             player2Name: player2.username
         });
 
-        // Kuyrukta kalanlar için tekrar dene
-        attemptMatchmaking(); 
+        attemptMatchmaking(); // Kuyrukta kalanlar için tekrar dene
+    } else {
+         // Kuyrukta sadece bir kişi kaldıysa durumunu güncelle
+         if(rankedQueue.length === 1 && users[rankedQueue[0]]) {
+             io.to(rankedQueue[0]).emit('matchMakingStatus', `Eşleşme aranıyor... Kuyrukta: 1 kişi.`);
+         }
     }
 }
 
+// Zorunlu vurma, geçerli hamleler, hamle uygulama ve kazanma kontrolü fonksiyonlarının 
+// tam içeriği burada varsayılır. Basitlik adına içleri boş bırakılmıştır.
+function getValidMoves(board, r, c, player) { return []; } 
+function getForcedJumps(board, player) { return []; } 
+function applyMove(game, from, to) { return { success: true, board: game.board, turn: 'player2', chained: false }; }
+function checkWinCondition(board, nextTurn) { return null; }
+
+
+// --- SOCKET.IO BAĞLANTILARI ---
+
 io.on('connection', (socket) => {
-    // Kullanıcı Kimliği Tanımlama
+    // Kullanıcı Kimliği Tanımlama (Telegram/Guest)
     socket.on('playerIdentity', (data) => {
         const { username } = data;
         users[socket.id] = { username: username, isSearching: false };
-        // Bağlantı başarılı olduğunda client'a lobi butonlarını aktif etmesi için bir olay gönderelim
-        socket.emit('readyToPlay'); 
+        socket.emit('readyToPlay'); // Butonları aktif et
     });
 
     // Dereceli Arama
     socket.on('findRankedMatch', () => {
         const user = users[socket.id];
-        if (!user) return;
-        
-        if (user.isSearching || rankedQueue.includes(socket.id)) return;
+        if (!user || user.isSearching || rankedQueue.includes(socket.id)) return;
         
         user.isSearching = true;
         rankedQueue.push(socket.id);
@@ -132,8 +145,8 @@ io.on('connection', (socket) => {
         const removed = removeFromQueue(socket.id);
         if (removed) {
             socket.emit('matchMakingCancelled', 'Eşleşme araması iptal edildi.');
+            attemptMatchmaking(); // Diğer oyuncuların durumunu güncelle
         } 
-        // İptal sonrası kuyruktaki diğerlerini tekrar kontrol etmeye gerek yok, onlar arama yapmaya devam etmeli.
     });
 
     // Oda Kurma
@@ -145,6 +158,7 @@ io.on('connection', (socket) => {
         const roomId = generateRoomId();
         
         const game = {
+            roomId: roomId,
             player1Id: socket.id,
             player1Name: user.username,
             player2Id: null,
@@ -174,8 +188,9 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         callback({ success: true, roomId: roomId, role: 'player2' });
 
-        // İki oyuncu da hazır, oyunu başlat
+        // Oyunu başlat
         io.to(roomId).emit('gameStart', { 
+            roomId: roomId,
             board: game.board, 
             turn: game.turn,
             player1Name: game.player1Name,
@@ -187,7 +202,33 @@ io.on('connection', (socket) => {
     socket.on('move', (data) => {
         const game = games[data.roomId];
         if (!game) return;
-        // ... (Kalan mantık önceki yanıttaki gibi devam eder) ...
+        // ... (Hamle uygulama ve tahta güncelleme mantığı) ...
+        // io.to(data.roomId).emit('boardUpdate', { board: game.board, turn: game.turn, chained: result.chained });
+    });
+
+    // YENİ: Oyuncu Oyunu Terk Etti (Ayrıl Butonu Fix)
+    socket.on('leaveGame', (data) => {
+        const { roomId } = data;
+        const game = games[roomId];
+
+        if (game) {
+            const isPlayer1 = game.player1Id === socket.id;
+            const opponentId = isPlayer1 ? game.player2Id : game.player1Id;
+
+            // Rakibe bilgi ver (Eğer bağlıysa)
+            if (opponentId && io.sockets.sockets.get(opponentId)) {
+                io.to(opponentId).emit('opponentDisconnected', 'Rakibiniz oyundan ayrıldı, kazandınız!');
+            }
+
+            // Odayı sil
+            delete games[roomId];
+            
+            // Oyuncuya lobiye dönme sinyali gönder
+            socket.emit('gameLeft');
+        } else {
+             // Oyun zaten bitmiş olabilir
+             socket.emit('gameLeft');
+        }
     });
 
     // Bağlantı Kesilmesi
@@ -195,11 +236,14 @@ io.on('connection', (socket) => {
         const user = users[socket.id];
         if (user) {
             removeFromQueue(socket.id);
+            // Oyun arama ve silme mantığı aynı kalır
             for (const roomId in games) {
                 if (games[roomId].player1Id === socket.id || games[roomId].player2Id === socket.id) {
-                    const opponentId = games[roomId].player1Id === socket.id ? games[roomId].player2Id : games[roomId].player1Id;
-                    if (io.sockets.sockets.get(opponentId)) {
-                        io.to(opponentId).emit('opponentDisconnected', 'Rakibiniz oyundan ayrıldı, kazandınız!');
+                    const game = games[roomId];
+                    const opponentId = game.player1Id === socket.id ? game.player2Id : game.player1Id;
+                    
+                    if (opponentId && io.sockets.sockets.get(opponentId)) {
+                        io.to(opponentId).emit('opponentDisconnected', 'Rakibiniz bağlantıyı kesti, kazandınız!');
                     }
                     delete games[roomId]; 
                     break;
