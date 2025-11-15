@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Türk Dama Oyunu</title>
+    <title>Online Türk Daması</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
     <style>
         /* --- Renkler ve Genel Stil --- */
@@ -16,9 +17,8 @@
             --dark-bg: #141c24; 
             --card-bg: #2c3e50; 
             --square-light: #f5f5dc; 
-            --square-dark: #8b4513;
-            --piece-size: 75%;
-            --board-size: min(90vw, 80vh);
+            --square-dark: #8b4513;  
+            --piece-size: 75%; 
         }
 
         body { 
@@ -26,245 +26,78 @@
             background: linear-gradient(135deg, var(--dark-bg), #1e2a38); 
             color: #fff; 
             margin: 0; 
-            min-height: 100vh;
-            padding: 20px 0;
+            height: 100vh; 
+            overflow: hidden; 
             display: flex; 
-            flex-direction: column;
             justify-content: center; 
             align-items: center; 
         }
         
         #app-container { 
-            width: 100%;
-            max-width: 800px;
-            padding: 20px; 
-            box-sizing: border-box; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center; 
-            align-items: center; 
+            width: 100%; height: 100%; 
+            padding: 10px; box-sizing: border-box; 
+            display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; 
         }
         
-        /* Oyun Tahtası ve Oyun Alanı */
-        #game {
+        /* Ekran Geçişleri */
+        .screen { display: none; width: 95%; max-width: 500px; }
+        .screen.active { 
             display: flex;
             flex-direction: column;
             align-items: center;
-            width: 100%;
-            max-width: var(--board-size);
+            animation: fadeIn 0.6s ease-out;
         }
-        
-        .board-wrapper {
-            width: 100%;
-            aspect-ratio: 1/1;
-            background: #654321;
-            padding: 10px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        }
-        
-        #board {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            grid-template-rows: repeat(8, 1fr);
-            width: 100%;
-            height: 100%;
-            gap: 2px;
-        }
-        
-        .square {
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .square.light { 
-            background-color: var(--square-light); 
-        }
-        
-        .square.dark { 
-            background-color: var(--square-dark); 
-        }
-        
-        .square.possible-move::after {
-            content: ''; 
-            position: absolute; 
-            width: 30%; 
-            height: 30%;
-            border-radius: 50%; 
-            background-color: rgba(46, 204, 113, 0.7); 
-            pointer-events: none; 
-            z-index: 5;
-            animation: pulse 1s infinite alternate;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(0.8); opacity: 0.7; }
-            100% { transform: scale(1.2); opacity: 1; }
-        }
+        @keyframes fadeIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
 
-        /* Taş Stilleri */
-        .piece {
-            width: 85%;
-            height: 85%;
-            border-radius: 50%;
-            position: relative;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            z-index: 2;
-        }
-        
-        .piece.black { 
-            background: #333; 
-            border: 3px solid #111;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-        }
-        
-        .piece.white { 
-            background: #fff; 
-            border: 3px solid #ddd;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
-        }
-        
-        .piece.selected { 
-            box-shadow: 0 0 0 3px var(--secondary-color), 0 0 20px var(--secondary-color);
-            transform: scale(1.05);
-            z-index: 3;
-        }
-        
-        .king::after {
-            content: '';
-            position: absolute;
-            width: 40%;
-            height: 40%;
-            background: gold;
-            border-radius: 50%;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
-        }
-        /* Oyun Başlık ve Kontroller */
-        .game-header {
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 10px 0;
-            border-bottom: 2px solid rgba(255,255,255,0.1);
-        }
-        
-        .game-title {
-            font-size: 2.5em;
-            margin: 0;
-            color: #fff;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-        
-        .turn-indicator {
-            font-size: 1.2em;
-            font-weight: bold;
-            padding: 8px 15px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 20px;
-            min-width: 150px;
+        /* --- GİRİŞ/LOBİ EKRANI --- */
+        #entry-screen { 
+            background: var(--card-bg); 
+            padding: 40px 30px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); 
+            border: 1px solid rgba(255, 255, 255, 0.1);
             text-align: center;
         }
-        
-        .turn-indicator.black-turn {
-            color: #333;
-            background: rgba(255,255,255,0.9);
-            box-shadow: 0 0 15px rgba(255,255,255,0.3);
-        }
-        
-        .turn-indicator.white-turn {
-            color: #fff;
-            background: rgba(0,0,0,0.7);
-            box-shadow: 0 0 15px rgba(255,255,255,0.1);
-        }
+        .logo-text { font-size: 3.5em; margin-bottom: 10px; font-weight: 900; letter-spacing: 2px; text-shadow: 3px 3px #000; }
+        .logo-span { color: var(--primary-color); }
         
         /* Bağlantı Durumu */
+        #status { color: var(--secondary-color); font-weight: bold; margin-top: 15px; transition: color 0.3s; }
+        #status.error { color: var(--primary-color); }
+
         /* Butonlar */
-        .btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 5px;
-            font-family: 'Roboto', sans-serif;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+        .main-btn { 
+            padding: 18px 30px; margin: 12px 0; 
+            width: 100%; 
+            border: none; border-radius: 10px; 
+            cursor: pointer; font-size: 1.3em; font-weight: 700; 
+            transition: all 0.3s cubic-bezier(.25,.8,.25,1); 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            text-transform: uppercase;
         }
+        .main-btn:hover:not(:disabled) { transform: translateY(-4px); box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5); }
+        .main-btn:disabled { background-color: #55606d; cursor: not-allowed; color: #bbb; transform: none; box-shadow: none; }
         
-        .btn-primary {
-            background: var(--primary-color);
+        /* Dereceli Buton Kırmızı */
+        #rankedBtn { 
+            background-color: var(--primary-color); 
+            color: white;
+            box-shadow: 0 6px 10px rgba(231, 76, 60, 0.4); 
+        }
+        #rankedBtn:hover:not(:disabled) { background-color: #c0392b; }
+
+        /* Oda Kur Butonu Mavi */
+        #createGameBtn {
+            background-color: var(--tertiary-color);
             color: white;
         }
-        
-        .btn-primary:hover {
-            background: #c0392b;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
-        }
-        
-        .btn-secondary {
-            background: var(--tertiary-color);
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #2980b9;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
-        }
-        
-        .controls {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            width: 100%;
-        }
+        #createGameBtn:hover:not(:disabled) { background-color: #2980b9; }
 
-        /* Responsive Tasarım */
-        @media (max-width: 768px) {
-            :root {
-                --board-size: 95vw;
-            }
-            
-            .game-header {
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .game-title {
-                font-size: 2em;
-            }
-            
-            .controls {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .btn {
-                width: 100%;
-                max-width: 300px;
-            }
-        }
-
-        /* Oyun Ekranı */
+        /* --- OYUN EKRANI (game) --- */
         #game {
-            width: 100%;
-            max-width: 800px;
+            justify-content: space-between; 
+            height: 98vh; 
             padding: 0;
             max-width: 550px;
         }
@@ -381,81 +214,99 @@
 </head>
 <body>
     <div id="app-container">
-        <div id="game" class="active">
-            <div class="game-header">
-                <h1 class="game-title">TÜRK DAMA OYUNU</h1>
-                <div id="turnIndicator" class="turn-indicator black-turn">Sıra: Siyah</div>
+        
+        <div id="entry-screen" class="screen active">
+            <h1 class="logo-text">TÜRK <span class="logo-span">DAMA</span></h1>
+            
+            <p id="player-name" style="font-weight: bold; color: var(--secondary-color); margin: 20px 0;">Giriş Yapılıyor...</p>
+            
+            <p id="status" class="info-text">Sunucuya bağlanılıyor...</p>
+            
+            <div class="lobby-controls" style="width: 100%; margin-top: 20px;">
+                <button id="rankedBtn" class="main-btn" disabled>
+                    <i class="fas fa-crown"></i> Dereceli Oyna
+                </button>
+
+                <button id="showRoomOptionsBtn" class="main-btn" disabled>
+                    <i class="fas fa-users"></i> Arkadaşla Oyna (Oda)
+                </button>
+            </div>
+        </div>
+        
+        <div id="game" class="screen">
+            <div id="opponent-card" class="player-info-card">
+                <i class="fas fa-user-circle"></i> <span id="opponentNameDisplay">Rakip Bekleniyor</span> 
+            </div>
+
+            <div id="game-header">
+                <h2 id="turnIndicator">Sıra: Bekleniyor...</h2>
+                <button id="leaveBtn" class="main-btn" style="padding: 10px 15px; font-size: 1em; background-color: var(--primary-color);">
+                    <i class="fas fa-times"></i> Ayrıl
+                </button>
             </div>
             
             <div class="board-wrapper">
-                <div id="board"></div>
+                <div id="board">
+                    </div>
             </div>
-            
-            <div class="controls">
-                <button id="newGameBtn" class="btn btn-primary">
-                    <i class="fas fa-redo"></i> Yeni Oyun
+
+            <div id="my-card" class="player-info-card">
+                <i class="fas fa-chess-pawn"></i> <span id="myNameDisplay">Siz</span>
+            </div>
+        </div>
+
+        <div id="roomOptionsOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3>Arkadaşla Oyna</h3>
+                <button id="createGameBtn" class="main-btn" style="background-color: var(--tertiary-color);">
+                    <i class="fas fa-plus-circle"></i> Oda Kur
                 </button>
-                <button id="rulesBtn" class="btn btn-secondary">
-                    <i class="fas fa-question-circle"></i> Oyun Kuralları
+                <button id="showJoinBtn" class="main-btn" style="background-color: var(--secondary-color);">
+                    <i class="fas fa-sign-in-alt"></i> Odaya Katıl
+                </button>
+                <button id="cancelRoomOptionsBtn" class="main-btn" style="background-color: #55606d; font-size: 1em;">
+                    <i class="fas fa-arrow-left"></i> Geri
+                </button>
+            </div>
+        </div>
+
+        <div id="createOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3><i class="fas fa-door-open"></i> Yeni Oda Kuruldu</h3>
+                <p class="info-text">Oda Kodunu Rakibine Gönder:</p>
+                <p id="currentRoomCode" class="info-text"><span>****</span></p>
+                <p id="createStatus" class="info-text">Rakip bekleniyor...</p>
+                <button id="cancelCreateBtn" class="main-btn" style="background-color: var(--primary-color); font-size: 1em;">
+                    <i class="fas fa-times"></i> İptal Et/Kapat
+                </button>
+            </div>
+        </div>
+
+        <div id="joinOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3><i class="fas fa-sign-in-alt"></i> Odaya Katıl</h3>
+                <input type="number" id="roomIdInput" placeholder="4 HANELİ KOD" maxlength="4">
+                <button id="joinBtn" class="main-btn" style="background-color: var(--secondary-color); margin-top: 15px;">
+                    <i class="fas fa-check"></i> Katıl
+                </button>
+                <button id="cancelJoinBtn" class="main-btn" style="background-color: #55606d; font-size: 1em;">
+                    <i class="fas fa-times"></i> İptal
+                </button>
+            </div>
+        </div>
+
+        <div id="matchmakingOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3><i class="fas fa-search"></i> Dereceli Eşleşme Aranıyor</h3>
+                <div class="spinner" style="border: 8px solid rgba(255, 255, 255, 0.1); border-top: 8px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                <p id="matchmakingStatusText" class="info-text" style="font-size: 1.2em;">Kuyrukta bekleniyor...</p>
+                <button id="cancelRankedBtn" class="main-btn" style="background-color: var(--primary-color); font-size: 1em;">
+                    <i class="fas fa-times"></i> Aramayı İptal Et
                 </button>
             </div>
         </div>
     </div>
     
-    <!-- Oyun Kuralları Modal -->
-    <div id="rulesModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h2>Türk Dama Oyun Kuralları</h2>
-            <div class="rules-list">
-                <div class="rule">
-                    <h3>Oyunun Amacı</h3>
-                    <p>Rakibin tüm taşlarını yemek veya hamle yapamaz duruma getirmek.</p>
-                </div>
-                <div class="rule">
-                    <h3>Taş Hareketleri</h3>
-                    <p>Taşlar sadece çapraz ileri hareket edebilir. Siyah taşlar aşağı, beyaz taşlar yukarı gider.</p>
-                </div>
-                <div class="rule">
-                    <h3>Taş Yeme</h3>
-                    <p>Rakip taşınızın üzerinden atlayarak yiyebilirsiniz. Yeme zorunluluğu vardır.</p>
-                </div>
-                <div class="rule">
-                    <h3>Kral Olma</h3>
-                    <p>Karşı tarafa ulaşan taş kral olur. Krallar hem ileri hem geri gidebilir.</p>
-                </div>
-            </div>
-            <button id="closeRulesBtn" class="btn btn-primary">Kapat</button>
-        </div>
-    </div>
-    
-    <script>
-        // Oyun Kuralları Modal İşlemleri
-        const rulesModal = document.getElementById('rulesModal');
-        const rulesBtn = document.getElementById('rulesBtn');
-        const closeRulesBtn = document.getElementById('closeRulesBtn');
-        
-        rulesBtn.addEventListener('click', () => {
-            rulesModal.style.display = 'flex';
-        });
-        
-        closeRulesBtn.addEventListener('click', () => {
-            rulesModal.style.display = 'none';
-        });
-        
-        // Modal dışına tıklandığında kapat
-        window.addEventListener('click', (e) => {
-            if (e.target === rulesModal) {
-                rulesModal.style.display = 'none';
-            }
-        });
-        
-        // Yeni Oyun Butonu
-        document.getElementById('newGameBtn').addEventListener('click', () => {
-            if (window.confirm('Yeni bir oyuna başlamak istediğinize emin misiniz?')) {
-                startNewGame();
-            }
-        });
-    </script>
     <script src="game.js"></script> 
 </body>
 </html>
