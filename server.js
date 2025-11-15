@@ -1,104 +1,153 @@
-// Sunucunuzun 10000 portunda çalışacağını varsayarak
-const PORT = process.env.PORT || 10000;
+// Sunucu Bağımlılıkları: npm install express socket.io
 const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
 
+// Render genellikle kendi PORT değişkenini atar
+const PORT = process.env.PORT || 3000; 
+
 const app = express();
 const server = http.createServer(app);
-// CORS (Farklı Kaynak İsteği) ayarı, GitHub Pages'ten gelen isteklere izin vermeli
+
+// **ÇOK ÖNEMLİ:** CORS Ayarı - GitHub Pages'ten gelen isteklere izin verir
 const io = socketio(server, {
     cors: {
-        origin: "*", // GitHub Pages dahil tüm kaynaklardan gelen isteklere izin ver
+        // İstemcinizin (GitHub Pages) tam URL'sini buraya yazın veya "*" kullanın
+        origin: "*", 
         methods: ["GET", "POST"]
     }
 });
 
 // Oda durumlarını tutacak ana nesne
-const games = {}; // Örnek: { 'odaKodu': { player1Id: '...', player2Id: '...', board: [], turn: '...' } }
+const games = {}; // { 'odaKodu': { player1Id: '...', player2Id: '...', board: [], turn: 'player1' } }
+
+// --- DAMA MANTIĞI FONKSİYONLARI (BASİTLEŞTİRİLMİŞ) ---
+function initializeBoard() {
+    // 8x8 tahta. 1: Siyah (Player 1), 2: Beyaz (Player 2), 3: Siyah Kral, 4: Beyaz Kral
+    const board = Array(8).fill(0).map(() => Array(8).fill(0));
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 8; c++) {
+            if ((r + c) % 2 !== 0) board[r][c] = 2; // Beyazlar (Üst)
+        }
+    }
+    for (let r = 5; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if ((r + c) % 2 !== 0) board[r][c] = 1; // Siyahlar (Alt)
+        }
+    }
+    return board;
+}
+
+// Sunucunun hareketleri kontrol edeceği ve uygulayacağı (ÇOK BASİT) fonksiyon
+function applyMove(board, from, to, pieceType) {
+    // Burada tüm kurallar (çapraz hareket, zıplama, kral olma) kontrol edilmeli.
+    // Şimdilik sadece konumu değiştiriyoruz.
+    
+    // Zıplama/Vurma kontrolü (eğer bir taş zıplandıysa, o taşı sil)
+    const jumpedRow = (from.row + to.row) / 2;
+    const jumpedCol = (from.col + to.col) / 2;
+    if (Math.abs(from.row - to.row) === 2) {
+        board[jumpedRow][jumpedCol] = 0; // Vurulan taşı sil
+    }
+
+    // Taşı yeni konuma taşı
+    let newPieceType = pieceType;
+    
+    // Kral olma kontrolü
+    if (pieceType === 1 && to.row === 0) newPieceType = 3; // Siyah kral
+    if (pieceType === 2 && to.row === 7) newPieceType = 4; // Beyaz kral
+
+    board[to.row][to.col] = newPieceType;
+    board[from.row][from.col] = 0;
+    
+    return board;
+}
+// -------------------------------------------------------------------
+
 
 io.on('connection', (socket) => {
     console.log(`Yeni oyuncu bağlandı: ${socket.id}`);
 
-    // --- Lobi ve Oda Oluşturma/Katılma Mantığı ---
-    socket.on('createGame', (callback) => {
-        // Rastgele 4 haneli bir oda kodu oluştur
+    // --- ODA OLUŞTURMA ---
+    socket.on('createGame', (data, callback) => {
         const roomId = Math.floor(1000 + Math.random() * 9000).toString();
         
-        // Odayı oluştur ve oyuncuyu ilk oyuncu olarak ekle
         games[roomId] = {
             player1Id: socket.id,
+            player1Name: data.username || 'Oyuncu 1',
             player2Id: null,
-            board: initializeBoard(), // Dama tahtasını başlatma fonksiyonunuz
-            turn: 'player1' // İlk kimin başlayacağı
+            board: initializeBoard(),
+            turn: 'player1'
         };
         
         socket.join(roomId);
-        // İstemciye oda kodunu gönder
         callback({ success: true, roomId: roomId, role: 'player1' });
-        console.log(`Oda oluşturuldu: ${roomId} (Oyuncu 1: ${socket.id})`);
+        console.log(`Oda ${roomId} oluşturuldu.`);
     });
 
-    socket.on('joinGame', (roomId, callback) => {
+    // --- ODAYA KATILMA ---
+    socket.on('joinGame', (data, callback) => {
+        const { roomId, username } = data;
         const game = games[roomId];
 
-        if (!game) {
-            callback({ success: false, message: 'Oda bulunamadı.' });
-            return;
-        }
-        if (game.player2Id) {
-            callback({ success: false, message: 'Oda dolu.' });
+        if (!game || game.player2Id) {
+            callback({ success: false, message: 'Oda dolu veya bulunamadı.' });
             return;
         }
         
-        // Odaya katıl ve ikinci oyuncu olarak ekle
         game.player2Id = socket.id;
+        game.player2Name = username || 'Oyuncu 2';
         socket.join(roomId);
         callback({ success: true, roomId: roomId, role: 'player2' });
 
-        // İki oyuncu da hazır. Oyunu başlatma mesajını gönder.
-        io.to(roomId).emit('gameStart', { board: game.board, turn: game.turn });
-        console.log(`Oyuncu ${socket.id} odaya katıldı: ${roomId} (Oyuncu 2)`);
+        // İki oyuncu da hazır. Oyunu başlat.
+        io.to(roomId).emit('gameStart', { 
+            board: game.board, 
+            turn: game.turn,
+            player1Name: game.player1Name,
+            player2Name: game.player2Name
+        });
     });
 
-    // --- Oyun İçi Mantık ---
+    // --- HAREKET ETME ---
     socket.on('move', (data) => {
         const { roomId, from, to } = data;
         const game = games[roomId];
         
         if (!game) return;
-        
-        // ******* ÖNEMLİ: SUNUCUDA HAREKET KONTROLÜ *******
-        // 1. Hareket sırası bu oyuncuda mı? (game.turn kontrolü)
-        // 2. Hareket dama kurallarına uygun mu? (Tahtada geçerlilik kontrolü)
-        // 3. Vurma zorunluluğu var mıydı?
-        // Bu kontrolleri sunucu tarafında yapmalısınız.
-        
+
         const isPlayer1 = game.player1Id === socket.id;
         const isPlayer2 = game.player2Id === socket.id;
 
-        // Geçerli bir hamle olduğu varsayılırsa:
-        // game.board = applyMove(game.board, from, to); // Tahtayı güncelle
-        // game.turn = game.turn === 'player1' ? 'player2' : 'player1'; // Sırayı değiştir
+        const pieceType = game.board[from.row][from.col];
+        
+        // Sıra ve Taş Kontrolü
+        if (game.turn === 'player1' && !isPlayer1) return;
+        if (game.turn === 'player2' && !isPlayer2) return;
+        if (isPlayer1 && (pieceType !== 1 && pieceType !== 3)) return; // Siyah/Siyah Kral değil
+        if (isPlayer2 && (pieceType !== 2 && pieceType !== 4)) return; // Beyaz/Beyaz Kral değil
+        
+        // Gerçek Dama Kural Kontrolleri (Çok karmaşık, bu kısım tam kodda detaylandırılmalı)
 
-        // Odanın tüm üyelerine tahta durumunu ve sırayı bildir
+        // Hamleyi uygula
+        game.board = applyMove(game.board, from, to, pieceType);
+        game.turn = game.turn === 'player1' ? 'player2' : 'player1'; // Sırayı değiştir
+
+        // Odanın tüm üyelerine yeni durumu bildir
         io.to(roomId).emit('boardUpdate', { 
             board: game.board, 
             turn: game.turn 
         });
-
-        // Kazanma/Beraberlik kontrolü yapılabilir ve 'gameOver' eventi gönderilebilir
     });
 
-    // --- Bağlantı Kesilmesi ---
+    // --- BAĞLANTI KESİLMESİ ---
     socket.on('disconnect', () => {
-        console.log(`Oyuncu bağlantısı kesildi: ${socket.id}`);
         // Bağlantısı kesilen oyuncunun odasını bul ve diğer oyuncuya haber ver
         for (const roomId in games) {
             if (games[roomId].player1Id === socket.id || games[roomId].player2Id === socket.id) {
-                // Odanın diğer oyuncusuna 'opponentDisconnected' eventini gönder
-                socket.to(roomId).emit('opponentDisconnected', 'Rakibiniz oyundan ayrıldı.');
-                delete games[roomId]; // Odayı sil
+                // Diğer oyuncuya haber ver
+                socket.to(roomId).emit('opponentDisconnected', 'Rakibiniz oyundan ayrıldı, kazandınız!');
+                delete games[roomId]; 
                 console.log(`Oda ${roomId} silindi.`);
                 break;
             }
@@ -106,23 +155,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// Sizin Render sunucunuz 10000 portunda çalışmalı.
 server.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
-
-// Tahta Başlatma Örneği (Bu fonksiyonu kurallara göre detaylı yazmalısınız)
-function initializeBoard() {
-    // 8x8 bir dama tahtası dizisi döndürün.
-    // Örnek: 0: Boş, 1: Oyuncu 1 taşı, 2: Oyuncu 2 taşı
-    return [
-        [0, 2, 0, 2, 0, 2, 0, 2],
-        [2, 0, 2, 0, 2, 0, 2, 0],
-        [0, 2, 0, 2, 0, 2, 0, 2],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [1, 0, 1, 0, 1, 0, 1, 0],
-        [0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0, 1, 0]
-    ];
-}
