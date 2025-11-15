@@ -1,8 +1,8 @@
 // game.js
 // Bu kod, tarayıcıda çalışır.
 
-// ⚠️ BURAYI KENDİ ÇALIŞAN SUNUCU ADRESİNİZLE DEĞİŞTİRİN!
-const SERVER_URL = 'http://localhost:3000'; // Yerel test için 3000 portunu kullanın
+// ⚠️ Node.js sunucunuzun bu adreste çalıştığından emin olun.
+const SERVER_URL = 'http://localhost:3000'; 
 const socket = io(SERVER_URL);
 
 // --- DOM Elementleri ---
@@ -39,7 +39,7 @@ let currentBoard = null;
 let currentTurn = null;
 let currentUsername = null; 
 let selectedPiece = null; 
-let possibleMoves = []; // Sunucudan gelen geçerli hamleler (Tüm koordinatlar)
+let possibleMoves = []; 
 
 // --- Kullanıcı Adı Yönetimi ---
 function generateGuestName() {
@@ -121,13 +121,12 @@ function clearSelections() {
     document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
 }
 
-function updateBoard(board) {
+function updateBoard(board, forcedSelection = null) {
     currentBoard = board;
     boardDiv.innerHTML = '';
     
-    // Tahtayı yeniden oluştururken, önceki seçimi koruyamayız, bu yüzden sıfırlarız.
-    // Ancak zincirleme vurmada seçili taşı korumak için, selectedPiece'in içeriğini kaybetmeyiz.
-    const tempSelected = selectedPiece;
+    // Eğer zorunlu seçim varsa (zincirleme vurma), mevcut seçimi koru.
+    const tempSelected = forcedSelection || selectedPiece;
     clearSelections();
 
     for (let r = 0; r < 8; r++) {
@@ -155,7 +154,7 @@ function updateBoard(board) {
                 piece.innerHTML = kingIcon;
                 piece.addEventListener('click', handlePieceClick);
                 
-                // Eğer tahta güncellenirken bir taş seçili kalmalıysa (zincirleme vurma)
+                // Seçili taşı yeniden işaretle
                 if (tempSelected && tempSelected.row === r && tempSelected.col === c) {
                      piece.classList.add('selected');
                      selectedPiece = tempSelected; // Seçili taşı geri yükle
@@ -184,7 +183,6 @@ function updateTurn(turn) {
 }
 
 function highlightMoves(moves) {
-    // Sadece sunucudan gelen geçerli hamleleri vurgula
     document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
     
     moves.forEach(move => {
@@ -306,34 +304,22 @@ socket.on('gameStart', (data) => {
     }
 });
 
-// KRİTİK DÜZELTME: Sunucudan hamle listesi geldiğinde
 socket.on('possibleMoves', (moves) => {
-     // Sunucudan gelen hamle listesini kaydet
      possibleMoves = moves; 
-     // Hamleleri tahta üzerinde işaretle
      highlightMoves(moves);
 });
 
 
 socket.on('boardUpdate', (data) => {
-    // Hamle yapıldıktan sonra tahtayı güncelle
-    // Eğer zincirleme vurma varsa, tahtayı güncelledikten sonra seçili taşı tekrar işaretleyip hamleleri göster
-    updateBoard(data.board);
+    updateBoard(data.board, data.chained ? data.to : null);
     updateTurn(data.turn);
 
     if (data.chained) {
          statusDiv.textContent = 'ZİNCİRLEME VURMA! Aynı taşla devam edin.';
-         // Zincirleme vurmada taş hala seçili kalmalıdır.
-         const pieceElement = document.querySelector(`[data-row="${data.to.row}"][data-col="${data.to.col}"] .piece`);
-         if (pieceElement) {
-            selectedPiece = data.to;
-            pieceElement.classList.add('selected');
-            // Yeni pozisyon için geçerli hamleleri tekrar iste
-            socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
-         } else {
-             // Taş bir nedenden dolayı görünmezse, sıfırla.
-             clearSelections(); 
-         }
+         const newSelectedPos = data.to;
+         selectedPiece = newSelectedPos;
+         // Yeni pozisyon için geçerli hamleleri tekrar iste
+         socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
     } else {
          clearSelections();
     }
@@ -358,10 +344,10 @@ socket.on('gameLeft', () => {
 
 socket.on('invalidMove', (data) => {
     alert("Geçersiz Hamle: " + data.message);
-    clearSelections(); // Hata varsa seçimi kaldır
+    clearSelections(); 
 });
 
-// --- BUTON OLAYLARI (Aynı kaldı) ---
+// --- BUTON OLAYLARI (Lobi Kontrolleri) ---
 rankedBtn.addEventListener('click', () => {
     toggleOverlay(matchmakingOverlay, true);
     matchmakingStatusText.textContent = 'Eşleşme aranıyor...';
