@@ -2,7 +2,7 @@
 // Bu kod, tarayıcıda çalışır.
 
 // ⚠️ BURAYI KENDİ ÇALIŞAN SUNUCU ADRESİNİZLE DEĞİŞTİRİN!
-const SERVER_URL = 'https://mario-io-1.onrender.com'; 
+const SERVER_URL = 'http://localhost:3000'; // Yerel test için 3000 portunu kullanın
 const socket = io(SERVER_URL);
 
 // --- DOM Elementleri ---
@@ -30,6 +30,8 @@ const joinBtn = document.getElementById('joinBtn');
 const matchmakingOverlay = document.getElementById('matchmakingOverlay');
 const myCard = document.getElementById('my-card');
 const opponentCard = document.getElementById('opponent-card');
+const matchmakingStatusText = document.getElementById('matchmakingStatusText');
+
 
 let currentRoomId = null;
 let playerRole = null;
@@ -37,7 +39,7 @@ let currentBoard = null;
 let currentTurn = null;
 let currentUsername = null; 
 let selectedPiece = null; 
-let possibleMoves = []; // Sunucudan gelen geçerli hamleler
+let possibleMoves = []; // Sunucudan gelen geçerli hamleler (Tüm koordinatlar)
 
 // --- Kullanıcı Adı Yönetimi ---
 function generateGuestName() {
@@ -122,11 +124,13 @@ function clearSelections() {
 function updateBoard(board) {
     currentBoard = board;
     boardDiv.innerHTML = '';
-    clearSelections();
+    clearSelections(); // Tahta her güncellendiğinde seçim ve vurgulamaları sıfırla
     
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const square = document.createElement('div');
+            // Dama tahtasında tüm kareler kullanılabilir, ancak Türk damasında genelde koyu kareler kullanılır.
+            // Oyun mantığında tüm kareleri kullandığımız için görselde de hepsini kullanabiliriz (Klasik dama tahtası rengi).
             const isDark = (r + c) % 2 !== 0; 
             square.className = `square ${isDark ? 'dark' : 'light'}`;
             square.dataset.row = r;
@@ -147,6 +151,7 @@ function updateBoard(board) {
 
                 piece.className = `piece ${pieceClass} ${isKing ? 'king' : ''}`;
                 piece.innerHTML = kingIcon;
+                // Taşa tıklama olayını ekle
                 piece.addEventListener('click', handlePieceClick);
                 square.appendChild(piece);
             }
@@ -173,6 +178,7 @@ function updateTurn(turn) {
 function highlightMoves(moves) {
     // Sadece sunucudan gelen geçerli hamleleri vurgula
     document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
+    
     moves.forEach(move => {
         const square = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
         if (square) {
@@ -182,7 +188,8 @@ function highlightMoves(moves) {
 }
 
 function handlePieceClick(event) {
-    event.stopPropagation();
+    event.stopPropagation(); // Square click olayını engelle
+    
     const piece = event.currentTarget;
     const square = piece.parentElement;
     const clickedPos = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
@@ -214,13 +221,19 @@ function handleSquareClick(event) {
     const target = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
 
     // Eğer bir taş seçiliyse ve tıklanan kare geçerli hamlelerden biriyse
-    if (selectedPiece && square.classList.contains('possible-move')) {
+    // possibleMoves dizisinde bu hedef koordinatın olup olmadığını kontrol et.
+    const isPossible = possibleMoves.some(move => move.row === target.row && move.col === target.col);
+
+    if (selectedPiece && isPossible) {
         // Hamle isteğini sunucuya gönder
         socket.emit('move', { 
             roomId: currentRoomId, 
             from: selectedPiece, 
             to: target 
         });
+        clearSelections();
+    } else {
+        // Geçerli hamle olmayan yere tıklandıysa, seçimi kaldır.
         clearSelections();
     }
 }
@@ -264,7 +277,7 @@ socket.on('gameStart', (data) => {
     
     document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
 
-    currentRoomId = data.roomId;
+    // Rolü belirle (matchFound'dan gelmiş olabilir ama burada kesinleştirelim)
     playerRole = data.player1Name === currentUsername ? 'player1' : 'player2';
     
     const isPlayer1 = playerRole === 'player1';
@@ -279,6 +292,7 @@ socket.on('gameStart', (data) => {
     updateBoard(data.board);
     updateTurn(data.turn);
 
+    // Tahtayı kendi bakış açımıza göre çevir
     if (!isPlayer1) {
         boardDiv.classList.add('player2-view');
     } else {
@@ -286,19 +300,23 @@ socket.on('gameStart', (data) => {
     }
 });
 
-// Sunucudan hamle listesi geldiğinde
+// KRİTİK DÜZELTME: Sunucudan hamle listesi geldiğinde
 socket.on('possibleMoves', (moves) => {
-     possibleMoves = moves;
+     // Sunucudan gelen hamle listesini kaydet
+     possibleMoves = moves; 
+     // Hamleleri tahta üzerinde işaretle
      highlightMoves(moves);
 });
 
 
 socket.on('boardUpdate', (data) => {
+    // Hamle yapıldıktan sonra tahtayı güncelle
     updateBoard(data.board);
     updateTurn(data.turn);
     if (data.chained) {
          statusDiv.textContent = 'ZİNCİRLEME VURMA! Aynı taşla devam edin.';
-         // Zincirleme vurmada taş seçimi değişmez, yeni hamleleri göstermek için tekrar istek atılabilir (şimdilik basit tutuyoruz).
+         // Zincirleme vurmada otomatik olarak tekrar hamle isteği yapabiliriz (opsiyonel)
+         // Şu anki koddaki gibi kullanıcıdan tekrar taşa tıklamasını beklemek de geçerli.
     }
 });
 
@@ -324,7 +342,7 @@ socket.on('invalidMove', (data) => {
     clearSelections(); // Hata varsa seçimi kaldır
 });
 
-// --- BUTON OLAYLARI ---
+// --- BUTON OLAYLARI (Aynı kaldı) ---
 rankedBtn.addEventListener('click', () => {
     toggleOverlay(matchmakingOverlay, true);
     matchmakingStatusText.textContent = 'Eşleşme aranıyor...';
