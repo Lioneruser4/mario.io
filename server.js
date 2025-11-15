@@ -9,6 +9,9 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 
+// Statik dosyaları (game.js dahil) sunabilmek için
+app.use(express.static(__dirname));
+
 // CORS ayarı her origin'den bağlantıya izin verir.
 const io = socketio(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
@@ -237,16 +240,13 @@ function applyMove(game, from, to) {
 
     // --- Hamle Geçerli: Uygula ---
     
-    let target = null;
-    // Vurma işlemini bul
+    // 3. Vurma işlemini gerçekleştir (Eğer varsa)
     if (validMove.isHit) {
-        // Vurulan taşın koordinatları (hamle anında buradan silinecek)
         const hitMove = getPossibleMoves(game, from.row, from.col).find(m => 
             m.row === to.row && m.col === to.col && m.isHit
         );
         if (hitMove) {
-            target = { row: hitMove.targetR, col: hitMove.targetC };
-            board[target.row][target.col] = 0; // Rakip taşı tahtadan sil
+            board[hitMove.targetR][hitMove.targetC] = 0; // Rakip taşı tahtadan sil
         } else {
              // Bu durum olmamalı, ama korunma amaçlı
              return { success: false, message: 'Vurma hamlesi geçersiz.' };
@@ -306,14 +306,30 @@ function checkWinCondition(game) {
 
 io.on('connection', (socket) => {
     
-    // Kullanıcı Kimliği Tanımlama
     socket.on('playerIdentity', (data) => {
         const { username } = data;
         users[socket.id] = { username: username, isSearching: false };
         socket.emit('readyToPlay');
     });
 
-    // ... (Diğer lojiği aynen koru)
+    socket.on('findRankedMatch', () => {
+        const user = users[socket.id];
+        if (!user || user.isSearching || rankedQueue.includes(socket.id)) return;
+        
+        user.isSearching = true;
+        rankedQueue.push(socket.id);
+        socket.emit('matchMakingStatus', `Eşleşme aranıyor... Kuyrukta: ${rankedQueue.length} kişi.`);
+
+        attemptMatchmaking(); 
+    });
+
+    socket.on('cancelMatchmaking', () => {
+        const removed = removeFromQueue(socket.id);
+        if (removed) {
+            socket.emit('matchMakingCancelled', 'Eşleşme araması iptal edildi.');
+            attemptMatchmaking(); 
+        } 
+    });
 
     // İstemciden Seçilen Taş İçin Geçerli Hamle İstek
     socket.on('getPossibleMoves', (data) => {
@@ -374,17 +390,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ... (Geri kalan bağlantı ve bağlantı kesilme lojiği aynen koru)
-    
-    // --- Diğer Lobi/Bağlantı Lojiklerini Koru ---
-    socket.on('findRankedMatch', () => {
-        // ... (Kodu koru)
-    });
-    socket.on('cancelMatchmaking', () => {
-        // ... (Kodu koru)
-    });
     socket.on('createGame', (callback) => {
-        // ... (Kodu koru)
         const user = users[socket.id];
         if (!user) return callback({ success: false, message: 'Kimlik yüklenmedi.' });
         removeFromQueue(socket.id);
@@ -402,8 +408,8 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         callback({ success: true, roomId: roomId, role: 'player1' });
     });
+
     socket.on('joinGame', (data, callback) => {
-        // ... (Kodu koru)
         const { roomId } = data;
         const user = users[socket.id];
         const game = games[roomId];
@@ -423,8 +429,8 @@ io.on('connection', (socket) => {
             player2Name: game.player2Name
         });
     });
+
     socket.on('leaveGame', (data) => {
-        // ... (Kodu koru)
         const { roomId } = data;
         const game = games[roomId];
         if (game) {
@@ -441,7 +447,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // ... (Kodu koru)
         const user = users[socket.id];
         if (user) {
             removeFromQueue(socket.id);
@@ -462,5 +467,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor. (Ctrl+C ile durdurun)`);
+    console.log(`✅ Sunucu ${PORT} portunda çalışıyor. Tarayıcınızda http://localhost:${PORT} adresini açın.`);
 });
