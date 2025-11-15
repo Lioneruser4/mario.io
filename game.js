@@ -28,25 +28,63 @@ const elements = {
 
 // Socket.IO bağlantısı
 function initializeSocket() {
+    console.log('Socket bağlantısı başlatılıyor...');
+    
     // Eğer zaten bir socket bağlantısı varsa kapat
     if (gameState.socket) {
+        console.log('Mevcut socket bağlantısı kapatılıyor...');
         gameState.socket.disconnect();
     }
     
+    // Sunucu URL'sini belirle
+    const serverUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3000' 
+        : window.location.origin;
+    
+    console.log('Sunucuya bağlanılıyor:', serverUrl);
+    
     // Yeni bir socket bağlantısı oluştur
-    const serverUrl = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
     gameState.socket = io(serverUrl, {
+        path: '/socket.io/',
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
         timeout: 20000,
+        autoConnect: true,
         transports: ['websocket', 'polling'],
         upgrade: true,
         forceNew: true,
-        withCredentials: true,
+        withCredentials: false,
         extraHeaders: {
             'Access-Control-Allow-Origin': '*'
         }
+    });
+    
+    // Hata ayıklama için olay dinleyicileri ekle
+    gameState.socket.on('connect', () => {
+        console.log('Sunucuya başarıyla bağlandı. Socket ID:', gameState.socket.id);
+        updateStatus('Sunucuya bağlandı');
+    });
+    
+    gameState.socket.on('connect_error', (error) => {
+        console.error('Bağlantı hatası:', error);
+        updateStatus('Bağlantı hatası: ' + error.message, true);
+    });
+    
+    gameState.socket.on('disconnect', (reason) => {
+        console.log('Bağlantı kesildi. Sebep:', reason);
+        updateStatus('Sunucu bağlantısı kesildi. Tekrar bağlanılıyor...', true);
+    });
+    
+    gameState.socket.on('reconnect_attempt', () => {
+        console.log('Yeniden bağlanılmaya çalışılıyor...');
+        updateStatus('Sunucuya yeniden bağlanılıyor...');
+    });
+    
+    gameState.socket.on('reconnect_failed', () => {
+        console.error('Yeniden bağlantı başarısız oldu');
+        updateStatus('Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.', true);
     });
     
     // Socket olaylarını dinle
