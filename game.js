@@ -16,11 +16,12 @@ const elements = {
     loadingText: document.getElementById('loadingText'),
     status: document.getElementById('status'),
     gameScreen: document.getElementById('gameScreen'),
-    rankedButton: document.getElementById('rankedButton'),
-    privateButton: document.getElementById('privateButton'),
+    mainMenu: document.getElementById('mainMenu'),
+    createGameBtn: document.getElementById('createGameBtn'),
     roomCodeInput: document.getElementById('roomCodeInput'),
     joinButton: document.getElementById('joinButton'),
     roomCodeDisplay: document.getElementById('roomCodeDisplay'),
+    roomInfo: document.getElementById('roomInfo'),
     opponentInfo: document.getElementById('opponentInfo'),
     playerInfo: document.getElementById('playerInfo')
 };
@@ -58,18 +59,84 @@ function initializeSocket() {
 function setupSocketListeners() {
     const socket = gameState.socket;
     
-    // Sunucuya bağlanıldığında
+    // Bağlantı başarılı olduğunda
     socket.on('connect', () => {
-        console.log('Sunucuya bağlandı:', socket.id);
-        gameState.playerId = socket.id;
-        updateStatus('Sunucuya bağlanıldı');
-        showLoading(false);
+        console.log('Sunucuya bağlandı');
+        updateStatus('Sunucuya bağlandı');
     });
     
-    // Bağlantı hatası
+    // Bağlantı koptuğunda
+    socket.on('disconnect', () => {
+        updateStatus('Sunucu bağlantısı koptu. Tekrar bağlanılıyor...', true);
+    });
+    
+    // Bağlantı hatası olduğunda
     socket.on('connect_error', (error) => {
         console.error('Bağlantı hatası:', error);
-        updateStatus('Sunucuya bağlanılamadı. Tekrar deneniyor...');
+        updateStatus('Bağlantı hatası: ' + error.message, true);
+    });
+    
+    // Oyun başlatıldığında
+    socket.on('gameStart', (data) => {
+        gameState.roomId = data.roomCode;
+        gameState.playerNumber = data.playerColor;
+        gameState.opponent = {
+            name: data.opponentName,
+            color: data.playerColor === 'black' ? 'white' : 'black'
+        };
+        gameState.isGameStarted = true;
+        
+        // Oyun ekranını göster
+        document.getElementById('mainMenu').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'block';
+        
+        // Oyun tahtasını güncelle
+        updateGameBoard(data.board);
+        updatePlayerInfo();
+        
+        updateStatus(`Oyun başladı! Sıra: ${data.turn === gameState.playerNumber ? 'Sizde' : 'Rakibinizde'}`);
+    });
+    
+    // Hamle yapıldığında
+    socket.on('moveMade', (data) => {
+        updateGameBoard(data.board);
+        updateStatus(`Sıra ${data.turn === gameState.playerNumber ? 'Sizde' : 'Rakibinizde'}`);
+    });
+    
+    // Oyun bittiğinde
+    socket.on('gameOver', (data) => {
+        let message = '';
+        if (data.winner === 'draw') {
+            message = 'Oyun berabere bitti!';
+        } else if (data.winner === gameState.playerNumber) {
+            message = 'Tebrikler, kazandınız!';
+        } else {
+            message = 'Maalesef kaybettiniz.';
+        }
+        
+        updateStatus(message);
+        alert(message);
+        
+        // Ana menüye dön butonu göster
+        const backButton = document.createElement('button');
+        backButton.textContent = 'Ana Menü';
+        backButton.className = 'btn btn-primary mt-4';
+        backButton.onclick = () => {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('mainMenu').style.display = 'flex';
+            resetGame();
+        };
+        
+        const gameStatus = document.getElementById('gameStatus');
+        gameStatus.innerHTML = '';
+        gameStatus.appendChild(backButton);
+    });
+    
+    // Hata mesajları
+    socket.on('error', (error) => {
+        updateStatus('Hata: ' + error, true);
+        elements.createGameBtn.disabled = false;
+        elements.joinButton.disabled = false;
     });
     
     // Eşleşme durumu
@@ -225,31 +292,44 @@ function initGame() {
     // Socket bağlantısını başlat
     initializeSocket();
     
+    // Oyun durumunu sıfırla
+    resetGame();
+    
     // Buton olaylarını ayarla
     setupEventListeners();
     
-    // Sayfa yüklendiğinde
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('Oyun başlatılıyor...');
-        showLoading(true, 'Sunucuya bağlanılıyor...');
-    });
+    // Ana menüyü göster
+    showMainMenu();
+}
+
+// Ana menüyü göster
+function showMainMenu() {
+    elements.gameScreen.style.display = 'none';
+    elements.loadingMessage.style.display = 'none';
+    elements.mainMenu.style.display = 'flex';
+    elements.roomInfo.classList.add('hidden');
+    updateStatus('Oyuna hoş geldiniz!');
 }
 
 // Buton olaylarını ayarla
 function setupEventListeners() {
-    // Dereceli maç butonu
-    if (elements.rankedButton) {
-        elements.rankedButton.addEventListener('click', startRankedMatch);
-    }
-    
-    // Özel oda oluştur butonu
-    if (elements.privateButton) {
-        elements.privateButton.addEventListener('click', createPrivateRoom);
+    // Yeni oyun butonu
+    if (elements.createGameBtn) {
+        elements.createGameBtn.addEventListener('click', createPrivateRoom);
     }
     
     // Odaya katıl butonu
     if (elements.joinButton) {
         elements.joinButton.addEventListener('click', joinPrivateRoom);
+    }
+    
+    // Oda kodu input'unda enter tuşu desteği
+    if (elements.roomCodeInput) {
+        elements.roomCodeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinPrivateRoom();
+            }
+        });
     }
 }
 
@@ -268,30 +348,54 @@ function startRankedMatch() {
 
 // Özel oda oluştur
 function createPrivateRoom() {
-    if (!gameState.socket || !gameState.socket.connected) {
-        updateStatus('Sunucuya bağlı değil!');
+    if (!gameState.socket) {
+        updateStatus('Sunucuya bağlanılamadı!', true);
         return;
     }
     
-    gameState.socket.emit('createPrivateRoom');
-    showLoading(true, 'Oda oluşturuluyor...');
+    updateStatus('Oda oluşturuluyor...');
+    elements.createGameBtn.disabled = true;
+    
+    // Rastgele bir oyuncu adı oluştur
+    const playerName = 'Oyuncu_' + Math.floor(1000 + Math.random() * 9000);
+    
+    gameState.socket.emit('createPrivateRoom', { username: playerName }, (response) => {
+        if (response.error) {
+            updateStatus('Oda oluşturulamadı: ' + response.error, true);
+            elements.createGameBtn.disabled = false;
+        }
+    });
 }
 
 // Özel odaya katıl
 function joinPrivateRoom() {
-    if (!gameState.socket || !gameState.socket.connected) {
-        updateStatus('Sunucuya bağlı değil!');
+    const roomCode = elements.roomCodeInput.value.trim();
+    
+    if (!roomCode) {
+        updateStatus('Lütfen bir oda kodu girin!', true);
         return;
     }
     
-    const code = elements.roomCodeInput?.value?.trim();
-    if (!code) {
-        updateStatus('Lütfen geçerli bir oda kodu girin!');
+    if (!gameState.socket) {
+        updateStatus('Sunucuya bağlanılamadı!', true);
         return;
     }
     
-    gameState.socket.emit('joinPrivateRoom', { code });
-    showLoading(true, 'Odaya katılılıyor...');
+    updateStatus('Odaya katılıyor...');
+    elements.joinButton.disabled = true;
+    
+    // Rastgele bir oyuncu adı oluştur
+    const playerName = 'Oyuncu_' + Math.floor(1000 + Math.random() * 9000);
+    
+    gameState.socket.emit('joinPrivateRoom', { 
+        roomCode,
+        username: playerName
+    }, (response) => {
+        if (response.error) {
+            updateStatus('Odaya katılamadı: ' + response.error, true);
+            elements.joinButton.disabled = false;
+        }
+    });
 }
 
 // Global olarak erişilebilir yap
