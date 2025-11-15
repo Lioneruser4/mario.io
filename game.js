@@ -2,7 +2,7 @@
 // Bu kod, tarayıcıda çalışır.
 
 // ⚠️ Node.js sunucunuzun bu adreste çalıştığından emin olun.
-const SERVER_URL = 'http://localhost:3000'; 
+const SERVER_URL = 'https://mario-io-1.onrender.com'; 
 const socket = io(SERVER_URL);
 
 // --- DOM Elementleri ---
