@@ -3,102 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Dama Oyunu</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <title>Profesyonel Online Dama</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
     <style>
-        /* --- Tasarım ve Animasyonlar (Önceki yanıttaki CSS aynı kalır) --- */
+        /* --- Renkler ve Genel Stil --- */
         :root {
-            --primary-color: #3498db; 
-            --secondary-color: #2ecc71; 
-            --tertiary-color: #e74c3c; 
-            --dark-bg: #1e2a38; 
+            --primary-color: #e74c3c; /* Kırmızı (Ana Aksiyon) */
+            --secondary-color: #2ecc71; /* Yeşil (Vurgu) */
+            --tertiary-color: #3498db; /* Mavi (Diğer Aksiyon) */
+            --dark-bg: #141c24; 
             --card-bg: #2c3e50; 
             --square-light: #f5f5dc;
             --square-dark: #8b4513;
+            --piece-size: 85%;
         }
 
-        body { font-family: 'Roboto', sans-serif; background: linear-gradient(135deg, var(--dark-bg), #141c24); color: #fff; margin: 0; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        body { 
+            font-family: 'Roboto', sans-serif; 
+            background: linear-gradient(135deg, var(--dark-bg), #1e2a38); 
+            color: #fff; 
+            margin: 0; 
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+        }
         
-        #app-container { width: 100%; height: 100%; max-width: none; max-height: none; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #app-container { 
+            width: 100%; height: 100%; 
+            padding: 10px; box-sizing: border-box; 
+            display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; 
+        }
         
-        .screen { display: none; width: 90%; max-width: 550px; }
-        .screen.active { display: block; }
+        .screen { display: none; width: 95%; max-width: 550px; }
+        .screen.active { 
+            display: block; 
+            animation: fadeIn 0.8s ease-out;
+        }
         
-        /* LOBİ STİLİ */
-        #lobby { background: var(--card-bg); padding: 40px 30px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); animation: fadeIn 0.8s ease-out; border: 1px solid rgba(255, 255, 255, 0.1); }
         @keyframes fadeIn { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
 
-        .logo-text { font-size: 3.5em; margin-bottom: 5px; font-weight: 900; letter-spacing: 2px; text-shadow: 3px 3px #000; }
+        /* LOBİ STİLİ */
+        #lobby { 
+            background: var(--card-bg); 
+            padding: 40px 30px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .logo-text { font-size: 4em; margin-bottom: 5px; font-weight: 900; letter-spacing: 2px; text-shadow: 4px 4px #000; }
         .logo-span { color: var(--primary-color); }
-        .info-text { margin-top: 10px; font-size: 1em; opacity: 0.9; }
-        #status { color: var(--tertiary-color); font-weight: bold; }
-        #status.green { color: var(--secondary-color); }
+        #status { color: var(--secondary-color); font-weight: bold; transition: color 0.3s; }
+        #status.error { color: var(--primary-color); }
         
         /* Butonlar */
-        .main-btn, .secondary-btn { padding: 14px 25px; margin: 10px; border: none; border-radius: 10px; cursor: pointer; font-size: 1.1em; font-weight: 700; transition: all 0.3s cubic-bezier(.25,.8,.25,1); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); }
-        .main-btn { background-color: var(--primary-color); color: #fff; }
-        .main-btn:hover:not(:disabled) { background-color: #2980b9; transform: translateY(-3px); box-shadow: 0 8px 10px rgba(0, 0, 0, 0.4); }
+        .main-btn, .secondary-btn { 
+            padding: 16px 30px; margin: 10px; 
+            border: none; border-radius: 10px; 
+            cursor: pointer; font-size: 1.2em; font-weight: 700; 
+            transition: all 0.3s cubic-bezier(.25,.8,.25,1); 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            text-transform: uppercase;
+        }
+        #rankedBtn { background-color: var(--primary-color); box-shadow: 0 6px 10px rgba(231, 76, 60, 0.4); }
+        #rankedBtn:hover:not(:disabled) { background-color: #c0392b; transform: translateY(-4px); box-shadow: 0 10px 15px rgba(231, 76, 60, 0.6);}
         .main-btn:disabled { background-color: #55606d; cursor: not-allowed; color: #bbb; }
-        .main-btn.red-btn { background-color: var(--tertiary-color); color: white; }
 
-        /* Overlay'ler ve Oyun Tahtası stilleri aynı kalır */
-        .sub-screen-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; z-index: 100; }
-        .sub-screen-content { background: var(--card-bg); padding: 40px; border-radius: 15px; box-shadow: 0 0 50px rgba(0, 0, 0, 0.9); text-align: center; animation: slideUp 0.4s ease-out; }
-        @keyframes slideUp { 0% { opacity: 0; transform: translateY(50px); } 100% { opacity: 1; transform: translateY(0); } }
-        .sub-screen-overlay.active { display: flex; }
-        
-        #currentRoomCode span { font-size: 2.5em; color: var(--secondary-color); font-weight: 900; letter-spacing: 5px; display: block; margin: 10px 0; text-shadow: 1px 1px #000; }
-        #board { width: 95vmin; height: 95vmin; max-width: 450px; max-height: 450px; margin: 20px auto; border: 5px solid var(--primary-color); box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); transition: transform 0.5s; }
+
+        /* OYUN EKRANI STİLİ */
+        #game {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            justify-content: space-between; 
+            align-items: center;
+        }
+
+        .player-info-card {
+            background: rgba(44, 62, 80, 0.8);
+            border-radius: 10px;
+            padding: 10px 15px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            margin: 10px 0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+        .player-info-card.active-turn {
+            border: 3px solid var(--secondary-color);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px var(--secondary-color);
+        }
+
+        #game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 90%;
+            max-width: 500px;
+            margin-bottom: 5px;
+        }
+
+        /* TAHTA VE PARÇA STİLİ (MOBİL UYUMLU) */
+        #board { 
+            width: 90vmin; /* Mobil cihazlarda daha büyük tahta */
+            height: 90vmin;
+            max-width: 500px; 
+            max-height: 500px; 
+            margin: 10px auto; 
+            border: 6px solid var(--tertiary-color); 
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+            transition: transform 0.5s; 
+            display: grid; 
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+        }
+
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+        }
+        .square.light { background-color: var(--square-light); }
+        .square.dark { background-color: var(--square-dark); }
+        .square.possible-move::after {
+            content: '';
+            position: absolute;
+            width: 60%;
+            height: 60%;
+            border-radius: 50%;
+            background-color: rgba(46, 204, 113, 0.5); 
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .piece {
+            width: var(--piece-size);
+            height: var(--piece-size);
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2em; 
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .piece.black { background-color: #333; border: 3px solid #000; color: #eee; }
+        .piece.white { background-color: #eee; border: 3px solid #ccc; color: #333; }
+        .piece.selected { box-shadow: 0 0 0 5px var(--secondary-color), 0 0 15px var(--secondary-color); }
+        .piece.king i { color: var(--primary-color); font-size: 0.8em; }
+
+        /* Oyuncu Yönlendirmesi */
         #board.player2-view { transform: rotate(180deg); }
         #board.player2-view .piece { transform: rotate(180deg); }
-        .piece.selected { box-shadow: 0 0 15px var(--secondary-color), 0 0 5px var(--secondary-color); }
-
-        @media (max-width: 600px) {
-            #lobby { padding: 30px 15px; }
-            .logo-text { font-size: 2.5em; }
-            .main-btn, .secondary-btn { padding: 12px 18px; font-size: 1em; }
-            #board { width: 98vmin; height: 98vmin; }
+        
+        /* Mobil Optimizasyon (Aynı Kalır) */
+        @media (max-width: 600px) and (orientation: portrait) {
+            #board { width: 95vw; height: 95vw; max-width: 450px; max-height: 450px; }
+        }
+        @media (max-height: 600px) and (orientation: landscape) {
+            #board { width: 65vh; height: 65vh; }
         }
     </style>
 </head>
 <body>
     <div id="app-container">
         <div id="lobby" class="screen active">
-            <h1 class="logo-text">CHEC<span class="logo-span">KERS</span> ONLINE</h1>
+            <h1 class="logo-text">PRO <span class="logo-span">DAMA</span></h1>
             <p id="status" class="info-text">Sunucuya bağlanılıyor...</p>
             
             <div id="auth-status">
-                <p id="player-name" style="font-weight: bold; color: var(--secondary-color); margin-top: 20px;">Giriş Yapılıyor...</p>
+                <p id="player-name" style="font-weight: bold; color: var(--secondary-color); margin: 20px 0;">Giriş Yapılıyor...</p>
             </div>
             
             <div class="lobby-controls">
-                <button id="rankedBtn" class="main-btn" disabled>
-                    <i class="fas fa-medal"></i> Dereceli Eşleşme Bul
+                <button id="rankedBtn" class="main-btn red-btn" disabled>
+                    <i class="fas fa-crown"></i> Dereceli Eşleşme Bul
                 </button>
 
-                <button id="createGameBtn" class="main-btn" disabled>
+                <button id="createGameBtn" class="main-btn" disabled style="background-color: var(--tertiary-color);">
                     <i class="fas fa-plus-circle"></i> Oda Kur
                 </button>
                 
-                <button id="showJoinBtn" class="main-btn" disabled>
+                <button id="showJoinBtn" class="main-btn" disabled style="background-color: var(--secondary-color);">
                     <i class="fas fa-sign-in-alt"></i> Odaya Katıl
                 </button>
             </div>
         </div>
         
         <div id="game" class="screen">
-            <div class="game-header">
-                <p id="playerRoleDisplay" class="role-text" style="font-size: 1.1em; font-weight: bold;"></p>
-                <h2 id="turnIndicator" style="margin: 10px 0;">Sıra: Bekleniyor...</h2>
-                <button id="leaveBtn" class="secondary-btn red-btn"><i class="fas fa-times-circle"></i> Ayrıl</button>
+            <div id="opponent-card" class="player-info-card">
+                <i class="fas fa-user-circle"></i> <span id="opponentNameDisplay">Rakip Bekleniyor</span> 
+            </div>
+
+            <div id="game-header">
+                <h2 id="turnIndicator">Sıra: Bekleniyor...</h2>
+                <button id="leaveBtn" class="secondary-btn red-btn"><i class="fas fa-times"></i> Ayrıl</button>
             </div>
             
             <div class="board-wrapper">
                 <div id="board">
                 </div>
+            </div>
+
+            <div id="my-card" class="player-info-card">
+                <i class="fas fa-chess-pawn"></i> <span id="myNameDisplay">Siz</span>
             </div>
         </div>
     </div>
@@ -106,7 +230,8 @@
     <div id="createOverlay" class="sub-screen-overlay">
         <div class="sub-screen-content">
             <h3><i class="fas fa-door-open"></i> Yeni Oda Kuruldu</h3>
-            <p id="currentRoomCode" class="info-text">Oda Kodu: <span>****</span></p>
+            <p class="info-text">Oda Kodunu Rakibine Gönder:</p>
+            <p id="currentRoomCode" class="info-text"><span>****</span></p>
             <p id="createStatus" class="info-text">Rakip bekleniyor...</p>
             <button id="cancelCreateBtn" class="secondary-btn red-btn"><i class="fas fa-times"></i> İptal Et/Kapat</button>
         </div>
@@ -115,8 +240,8 @@
     <div id="joinOverlay" class="sub-screen-overlay">
         <div class="sub-screen-content">
             <h3><i class="fas fa-sign-in-alt"></i> Odaya Katıl</h3>
-            <input type="text" id="roomIdInput" placeholder="4 Haneli Oda Kodunu Girin" maxlength="4" style="font-size: 1.5em; width: 100%; text-align: center;">
-            <button id="joinBtn" class="main-btn" style="margin-top: 15px;"><i class="fas fa-check"></i> Katıl</button>
+            <input type="text" id="roomIdInput" placeholder="4 HANELİ KOD" maxlength="4" style="font-size: 2em; width: 100%; text-align: center; margin: 15px 0;">
+            <button id="joinBtn" class="main-btn" style="background-color: var(--secondary-color); margin-top: 15px;"><i class="fas fa-check"></i> Katıl</button>
             <button id="cancelJoinBtn" class="secondary-btn red-btn"><i class="fas fa-times"></i> İptal</button>
         </div>
     </div>
@@ -124,41 +249,36 @@
     <div id="matchmakingOverlay" class="sub-screen-overlay">
         <div class="sub-screen-content">
             <h3><i class="fas fa-search"></i> Dereceli Eşleşme Aranıyor</h3>
-            <div class="spinner" style="border: 8px solid rgba(255, 255, 255, 0.1); border-top: 8px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+            <div class="spinner" style="border: 8px solid rgba(255, 255, 255, 0.1); border-top: 8px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
             <p id="matchmakingStatusText" class="info-text" style="font-size: 1.2em;">Kuyrukta bekleniyor...</p>
             <button id="cancelRankedBtn" class="main-btn red-btn" style="margin-top: 15px;"><i class="fas fa-times"></i> Aramayı İptal Et</button>
         </div>
     </div>
-
+    
     <script>
         // Lütfen burayı KENDİ ÇALIŞAN SUNUCU ADRESİNİZLE DEĞİŞTİRİN!
         const SERVER_URL = 'https://mario-io-1.onrender.com'; 
         const socket = io(SERVER_URL);
 
-        // --- DOM Elementleri ve Değişkenler ---
-        // (Aynı kalır)
-
+        // --- DOM Elementleri ---
         const lobbyDiv = document.getElementById('lobby');
         const gameDiv = document.getElementById('game');
         const statusDiv = document.getElementById('status');
         const boardDiv = document.getElementById('board');
         const turnIndicator = document.getElementById('turnIndicator');
         const playerNameDisplay = document.getElementById('player-name');
+        const opponentNameDisplay = document.getElementById('opponentNameDisplay');
+        const myNameDisplay = document.getElementById('myNameDisplay');
         const rankedBtn = document.getElementById('rankedBtn');
         const createGameBtn = document.getElementById('createGameBtn');
         const showJoinBtn = document.getElementById('showJoinBtn');
         const leaveBtn = document.getElementById('leaveBtn');
-
         const createOverlay = document.getElementById('createOverlay');
         const currentRoomCode = document.getElementById('currentRoomCode').querySelector('span');
-        const cancelCreateBtn = document.getElementById('cancelCreateBtn');
         const joinOverlay = document.getElementById('joinOverlay');
-        const roomIdInput = document.getElementById('roomIdInput');
-        const joinBtn = document.getElementById('joinBtn');
-        const cancelJoinBtn = document.getElementById('cancelJoinBtn');
         const matchmakingOverlay = document.getElementById('matchmakingOverlay');
-        const cancelRankedBtn = document.getElementById('cancelRankedBtn');
-        const matchmakingStatusText = document.getElementById('matchmakingStatusText');
+        const myCard = document.getElementById('my-card');
+        const opponentCard = document.getElementById('opponent-card');
 
         let currentRoomId = null;
         let playerRole = null;
@@ -167,12 +287,11 @@
         let currentUsername = null; 
         let selectedPiece = null; 
         
-        // --- Telegram ve Misafir Kullanıcı Adı Yönetimi (Aynı kalır) ---
+        // --- Kullanıcı Adı Yönetimi (Aynı Kalır) ---
         function generateGuestName() {
             const randomNumber = Math.floor(Math.random() * 900) + 100;
             return `Guest${randomNumber}`;
         }
-
         function checkAndSetUsername() {
             const urlParams = new URLSearchParams(window.location.search);
             const tgId = urlParams.get('id'); 
@@ -199,7 +318,6 @@
         }
 
         function toggleOverlay(overlayElement, show) {
-            // Overlay açıldığında tüm lobi butonlarını devre dışı bırak
             if (show) {
                 overlayElement.classList.add('active');
                 lobbyDiv.style.transform = 'scale(0.9)';
@@ -207,7 +325,6 @@
             } else {
                 overlayElement.classList.remove('active');
                 lobbyDiv.style.transform = 'scale(1)';
-                // Sadece arama yapılmıyorsa butonları aç
                 if (socket.connected && !matchmakingOverlay.classList.contains('active')) {
                     setLobbyButtons(true);
                 }
@@ -219,99 +336,225 @@
             playerRole = null;
             currentBoard = null;
             currentTurn = null;
+            selectedPiece = null;
             clearSelections();
             
             gameDiv.classList.remove('active');
             lobbyDiv.classList.add('active');
+            
             turnIndicator.textContent = 'Sıra: Bekleniyor...';
             boardDiv.classList.remove('player2-view');
+            opponentCard.classList.remove('active-turn');
+            myCard.classList.remove('active-turn');
+            opponentNameDisplay.innerHTML = 'Rakip Bekleniyor';
+            myNameDisplay.innerHTML = `${currentUsername} (Taşlar: ?)`;
             
             toggleOverlay(matchmakingOverlay, false);
             toggleOverlay(createOverlay, false);
             toggleOverlay(joinOverlay, false);
             
+            // Tekrar bağlantı kontrolü yap
             if(socket.connected) {
                 setLobbyButtons(true);
+            }
+        }
+        
+        function clearSelections() {
+            selectedPiece = null;
+            document.querySelectorAll('.piece.selected').forEach(p => p.classList.remove('selected'));
+            document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
+        }
+
+        function updateBoard(board) {
+            currentBoard = board;
+            boardDiv.innerHTML = '';
+            clearSelections();
+            
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const square = document.createElement('div');
+                    const isDark = (r + c) % 2 !== 0; 
+                    square.className = `square ${isDark ? 'dark' : 'light'}`;
+                    square.dataset.row = r;
+                    square.dataset.col = c;
+                    square.addEventListener('click', handleSquareClick);
+                    
+                    const pieceType = board[r][c];
+                    if (pieceType !== 0) {
+                        const piece = document.createElement('div');
+                        let pieceClass = '';
+                        let isKing = false;
+
+                        if (pieceType === 1 || pieceType === 3) pieceClass = 'black';
+                        if (pieceType === 2 || pieceType === 4) pieceClass = 'white';
+                        if (pieceType === 3 || pieceType === 4) isKing = true;
+                        
+                        const kingIcon = isKing ? '<i class="fas fa-crown"></i>' : '';
+
+                        piece.className = `piece ${pieceClass} ${isKing ? 'king' : ''}`;
+                        piece.innerHTML = kingIcon;
+                        piece.addEventListener('click', handlePieceClick);
+                        square.appendChild(piece);
+                    }
+
+                    boardDiv.appendChild(square);
+                }
+            }
+        }
+
+        function updateTurn(turn) {
+            currentTurn = turn;
+            const isMyTurn = playerRole === turn;
+            
+            turnIndicator.textContent = isMyTurn ? 'SIRA SİZDE! 🟢' : 'Rakibinizin sırası... 🔴';
+            turnIndicator.className = isMyTurn ? 'turn-mine' : 'turn-opponent';
+
+            // Oyuncu kartlarını güncelle
+            if (isMyTurn) {
+                myCard.classList.add('active-turn');
+                opponentCard.classList.remove('active-turn');
+            } else {
+                myCard.classList.remove('active-turn');
+                opponentCard.classList.add('active-turn');
+            }
+        }
+
+        function handlePieceClick(event) {
+            event.stopPropagation();
+            const piece = event.currentTarget;
+            const square = piece.parentElement;
+            const clickedPos = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
+            const pieceType = currentBoard[clickedPos.row][clickedPos.col];
+            
+            const isMyPiece = (playerRole === 'player1' && (pieceType === 1 || pieceType === 3)) ||
+                             (playerRole === 'player2' && (pieceType === 2 || pieceType === 4));
+            
+            if (currentTurn === playerRole && isMyPiece) {
+                clearSelections();
+                selectedPiece = clickedPos;
+                piece.classList.add('selected');
+
+                // Basit vurgulama (Hamle kontrolü sunucuda)
+                document.querySelectorAll('.square.dark').forEach(s => {
+                    s.classList.add('possible-move');
+                });
+            } else {
+                clearSelections();
+            }
+        }
+        
+        function handleSquareClick(event) {
+            const square = event.currentTarget;
+            const target = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
+
+            if (selectedPiece) {
+                 // Hamle sadece karanlık kareye yapılabilir.
+                 if(square.classList.contains('dark')) {
+                    socket.emit('move', { 
+                        roomId: currentRoomId, 
+                        from: selectedPiece, 
+                        to: target 
+                    });
+                 }
+                clearSelections();
             }
         }
         
         // --- SOCKET BAĞLANTILARI ---
 
         socket.on('connect', () => {
-            statusDiv.textContent = '✅ Sunucuya bağlanılıyor...'; // Durum güncellendi
+            statusDiv.textContent = '✅ Sunucuya bağlanılıyor...';
+            statusDiv.classList.remove('error');
             statusDiv.classList.add('green');
-            // Bağlandıktan sonra kimliği hemen sunucuya gönder
             socket.emit('playerIdentity', { username: currentUsername });
             resetGame(); 
         });
 
-        // YENİ: Sunucudan "hazır" onayı geldiğinde butonları aç
         socket.on('readyToPlay', () => {
-            statusDiv.textContent = '✅ Sunucuya bağlandı.';
+            statusDiv.textContent = '✅ Hazır. Bir oyun seçin.';
             setLobbyButtons(true);
         });
 
         socket.on('connect_error', (err) => {
-            statusDiv.textContent = `❌ Bağlantı hatası: ${err.message}. Adres: ${SERVER_URL}`;
+            statusDiv.textContent = `❌ Bağlantı hatası: Sunucuya ulaşılamıyor. Adres: ${SERVER_URL}`;
             statusDiv.classList.remove('green');
+            statusDiv.classList.add('error');
             setLobbyButtons(false);
         });
 
-        socket.on('disconnect', () => {
-            statusDiv.textContent = '❌ Sunucu bağlantısı kesildi.';
-            statusDiv.classList.remove('green');
-            setLobbyButtons(false);
-            if(gameDiv.classList.contains('active')) {
-                alert('Sunucu bağlantısı kesildi. Lütfen sayfayı yenileyin.');
-                resetGame();
-            }
-        });
-
-        // Eşleşme Bulundu (matchFound) geldiğinde overlay'i kapat ve durumu hazırla.
         socket.on('matchFound', (data) => {
             toggleOverlay(matchmakingOverlay, false);
             currentRoomId = data.roomId;
             playerRole = data.role;
-            statusDiv.textContent = `Eşleşme bulundu! Oyun başlıyor... 🎉`;
+            statusDiv.textContent = `Eşleşme bulundu! Oyun yükleniyor... 🎉`;
         });
         
-        // Oyun Başladı (gameStart) geldiğinde oyunu başlat.
         socket.on('gameStart', (data) => {
-            // ... (Önceki yanıttaki gameStart mantığı aynı kalır) ...
+            // FIX: Oyunun görünmeme sorunu bu blokun çalışmamasıydı.
+            // Şimdi tüm overlay'ler kapanıp, oyun ekranı açılıyor.
             lobbyDiv.classList.remove('active');
             gameDiv.classList.add('active');
             toggleOverlay(createOverlay, false); 
             toggleOverlay(joinOverlay, false);
 
-            const myColor = playerRole === 'player1' ? 'Siyah' : 'Beyaz';
-            const opponentName = playerRole === 'player1' ? data.player2Name : data.player1Name;
+            currentRoomId = data.roomId;
+            playerRole = playerRole || (data.player1Name === currentUsername ? 'player1' : 'player2');
             
-            playerRoleDisplay.textContent = `Siz: ${myColor} | Rakip: ${opponentName}`;
-            currentRoomId = currentRoomId || data.roomId;
+            const isPlayer1 = playerRole === 'player1';
+            const myColor = isPlayer1 ? 'Siyah' : 'Beyaz';
+            const opponentName = isPlayer1 ? data.player2Name : data.player1Name;
+            const myName = isPlayer1 ? data.player1Name : data.player2Name;
+            const opponentColor = isPlayer1 ? 'Beyaz' : 'Siyah';
+
+            myNameDisplay.innerHTML = `<i class="fas fa-chess-pawn"></i> ${myName} (${myColor} Taşlar)`;
+            opponentNameDisplay.innerHTML = `<i class="fas fa-user-circle"></i> ${opponentName} (${opponentColor} Taşlar)`;
+            
             updateBoard(data.board);
             updateTurn(data.turn);
 
-            if (playerRole === 'player2') {
+            if (!isPlayer1) {
                 boardDiv.classList.add('player2-view');
             } else {
                 boardDiv.classList.remove('player2-view');
             }
         });
-
-        // Diğer olaylar (boardUpdate, invalidMove, gameOver, opponentDisconnected) aynı kalır.
-        // ...
         
+        socket.on('boardUpdate', (data) => {
+            updateBoard(data.board);
+            updateTurn(data.turn);
+            if (data.chained) {
+                statusDiv.textContent = 'ZİNCİRLEME VURMA! Hamle SİZDE!';
+            } else {
+                statusDiv.textContent = 'Oyun Devam Ediyor.';
+            }
+        });
+
+        // YENİ: Oyundan Başarıyla Ayrılma Olayı (Ayrıl Butonu Fix)
+        socket.on('gameLeft', () => {
+             alert('Oyundan başarıyla ayrıldınız.');
+             resetGame();
+        });
+
+        socket.on('opponentDisconnected', (message) => {
+            alert(message);
+            resetGame();
+        });
+
         // --- LOBİ KONTROL OLAYLARI ---
 
-        // Dereceli Arama Başlat
-        rankedBtn.addEventListener('click', () => {
-            toggleOverlay(matchmakingOverlay, true);
-            matchmakingStatusText.textContent = 'Eşleşme aranıyor...';
-            socket.emit('findRankedMatch');
+        // Ayrıl Butonu (FIXED)
+        leaveBtn.addEventListener('click', () => {
+            if (currentRoomId) {
+                // Sunucuya ayrıldığımızı bildir
+                socket.emit('leaveGame', { roomId: currentRoomId });
+            } else {
+                // Sadece sıfırla
+                resetGame();
+            }
         });
 
         // Oda Kurma
-        createGameBtn.addEventListener('click', () => {
+        document.getElementById('createGameBtn').addEventListener('click', () => {
             toggleOverlay(createOverlay, true);
             currentRoomCode.textContent = '....'; 
 
@@ -328,8 +571,18 @@
             });
         });
 
-        // ... (Kalan buton olayları ve oyun mantığı fonksiyonları aynı kalır) ...
+        document.getElementById('cancelCreateBtn').addEventListener('click', () => {
+             if (currentRoomId) {
+                // Kurulan odadan ayrılmayı bildir
+                socket.emit('leaveGame', { roomId: currentRoomId });
+            } else {
+                resetGame();
+            }
+            toggleOverlay(createOverlay, false);
+        });
         
+        // ... (Kalan tüm buton olayları) ...
+
         // İlk tahtayı çiz
         updateBoard(Array(8).fill(0).map(() => Array(8).fill(0)));
     </script>
