@@ -1,428 +1,239 @@
-// game.js
-// Bu kod, tarayıcıda çalışır.
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Checkers (Amerikan Dama)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-// ⚠️ Node.js sunucunuzun bu adreste çalıştığından emin olun.
-const SERVER_URL = 'https://mario-io-1.onrender.com/'; 
-const socket = io(SERVER_URL);
+    <style>
+        /* CSS KODU (Aynı Kaldı) */
+        :root {
+            --primary-color: #e74c3c; 
+            --secondary-color: #2ecc71; 
+            --tertiary-color: #3498db; 
+            --dark-bg: #141c24; 
+            --card-bg: #2c3e50; 
+            --square-light: #f5f5dc; 
+            --square-dark: #8b4513;  /* Koyu Kahverengi */
+            --piece-size: 75%; 
+        }
 
-// --- DOM Elementleri ---
-const entryScreen = document.getElementById('entry-screen');
-const gameDiv = document.getElementById('game');
-const statusDiv = document.getElementById('status');
-const boardDiv = document.getElementById('board');
-const turnIndicator = document.getElementById('turnIndicator');
-const playerNameDisplay = document.getElementById('player-name');
-const opponentNameDisplay = document.getElementById('opponentNameDisplay');
-const myNameDisplay = document.getElementById('myNameDisplay');
+        body { 
+            font-family: 'Roboto', sans-serif; 
+            background: linear-gradient(135deg, var(--dark-bg), #1e2a38); 
+            color: #fff; margin: 0; height: 100vh; overflow: hidden; 
+            display: flex; justify-content: center; align-items: center; 
+        }
+        #app-container { 
+            width: 100%; height: 100%; padding: 10px; box-sizing: border-box; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+        .screen { display: none; width: 95%; max-width: 500px; }
+        .screen.active { 
+            display: flex; flex-direction: column; align-items: center;
+            animation: fadeIn 0.6s ease-out;
+        }
+        @keyframes fadeIn { 0% { opacity: 0; transform: translateY(20px); } }
 
-const rankedBtn = document.getElementById('rankedBtn');
-const showRoomOptionsBtn = document.getElementById('showRoomOptionsBtn');
-const createGameBtn = document.getElementById('createGameBtn');
-const showJoinBtn = document.getElementById('showJoinBtn');
-const leaveBtn = document.getElementById('leaveBtn');
+        /* --- GİRİŞ/LOBİ EKRANI --- */
+        #entry-screen { 
+            background: var(--card-bg); padding: 40px 30px; border-radius: 15px; 
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        .logo-text { font-size: 3.5em; margin-bottom: 10px; font-weight: 900; letter-spacing: 2px; text-shadow: 3px 3px #000; }
+        .logo-span { color: var(--secondary-color); }
+        #status { color: var(--secondary-color); font-weight: bold; margin-top: 15px; transition: color 0.3s; }
+        #status.error { color: var(--primary-color); }
 
-const roomOptionsOverlay = document.getElementById('roomOptionsOverlay');
-const createOverlay = document.getElementById('createOverlay');
-const currentRoomCode = document.getElementById('currentRoomCode').querySelector('span');
-const joinOverlay = document.getElementById('joinOverlay');
-const roomIdInput = document.getElementById('roomIdInput');
-const joinBtn = document.getElementById('joinBtn');
-const matchmakingOverlay = document.getElementById('matchmakingOverlay');
-const myCard = document.getElementById('my-card');
-const opponentCard = document.getElementById('opponent-card');
-const matchmakingStatusText = document.getElementById('matchmakingStatusText');
+        /* Butonlar */
+        .main-btn { 
+            padding: 18px 30px; margin: 12px 0; width: 100%; border: none; border-radius: 10px; 
+            cursor: pointer; font-size: 1.3em; font-weight: 700; transition: all 0.3s cubic-bezier(.25,.8,.25,1); 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); text-transform: uppercase;
+        }
+        .main-btn:hover:not(:disabled) { transform: translateY(-4px); box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5); }
+        .main-btn:disabled { background-color: #55606d; cursor: not-allowed; color: #bbb; transform: none; box-shadow: none; }
+        #rankedBtn { background-color: var(--primary-color); color: white; box-shadow: 0 6px 10px rgba(231, 76, 60, 0.4); }
 
+        /* --- OYUN EKRANI (game) --- */
+        #game { justify-content: space-between; height: 98vh; padding: 0; max-width: 550px; }
+        .player-info-card {
+            background: rgba(44, 62, 80, 0.8); border-radius: 10px; padding: 10px 15px;
+            width: 90%; text-align: center; margin: 5px 0; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            font-size: 0.9em; transition: all 0.3s;
+        }
+        .player-info-card.active-turn {
+            border: 3px solid var(--secondary-color); transform: scale(1.05); box-shadow: 0 0 15px var(--secondary-color);
+        }
 
-let currentRoomId = null;
-let playerRole = null;
-let currentBoard = null;
-let currentTurn = null;
-let currentUsername = null; 
-let selectedPiece = null; 
-let possibleMoves = []; 
+        #game-header { display: flex; justify-content: space-between; align-items: center; width: 90%; margin: 10px 0; }
 
-// --- Kullanıcı Adı Yönetimi ---
-function generateGuestName() {
-    return `Guest${Math.floor(Math.random() * 900) + 100}`;
-}
+        /* --- TAHTA VE PARÇA STİLİ --- */
+        #board { 
+            width: 90vmin; height: 90vmin; max-width: 500px; max-height: 500px; margin: auto; 
+            border: 6px solid var(--tertiary-color); box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+            transition: transform 0.5s; display: grid; grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+        }
 
-function checkAndSetUsername() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tgUsername = urlParams.get('username'); 
-    const tgId = urlParams.get('id'); 
-    
-    if (tgUsername) {
-        currentUsername = `@${tgUsername}`;
-    } else if (tgId) {
-        currentUsername = `User_${tgId}`;
-    } else {
-        currentUsername = generateGuestName(); 
-    }
-    playerNameDisplay.textContent = `Oyuncu: ${currentUsername}`;
-}
-checkAndSetUsername(); 
-
-// --- Ekran Kontrolü ve YARDIMCI FONKSİYONLAR ---
-function setEntryButtons(enabled) {
-    rankedBtn.disabled = !enabled;
-    showRoomOptionsBtn.disabled = !enabled;
-}
-
-function toggleOverlay(overlayElement, show) {
-    document.querySelectorAll('.sub-screen-overlay').forEach(overlay => {
-        if(overlay !== overlayElement) overlay.classList.remove('active');
-    });
-
-    if (show) {
-        overlayElement.classList.add('active');
-        entryScreen.classList.remove('active');
-        gameDiv.classList.remove('active');
-        setEntryButtons(false);
-    } else {
-        overlayElement.classList.remove('active');
+        .square {
+            width: 100%; height: 100%; display: flex; justify-content: center;
+            align-items: center; position: relative; cursor: pointer;
+        }
+        /* KARE RENKLERİ - (0,0) Light*/
+        .square.light { background-color: var(--square-light); cursor: default; } 
+        .square.dark { background-color: var(--square-dark); }
         
-        if (!gameDiv.classList.contains('active') && !matchmakingOverlay.classList.contains('active')) {
-            entryScreen.classList.add('active');
-            if(socket.connected) setEntryButtons(true);
+        /* Mümkün Hamle İşaretleyicisi - Sadece dark karelerde görünür */
+        .square.possible-move::after {
+            content: ''; position: absolute; width: 60%; height: 60%;
+            border-radius: 50%; background-color: rgba(46, 204, 113, 0.7); 
+            pointer-events: none; z-index: 5;
+            animation: pulse 1s infinite alternate;
         }
-    }
-}
+        @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
 
-function resetGame() {
-    currentRoomId = null;
-    playerRole = null;
-    currentBoard = null;
-    currentTurn = null;
-    selectedPiece = null;
-    possibleMoves = [];
-    clearSelections();
-    
-    gameDiv.classList.remove('active');
-    entryScreen.classList.add('active');
-    
-    turnIndicator.textContent = 'Sıra: Bekleniyor...';
-    boardDiv.classList.remove('player2-view');
-    opponentCard.classList.remove('active-turn');
-    myCard.classList.remove('active-turn');
-    opponentNameDisplay.innerHTML = 'Rakip Bekleniyor';
-    myNameDisplay.innerHTML = `${currentUsername} (Taşlar: ?)`;
-    
-    document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
+        .piece {
+            width: var(--piece-size); height: var(--piece-size); border-radius: 50%;
+            position: absolute; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.2em; transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .piece.black { background-color: #333; border: 3px solid #000; color: #eee; }
+        .piece.white { background-color: #eee; border: 3px solid #ccc; color: #333; }
+        .piece.selected { box-shadow: 0 0 0 5px var(--secondary-color), 0 0 15px var(--secondary-color); }
+        .piece.king i { color: var(--primary-color); font-size: 0.8em; }
 
-    if(socket.connected) {
-        setEntryButtons(true);
-    }
-}
+        /* Rakip görünümü: Tahtayı ters çevir */
+        #board.player2-view { transform: rotate(180deg); }
+        #board.player2-view .piece { transform: rotate(180deg); }
 
-function clearSelections() {
-    selectedPiece = null;
-    possibleMoves = [];
-    document.querySelectorAll('.piece.selected').forEach(p => p.classList.remove('selected'));
-    document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
-}
 
-function updateBoard(board, forcedSelection = null) {
-    currentBoard = board;
-    boardDiv.innerHTML = '';
-    
-    // Eğer zorunlu seçim varsa (zincirleme vurma), mevcut seçimi koru.
-    const tempSelected = forcedSelection || selectedPiece;
-    clearSelections();
+        /* --- OVERLAY STİLLERİ --- */
+        .sub-screen-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0, 0, 0, 0.85); display: none; justify-content: center; align-items: center; 
+            z-index: 100;
+        }
+        .sub-screen-content { 
+            background: var(--card-bg); padding: 40px; border-radius: 15px; 
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.9); text-align: center;
+            animation: slideUp 0.4s ease-out; max-width: 90%;
+        }
+        .sub-screen-overlay.active { display: flex; }
+        #currentRoomCode span { 
+            font-size: 3em; color: var(--secondary-color); font-weight: 900; 
+            letter-spacing: 8px; display: block; margin: 15px 0; text-shadow: 2px 2px #000;
+        }
+        #roomIdInput {
+            font-size: 2em; width: 100%; text-align: center; margin: 15px 0;
+            padding: 10px; border-radius: 8px; border: none;
+            background-color: #3f5163; color: white;
+        }
+         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const square = document.createElement('div');
-            const isDark = (r + c) % 2 !== 0; 
-            square.className = `square ${isDark ? 'dark' : 'light'}`;
-            square.dataset.row = r;
-            square.dataset.col = c;
-            square.addEventListener('click', handleSquareClick);
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        
+        <div id="entry-screen" class="screen active">
+            <h1 class="logo-text">CHECKERS <span class="logo-span">(DAMA)</span></h1>
             
-            const pieceType = board[r][c];
-            if (pieceType !== 0) {
-                const piece = document.createElement('div');
-                let pieceClass = '';
-                let isKing = false;
-
-                if (pieceType === 1 || pieceType === 3) pieceClass = 'black'; // Siyah (P1)
-                if (pieceType === 2 || pieceType === 4) pieceClass = 'white'; // Beyaz (P2)
-                if (pieceType === 3 || pieceType === 4) isKing = true;
-                
-                const kingIcon = isKing ? '<i class="fas fa-crown"></i>' : '';
-
-                piece.className = `piece ${pieceClass} ${isKing ? 'king' : ''}`;
-                piece.innerHTML = kingIcon;
-                piece.addEventListener('click', handlePieceClick);
-                
-                // Seçili taşı yeniden işaretle
-                if (tempSelected && tempSelected.row === r && tempSelected.col === c) {
-                     piece.classList.add('selected');
-                     selectedPiece = tempSelected; // Seçili taşı geri yükle
-                }
-
-                square.appendChild(piece);
-            }
-            boardDiv.appendChild(square);
-        }
-    }
-}
-
-function updateTurn(turn) {
-    currentTurn = turn;
-    const isMyTurn = playerRole === turn;
-    
-    turnIndicator.textContent = isMyTurn ? 'SIRA SİZDE! 🟢' : 'Rakibinizin sırası... 🔴';
-
-    if (isMyTurn) {
-        myCard.classList.add('active-turn');
-        opponentCard.classList.remove('active-turn');
-    } else {
-        myCard.classList.remove('active-turn');
-        opponentCard.classList.add('active-turn');
-    }
-}
-
-function highlightMoves(moves) {
-    document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
-    
-    moves.forEach(move => {
-        const square = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
-        if (square) {
-            square.classList.add('possible-move');
-        }
-    });
-}
-
-function handlePieceClick(event) {
-    event.stopPropagation(); // Square click olayını engelle
-    
-    const piece = event.currentTarget;
-    const square = piece.parentElement;
-    const clickedPos = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
-    const pieceType = currentBoard[clickedPos.row][clickedPos.col];
-    
-    const isMyPiece = (playerRole === 'player1' && (pieceType === 1 || pieceType === 3)) ||
-                     (playerRole === 'player2' && (pieceType === 2 || pieceType === 4));
-    
-    if (currentTurn === playerRole && isMyPiece) {
-        if (selectedPiece && selectedPiece.row === clickedPos.row && selectedPiece.col === clickedPos.col) {
-            // Aynı taşa tekrar tıklandı: Seçimi kaldır
-            clearSelections();
-        } else {
-            // Yeni bir taş seçildi: Sunucudan geçerli hamleleri iste
-            clearSelections();
-            selectedPiece = clickedPos;
-            piece.classList.add('selected');
+            <p id="player-name" style="font-weight: bold; color: var(--secondary-color); margin: 20px 0;">Giriş Yapılıyor...</p>
             
-            // Sunucuya geçerli hamleleri sorma
-            socket.emit('getPossibleMoves', { roomId: currentRoomId, from: clickedPos });
-        }
-    } else {
-        clearSelections();
-    }
-}
+            <p id="status" class="info-text">Sunucuya bağlanılıyor...</p>
+            
+            <div class="lobby-controls" style="width: 100%; margin-top: 20px;">
+                <button id="rankedBtn" class="main-btn" disabled>
+                    <i class="fas fa-crown"></i> Dereceli Oyna
+                </button>
 
-function handleSquareClick(event) {
-    const square = event.currentTarget;
-    const target = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
+                <button id="showRoomOptionsBtn" class="main-btn" disabled>
+                    <i class="fas fa-users"></i> Arkadaşla Oyna (Oda)
+                </button>
+            </div>
+        </div>
+        
+        <div id="game" class="screen">
+            <div id="opponent-card" class="player-info-card">
+                <i class="fas fa-user-circle"></i> <span id="opponentNameDisplay">Rakip Bekleniyor</span> 
+            </div>
 
-    // Eğer bir taş seçiliyse ve tıklanan kare geçerli hamlelerden biriyse
-    const isPossible = possibleMoves.some(move => move.row === target.row && move.col === target.col);
+            <div id="game-header">
+                <h2 id="turnIndicator">Sıra: Bekleniyor...</h2>
+                <button id="leaveBtn" class="main-btn" style="padding: 10px 15px; font-size: 1em; background-color: var(--primary-color);">
+                    <i class="fas fa-times"></i> Ayrıl
+                </button>
+            </div>
+            
+            <div class="board-wrapper">
+                <div id="board">
+                    </div>
+            </div>
 
-    if (selectedPiece && isPossible) {
-        // Hamle isteğini sunucuya gönder
-        socket.emit('move', { 
-            roomId: currentRoomId, 
-            from: selectedPiece, 
-            to: target 
-        });
-        // Hamle yapıldıktan sonra yerel seçimi kaldır
-        clearSelections(); 
-    } else {
-        // Geçerli hamle olmayan yere tıklandıysa, seçimi kaldır.
-        clearSelections();
-    }
-}
+            <div id="my-card" class="player-info-card">
+                <i class="fas fa-chess-pawn"></i> <span id="myNameDisplay">Siz</span>
+            </div>
+        </div>
 
-// --- SOCKET BAĞLANTILARI ---
+        <div id="roomOptionsOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3>Arkadaşla Oyna</h3>
+                <button id="createGameBtn" class="main-btn" style="background-color: var(--tertiary-color);">
+                    <i class="fas fa-plus-circle"></i> Oda Kur
+                </button>
+                <button id="showJoinBtn" class="main-btn" style="background-color: var(--secondary-color);">
+                    <i class="fas fa-sign-in-alt"></i> Odaya Katıl
+                </button>
+                <button id="cancelRoomOptionsBtn" class="main-btn" style="background-color: #55606d; font-size: 1em;">
+                    <i class="fas fa-arrow-left"></i> Geri
+                </button>
+            </div>
+        </div>
 
-socket.on('connect', () => {
-    statusDiv.textContent = '✅ Sunucuya bağlanıldı.';
-    statusDiv.classList.remove('error');
-    statusDiv.classList.add('green');
-    socket.emit('playerIdentity', { username: currentUsername });
-    resetGame();
-});
+        <div id="createOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3><i class="fas fa-door-open"></i> Yeni Oda Kuruldu</h3>
+                <p class="info-text">Oda Kodunu Rakibine Gönder:</p>
+                <p id="currentRoomCode" class="info-text"><span>****</span></p>
+                <p id="createStatus" class="info-text">Rakip bekleniyor...</p>
+                <button id="cancelCreateBtn" class="main-btn" style="background-color: var(--primary-color); font-size: 1em;">
+                    <i class="fas fa-times"></i> İptal Et/Kapat
+                </button>
+            </div>
+        </div>
 
-socket.on('readyToPlay', () => {
-    statusDiv.textContent = '✅ Hazır. Bir oyun seçin.';
-    setEntryButtons(true);
-});
+        <div id="joinOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3><i class="fas fa-sign-in-alt"></i> Odaya Katıl</h3>
+                <input type="number" id="roomIdInput" placeholder="4 HANELİ KOD" maxlength="4">
+                <button id="joinBtn" class="main-btn" style="background-color: var(--secondary-color); margin-top: 15px;">
+                    <i class="fas fa-check"></i> Katıl
+                </button>
+                <button id="cancelJoinBtn" class="main-btn" style="background-color: #55606d; font-size: 1em;">
+                    <i class="fas fa-times"></i> İptal
+                </button>
+            </div>
+        </div>
 
-socket.on('connect_error', (err) => {
-    statusDiv.textContent = `❌ Bağlantı hatası: Sunucuya ulaşılamıyor.`;
-    statusDiv.classList.remove('green');
-    statusDiv.classList.add('error');
-    setEntryButtons(false);
-});
-
-socket.on('matchMakingStatus', (message) => {
-    matchmakingStatusText.textContent = message;
-});
-
-socket.on('matchFound', (data) => {
-    toggleOverlay(matchmakingOverlay, false);
-    currentRoomId = data.roomId;
-    playerRole = data.role;
-    statusDiv.textContent = `Eşleşme bulundu! Oyun yükleniyor... 🎉`;
-});
-
-socket.on('gameStart', (data) => {
-    entryScreen.classList.remove('active');
-    gameDiv.classList.add('active');
+        <div id="matchmakingOverlay" class="sub-screen-overlay">
+            <div class="sub-screen-content">
+                <h3><i class="fas fa-search"></i> Dereceli Eşleşme Aranıyor</h3>
+                <div class="spinner" style="border: 8px solid rgba(255, 255, 255, 0.1); border-top: 8px solid var(--primary-color); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                <p id="matchmakingStatusText" class="info-text" style="font-size: 1.2em;">Kuyrukta bekleniyor...</p>
+                <button id="cancelRankedBtn" class="main-btn" style="background-color: var(--primary-color); font-size: 1em;">
+                    <i class="fas fa-times"></i> Aramayı İptal Et
+                </button>
+            </div>
+        </div>
+    </div>
     
-    document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
-
-    playerRole = data.player1Name === currentUsername ? 'player1' : 'player2';
-    
-    const isPlayer1 = playerRole === 'player1';
-    const myColor = isPlayer1 ? 'Siyah' : 'Beyaz';
-    const opponentName = isPlayer1 ? data.player2Name : data.player1Name;
-    const myName = isPlayer1 ? data.player1Name : data.player2Name;
-    const opponentColor = isPlayer1 ? 'Beyaz' : 'Siyah';
-
-    myNameDisplay.innerHTML = `<i class="fas fa-chess-pawn"></i> ${myName} (${myColor} Taşlar)`;
-    opponentNameDisplay.innerHTML = `<i class="fas fa-user-circle"></i> ${opponentName} (${opponentColor} Taşlar)`;
-    
-    updateBoard(data.board);
-    updateTurn(data.turn);
-
-    if (!isPlayer1) {
-        boardDiv.classList.add('player2-view');
-    } else {
-        boardDiv.classList.remove('player2-view');
-    }
-});
-
-socket.on('possibleMoves', (moves) => {
-     possibleMoves = moves; 
-     highlightMoves(moves);
-});
-
-
-socket.on('boardUpdate', (data) => {
-    updateBoard(data.board, data.chained ? data.to : null);
-    updateTurn(data.turn);
-
-    if (data.chained) {
-         statusDiv.textContent = 'ZİNCİRLEME VURMA! Aynı taşla devam edin.';
-         const newSelectedPos = data.to;
-         selectedPiece = newSelectedPos;
-         // Yeni pozisyon için geçerli hamleleri tekrar iste
-         socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
-    } else {
-         clearSelections();
-    }
-});
-
-
-socket.on('gameOver', (data) => {
-    const isMe = data.winner === playerRole;
-    alert(`OYUN BİTTİ! ${isMe ? 'TEBRİKLER! Oyunu Kazandınız! 🎉' : 'Üzgünüm, Oyunu Kaybettiniz. 😔'} Sebep: ${data.reason}`);
-    resetGame();
-});
-
-socket.on('opponentDisconnected', (message) => {
-    alert(message);
-    resetGame();
-});
-
-socket.on('gameLeft', () => {
-     alert('Oyundan başarıyla ayrıldınız.');
-     resetGame();
-});
-
-socket.on('invalidMove', (data) => {
-    alert("Geçersiz Hamle: " + data.message);
-    clearSelections(); 
-});
-
-// --- BUTON OLAYLARI (Lobi Kontrolleri) ---
-rankedBtn.addEventListener('click', () => {
-    toggleOverlay(matchmakingOverlay, true);
-    matchmakingStatusText.textContent = 'Eşleşme aranıyor...';
-    socket.emit('findRankedMatch');
-});
-
-showRoomOptionsBtn.addEventListener('click', () => {
-    toggleOverlay(roomOptionsOverlay, true);
-});
-
-createGameBtn.addEventListener('click', () => {
-    toggleOverlay(roomOptionsOverlay, false);
-    toggleOverlay(createOverlay, true);
-    currentRoomCode.textContent = '....'; 
-
-    socket.emit('createGame', (response) => {
-        if (response.success) {
-            currentRoomId = response.roomId;
-            playerRole = response.role;
-            currentRoomCode.textContent = currentRoomId; 
-            document.getElementById('createStatus').textContent = 'Rakip bekleniyor... (Oda Kodu: ' + currentRoomId + ')';
-        } else {
-            currentRoomCode.textContent = 'HATA';
-            document.getElementById('createStatus').textContent = 'Oda kurulamadı: ' + response.message;
-        }
-    });
-});
-
-showJoinBtn.addEventListener('click', () => {
-    toggleOverlay(roomOptionsOverlay, false);
-    toggleOverlay(joinOverlay, true);
-    roomIdInput.value = '';
-});
-
-joinBtn.addEventListener('click', () => {
-    const roomId = roomIdInput.value.trim();
-    if (roomId.length !== 4) {
-        alert('Lütfen 4 haneli bir oda kodu girin.');
-        return;
-    }
-    toggleOverlay(joinOverlay, false);
-    
-    socket.emit('joinGame', { roomId: roomId }, (response) => {
-        if (!response.success) {
-            alert('Hata: ' + response.message);
-            resetGame();
-        } else {
-            currentRoomId = response.roomId;
-            playerRole = response.role;
-        }
-    });
-});
-
-
-document.getElementById('cancelRoomOptionsBtn').addEventListener('click', () => toggleOverlay(roomOptionsOverlay, false));
-document.getElementById('cancelJoinBtn').addEventListener('click', () => toggleOverlay(joinOverlay, false));
-
-document.getElementById('cancelCreateBtn').addEventListener('click', () => {
-     if (currentRoomId) socket.emit('leaveGame', { roomId: currentRoomId });
-     resetGame(); 
-});
-
-document.getElementById('cancelRankedBtn').addEventListener('click', () => {
-    socket.emit('cancelMatchmaking');
-    toggleOverlay(matchmakingOverlay, false);
-});
-
-leaveBtn.addEventListener('click', () => {
-    if (currentRoomId) {
-        socket.emit('leaveGame', { roomId: currentRoomId });
-    } else {
-        resetGame();
-    }
-});
-
-
-// İlk tahtayı çiz
-updateBoard(Array(8).fill(0).map(() => Array(8).fill(0)));
+    <script src="game.js"></script> 
+</body>
+</html>
