@@ -1,7 +1,6 @@
 // server.js - TEK PARÇA CHECKERS (AMERİKAN DAMA) OYUNU
 // İstemci (HTML/CSS/JS) ve Sunucu (Node.js/Socket.IO) Tek Dosyada.
-// RENDER.COM UYUMLU PORT VE BAĞLANTI AYARLARI YAPILMIŞTIR.
-// npm install express socket.io
+// Gerekli bağımlılık: npm install express socket.io
 
 const express = require('express');
 const http = require('http');
@@ -22,39 +21,37 @@ const io = socketio(server, {
     transports: ['websocket', 'polling']
 });
 
-// Oyun Durumu Değişkenleri
+// Oyun Durumu ve Sabitler
 const users = {}; 
 let rankedQueue = []; 
 const games = {}; 
 
-// --- CHECKERS (AMERİKAN DAMA) MANTIĞI FONKSİYONLARI ---
-
-// Tahta Kodları: 0=Boş, 1=Siyah Taş, 2=Beyaz Taş, 3=Siyah Kral, 4=Beyaz Kral
 const BLACK_MAN = 1;
 const WHITE_MAN = 2;
 const BLACK_KING = 3;
 const WHITE_KING = 4;
 
+// --- CHECKERS (AMERİKAN DAMA) MANTIĞI FONKSİYONLARI ---
+
 /**
  * Amerikan Dama (Checkers) başlangıç dizilimi: Sadece koyu karelerde.
- * Siyah (P1 - Alt) 5, 6, 7. sıralarda.
- * Beyaz (P2 - Üst) 0, 1, 2. sıralarda.
+ * Siyah (P1 - Alt) 5, 6, 7. sıralarda. Beyaz (P2 - Üst) 0, 1, 2. sıralarda.
  */
 function initializeBoard() {
     const board = Array(8).fill(0).map(() => Array(8).fill(0));
     
-    // Beyaz (P2) - Üst 3 sıra
+    // Beyaz (P2) - Üst 3 sıra (0, 1, 2)
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 8; c++) {
-            if ((r + c) % 2 === 1) { // Sadece koyu (tek) kareler
+            if ((r + c) % 2 === 1) { // Sadece koyu karelere (Dark) taş koy
                 board[r][c] = WHITE_MAN; 
             }
         }
     }
-    // Siyah (P1) - Alt 3 sıra
+    // Siyah (P1) - Alt 3 sıra (5, 6, 7)
     for (let r = 5; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-            if ((r + c) % 2 === 1) { // Sadece koyu (tek) kareler
+            if ((r + c) % 2 === 1) { // Sadece koyu karelere (Dark) taş koy
                 board[r][c] = BLACK_MAN; 
             }
         }
@@ -97,35 +94,33 @@ function getPossibleMoves(game, r, c) {
         let nextR = r + dr;
         let nextC = c + dc;
         
-        // Normal taşlar geriye gidemez (Kral hariç)
+        // 1. Kural: Normal taşlar geriye gidemez (Kral hariç)
         if (!isKing) {
             if (isBlack && dr === -1) continue; // Siyah sadece aşağı (ileriye)
             if (!isBlack && dr === 1) continue; // Beyaz sadece yukarı (ileriye)
         }
         
-        // 1. Yeme Hamlesi Kontrolü (2 adım atlama)
+        // 2. Yeme Hamlesi Kontrolü (2 adım atlama)
         if (nextR >= 0 && nextR < 8 && nextC >= 0 && nextC < 8) {
             // Yanında rakip var mı?
             if (opponentCodes.includes(board[nextR][nextC])) {
-                let landR = nextR + dr;
+                let landR = nextR + dr; // Atlama sonrası iniş karesi
                 let landC = nextC + dc;
 
                 // Atlama karesi tahta içinde ve boş mu?
                 if (landR >= 0 && landR < 8 && landC >= 0 && landC < 8 && board[landR][landC] === 0) {
                     moves.push({ 
                         row: landR, col: landC, 
-                        targetR: nextR, targetC: nextC, 
+                        targetR: nextR, targetC: nextC, // Yenen taşın konumu
                         isHit: true 
                     });
                 }
             }
         }
         
-        // 2. Normal Hamle Kontrolü (1 adım)
-        if (!moves.some(m => m.isHit)) { // Sadece yeme hamlesi yoksa normal hamle kontrol edilir
-            if (nextR >= 0 && nextR < 8 && nextC >= 0 && nextC < 8 && board[nextR][nextC] === 0) {
-                moves.push({ row: nextR, col: nextC, isHit: false });
-            }
+        // 3. Normal Hamle Kontrolü (1 adım)
+        if (nextR >= 0 && nextR < 8 && nextC >= 0 && nextC < 8 && board[nextR][nextC] === 0) {
+            moves.push({ row: nextR, col: nextC, isHit: false });
         }
     }
     
@@ -153,13 +148,14 @@ function getAllPossibleMoves(game, role) {
         }
     }
     
-    // Yeme zorunluluğu: Yeme hamlesi varsa, sadece onları döndür.
+    // Yeme zorunluluğu (FORCE JUMP): Yeme hamlesi varsa, sadece onları döndür.
     const hasHits = allMoves.some(move => move.isHit);
     if (hasHits) {
         return allMoves.filter(move => move.isHit);
     }
     
-    return allMoves;
+    // Yeme yoksa, sadece normal hamleleri döndür (isHit: false olanlar)
+    return allMoves.filter(move => !move.isHit);
 }
 
 /**
@@ -175,10 +171,10 @@ function applyMove(game, from, to) {
     if (currentRole === 'player1' && !isPlayer1Piece) return { success: false, message: 'Sıra Siyah taşlarda.' };
     if (currentRole === 'player2' && isPlayer1Piece) return { success: false, message: 'Sıra Beyaz taşlarda.' };
 
-    const allMoves = getAllPossibleMoves(game, currentRole);
+    const allValidMoves = getAllPossibleMoves(game, currentRole);
     
-    // 2. Geçerli hamle kontrolü
-    const validMove = allMoves.find(move => 
+    // 2. Geçerli hamle kontrolü (Yeme zorunluluğu dahil)
+    const validMove = allValidMoves.find(move => 
         move.fromR === from.row && 
         move.fromC === from.col && 
         move.row === to.row && 
@@ -186,8 +182,11 @@ function applyMove(game, from, to) {
     );
 
     if (!validMove) {
-        if (allMoves.some(m => m.isHit)) {
-            return { success: false, message: 'Yeme zorunludur! Farklı bir taş seçin veya yeme hamlesi yapın.' };
+        const hasForcedMove = allValidMoves.some(m => m.isHit);
+        if (hasForcedMove) {
+            // Yeme zorunluluğu varsa, ancak seçilen taşla yapılamıyorsa bu mesajı gönder.
+            // Bu uyarı, istemcide taş seçildikten sonra yanlış yere tıklanınca gösterilir.
+            return { success: false, message: 'Yeme zorunludur! Lütfen yiyebileceğiniz bir hamle yapın.' };
         }
         return { success: false, message: 'Geçersiz hamle.' };
     }
@@ -196,10 +195,7 @@ function applyMove(game, from, to) {
     
     // 3. Yeme işlemini gerçekleştir (Eğer varsa)
     if (validMove.isHit) {
-        const hitMove = getPossibleMoves(game, from.row, from.col).find(m => 
-            m.row === to.row && m.col === to.col && m.isHit
-        );
-        board[hitMove.targetR][hitMove.targetC] = 0; // Rakip taşı tahtadan sil
+        board[validMove.targetR][validMove.targetC] = 0; // Rakip taşı tahtadan sil
     }
 
     // 4. Taşı yeni konuma taşı
@@ -207,15 +203,14 @@ function applyMove(game, from, to) {
     board[from.row][from.col] = 0;
 
     // 5. Kral Olma Kontrolü
-    if (pieceType === BLACK_MAN && to.row === 0) board[to.row][to.col] = BLACK_KING; // Siyah kral olur
-    if (pieceType === WHITE_MAN && to.row === 7) board[to.row][to.col] = WHITE_KING; // Beyaz kral olur
+    if (pieceType === BLACK_MAN && to.row === 0) board[to.row][to.col] = BLACK_KING; // Siyah (P1) son sıraya (0) ulaşırsa kral olur
+    if (pieceType === WHITE_MAN && to.row === 7) board[to.row][to.col] = WHITE_KING; // Beyaz (P2) son sıraya (7) ulaşırsa kral olur
     
-    // 6. Zincirleme Yeme Kontrolü
+    // 6. Zincirleme Yeme Kontrolü (Sadece yeme hamlesi yapıldıysa kontrol edilir)
     let chained = false;
     if (validMove.isHit) {
-        // Yeni pozisyonda bu taşın tekrar yiyebileceği hamle var mı?
-        const nextMoves = getPossibleMoves(game, to.row, to.col);
-        if (nextMoves.some(m => m.isHit)) {
+        const pieceNextMoves = getPossibleMoves(game, to.row, to.col);
+        if (pieceNextMoves.some(m => m.isHit)) {
             chained = true;
         }
     }
@@ -235,13 +230,12 @@ function checkWinCondition(game) {
     if (p1Pieces === 0) return { winner: 'player2', reason: `Siyah taşları bitti.` };
     if (p2Pieces === 0) return { winner: 'player1', reason: `Beyaz taşları bitti.` };
 
-    // Hamle yapamama kontrolü
     const nextTurn = game.turn;
     const possibleMovesForNextTurn = getAllPossibleMoves(game, nextTurn);
     
     if (possibleMovesForNextTurn.length === 0) {
         const winner = nextTurn === 'player1' ? 'player2' : 'player1';
-        return { winner: winner, reason: `${nextTurn === 'player1' ? game.player1Name : game.player2Name} hareket edemiyor.` };
+        return { winner: winner, reason: `${nextTurn === 'player1' ? game.player1Name : game.player2Name} hareket edemiyor (Sıkışma).` };
     }
 
     return null; 
@@ -279,7 +273,8 @@ function attemptMatchmaking() {
 
         io.to(roomId).emit('gameStart', { 
             roomId: roomId, board: games[roomId].board, turn: games[roomId].turn,
-            player1Name: player1.username, player2Name: player2.username
+            player1Name: player1.username, player2Name: player2.username,
+            player1Id: player1Id, player2Id: player2Id
         });
 
         attemptMatchmaking(); 
@@ -311,7 +306,7 @@ const CLIENT_HTML = `
             --dark-bg: #141c24; 
             --card-bg: #2c3e50; 
             --square-light: #f5f5dc; 
-            --square-dark: #8b4513;  /* Sadece bu renkli kareler kullanılır */
+            --square-dark: #8b4513;  /* Koyu Kahverengi */
             --piece-size: 75%; 
         }
 
@@ -378,10 +373,11 @@ const CLIENT_HTML = `
             width: 100%; height: 100%; display: flex; justify-content: center;
             align-items: center; position: relative; cursor: pointer;
         }
-        /* Sadece koyu kareler kullanılacak */
-        .square.light { background-color: var(--square-light); pointer-events: none; } /* Hafif kareler etkileşimi kapalı */
+        /* KARE RENKLERİ - (0,0) Light*/
+        .square.light { background-color: var(--square-light); cursor: default; } 
         .square.dark { background-color: var(--square-dark); }
         
+        /* Mümkün Hamle İşaretleyicisi - Sadece dark karelerde görünür */
         .square.possible-move::after {
             content: ''; position: absolute; width: 60%; height: 60%;
             border-radius: 50%; background-color: rgba(46, 204, 113, 0.7); 
@@ -530,8 +526,8 @@ const CLIENT_HTML = `
     <script>
         // İSTEMCİ JAVASCRIPT KODU
         
-        // Sunucunuzun Render URL'si
-        const RENDER_URL = 'https://mario-io-1.onrender.com/'; 
+        // Sunucunuzun Render URL'sini otomatik olarak pencere konumundan al
+        const RENDER_URL = window.location.origin; 
         
         const socket = io(RENDER_URL, {
             transports: ['websocket'],
@@ -648,17 +644,20 @@ const CLIENT_HTML = `
             currentBoard = board;
             boardDiv.innerHTML = '';
             
-            const tempSelected = forcedSelection || selectedPiece;
-            clearSelections();
+            let tempSelected = forcedSelection ? forcedSelection : (selectedPiece || null);
+            clearSelections(); 
 
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     const square = document.createElement('div');
-                    const isDark = (r + c) % 2 === 1; // Checkers'ta (0,0) kare aydınlıktır, tekler koyudur.
+                    const isDark = (r + c) % 2 === 1; 
                     square.className = \`square \${isDark ? 'dark' : 'light'}\`;
                     square.dataset.row = r;
                     square.dataset.col = c;
-                    square.addEventListener('click', handleSquareClick);
+                    
+                    if(isDark) {
+                        square.addEventListener('click', handleSquareClick);
+                    } 
                     
                     const pieceType = board[r][c];
                     if (pieceType !== 0) {
@@ -666,32 +665,38 @@ const CLIENT_HTML = `
                         let pieceClass = '';
                         let isKing = false;
 
-                        if (pieceType === 1 || pieceType === 3) pieceClass = 'black'; // Siyah
-                        if (pieceType === 2 || pieceType === 4) pieceClass = 'white'; // Beyaz
+                        if (pieceType === 1 || pieceType === 3) pieceClass = 'black'; 
+                        if (pieceType === 2 || pieceType === 4) pieceClass = 'white'; 
                         if (pieceType === 3 || pieceType === 4) isKing = true;
                         
                         const kingIcon = isKing ? '<i class="fas fa-crown"></i>' : '';
 
                         piece.className = \`piece \${pieceClass} \${isKing ? 'king' : ''}\`;
                         piece.innerHTML = kingIcon;
-                        // Sadece koyu karelerdeki taşlara tıklanabilir olmalı
-                        if (isDark) { 
-                             piece.addEventListener('click', handlePieceClick);
-                        } else {
-                             // Bu durum olmamalı ama önlem
-                             square.classList.add('light'); 
-                        }
                         
-                        // Seçili taşı yeniden işaretle
+                        piece.addEventListener('click', handlePieceClick);
+                        
+                        // Seçimi koru
                         if (tempSelected && tempSelected.row === r && tempSelected.col === c) {
                              piece.classList.add('selected');
                              selectedPiece = tempSelected; 
+                             // Zincirleme varsa, hamleleri tekrar iste
+                             if(forcedSelection) {
+                                 socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
+                             }
                         }
 
                         square.appendChild(piece);
                     }
                     boardDiv.appendChild(square);
                 }
+            }
+            // Zincirleme yeme durumunda possibleMoves'un hemen güncellenmesini sağlar.
+            if(selectedPiece && !forcedSelection) {
+                 // Eğer updateBoard, zincirleme olmadan çağrıldıysa ve bir taş seçiliyse,
+                 // Hamle gösterimi için gerekli olan possibleMoves dizisi eski kalmış olabilir. 
+                 // Bu, taşın hala seçili kalmasına rağmen yeni tahtada hamle gösterilmemesi sorununu çözer.
+                 socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
             }
         }
 
@@ -722,7 +727,7 @@ const CLIENT_HTML = `
         }
 
         function handlePieceClick(event) {
-            event.stopPropagation(); 
+            event.stopPropagation();
             
             const piece = event.currentTarget;
             const square = piece.parentElement;
@@ -734,12 +739,15 @@ const CLIENT_HTML = `
             
             if (currentTurn === playerRole && isMyPiece) {
                 if (selectedPiece && selectedPiece.row === clickedPos.row && selectedPiece.col === clickedPos.col) {
+                    // Aynı taşa tekrar tıklandı: Seçimi kaldır.
                     clearSelections();
                 } else {
+                    // Yeni bir taş seçildi: Seçimi temizle, yenisini seç, hamleleri iste.
                     clearSelections();
                     selectedPiece = clickedPos;
                     piece.classList.add('selected');
                     
+                    // Sunucudan mümkün hamleleri iste
                     socket.emit('getPossibleMoves', { roomId: currentRoomId, from: clickedPos });
                 }
             } else {
@@ -751,18 +759,19 @@ const CLIENT_HTML = `
             const square = event.currentTarget;
             const target = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
             
-            // Sadece koyu karelere tıklandıysa işleme al
             if (!square.classList.contains('dark')) return; 
 
             const isPossible = possibleMoves.some(move => move.row === target.row && move.col === target.col);
 
             if (selectedPiece && isPossible) {
+                // Mümkün bir kareye tıklandı: Hamleyi sunucuya gönder
                 socket.emit('move', { 
                     roomId: currentRoomId, 
                     from: selectedPiece, 
                     to: target 
                 });
-                clearSelections(); 
+                // clearSelections() işlemi, sunucudan 'boardUpdate' gelince yapılacaktır, 
+                // bu sayede hamlenin gerçekleştiğini görsel olarak teyit etmiş oluruz.
             } else {
                 clearSelections();
             }
@@ -805,7 +814,7 @@ const CLIENT_HTML = `
             
             document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
 
-            playerRole = data.player1Name === currentUsername ? 'player1' : 'player2';
+            playerRole = data.player1Id === socket.id ? 'player1' : 'player2';
             
             const isPlayer1 = playerRole === 'player1';
             const myColor = isPlayer1 ? 'Siyah' : 'Beyaz';
@@ -832,17 +841,15 @@ const CLIENT_HTML = `
         });
 
         socket.on('boardUpdate', (data) => {
-            updateBoard(data.board, data.chained ? data.to : null);
-            updateTurn(data.turn);
-
             if (data.chained) {
                  statusDiv.textContent = 'ZİNCİRLEME YEME! Aynı taşla devam edin.';
-                 const newSelectedPos = data.to;
-                 selectedPiece = newSelectedPos;
-                 socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
+                 // updateBoard, data.to'yu kullanarak taşı seçili tutacak ve yeni hamleleri isteyecektir.
+                 updateBoard(data.board, data.to); 
             } else {
                  clearSelections();
+                 updateBoard(data.board, null); // Hamleleri sil
             }
+            updateTurn(data.turn);
         });
 
         socket.on('gameOver', (data) => {
@@ -863,7 +870,8 @@ const CLIENT_HTML = `
 
         socket.on('invalidMove', (data) => {
             alert("Geçersiz Hamle: " + data.message);
-            clearSelections(); 
+            // Geçersiz hamle durumunda taş seçimi hala geçerli olabilir (örneğin yeme zorunluluğu varsa),
+            // bu yüzden clearSelections yapmıyoruz. Sadece uyarı veriyoruz.
         });
 
         // --- BUTON OLAYLARI ---
@@ -953,12 +961,8 @@ const CLIENT_HTML = `
 
 // Ana sayfaya (/) gelen isteklere istemci HTML'ini gönder
 app.get('/', (req, res) => {
-    // Render URL'sini dinamik olarak istemci koduna yerleştir
-    const finalHtml = CLIENT_HTML.replace(
-        /'https:\/\/mario-io-1.onrender.com\/'/g, 
-        `'${req.protocol}://${req.get('host')}/'`
-    );
-    res.send(finalHtml);
+    // Statik CLIENT_HTML içeriğini gönder
+    res.send(CLIENT_HTML);
 });
 
 
@@ -1023,7 +1027,8 @@ io.on('connection', (socket) => {
 
         io.to(roomId).emit('gameStart', { 
             roomId: roomId, board: game.board, turn: game.turn,
-            player1Name: game.player1Name, player2Name: game.player2Name
+            player1Name: game.player1Name, player2Name: game.player2Name,
+            player1Id: game.player1Id, player2Id: game.player2Id
         });
     });
 
@@ -1036,6 +1041,7 @@ io.on('connection', (socket) => {
         const pieceRole = game.player1Id === socket.id ? 'player1' : 'player2';
         const allValidMoves = getAllPossibleMoves(game, pieceRole);
         
+        // Sadece seçilen taşa ait hamleleri filtrele
         const specificMoves = allValidMoves
             .filter(m => m.fromR === data.from.row && m.fromC === data.from.col)
             .map(m => ({ row: m.row, col: m.col }));
