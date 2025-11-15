@@ -10,6 +10,7 @@ const app = express();
 const server = http.createServer(app);
 
 // CORS ayarı her origin'den bağlantıya izin verir.
+// ⚠️ DİKKAT: game.js'deki SERVER_URL buradaki porta (3000) yönlenmeli.
 const io = socketio(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 const users = {}; 
