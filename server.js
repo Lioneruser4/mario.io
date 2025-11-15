@@ -12,9 +12,9 @@ const server = http.createServer(app);
 // CORS ayarı her origin'den bağlantıya izin verir.
 const io = socketio(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
-const users = {}; // Tüm kullanıcıların ID ve isimlerini tutar
-let rankedQueue = []; // Dereceli arama kuyruğu
-const games = {}; // Aktif oyun odaları
+const users = {}; 
+let rankedQueue = []; 
+const games = {}; 
 
 // --- DAMA MANTIĞI FONKSİYONLARI ---
 
@@ -123,7 +123,6 @@ function getOpponentPieceCodes(pieceType) {
 /**
  * Belirtilen bir taştan yapılabilecek tüm geçerli hamleleri (normal ve vurma) bulur.
  * Türk Daması vurma kuralları basitleştirilmiş simülasyonudur.
- * @returns {Array<{row: number, col: number, targetR?: number, targetC?: number, isHit: boolean}>} Hamle listesi
  */
 function getPossibleMoves(game, r, c) {
     const board = game.board;
@@ -173,9 +172,6 @@ function getPossibleMoves(game, r, c) {
     // ÖNEMLİ KURAL: Vurma varsa, sadece vurma hamleleri geçerlidir.
     if (hits.length > 0) return hits;
     
-    // Normal hamleler (vurma yoksa)
-    // Kral taşlar için burada daha fazla boş kare atlama mantığı eklenebilir, 
-    // ancak karmaşıklığı azaltmak için şimdilik normal taş gibi 1 adımla sınırlı.
     return moves;
 }
 
