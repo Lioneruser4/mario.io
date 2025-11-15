@@ -44,7 +44,7 @@
         /* Ekran Geçişleri */
         .screen { display: none; width: 95%; max-width: 500px; }
         .screen.active { 
-            display: flex; /* İçerik için esnek düzenleme */
+            display: flex;
             flex-direction: column;
             align-items: center;
             animation: fadeIn 0.6s ease-out;
@@ -98,7 +98,7 @@
         /* --- OYUN EKRANI (game) --- */
         #game {
             justify-content: space-between; 
-            height: 98vh; /* Tam mobil yüksekliği */
+            height: 98vh; /* Mobil cihazlarda daha uzun dikey alan kullan */
             padding: 0;
             max-width: 550px;
         }
@@ -125,7 +125,7 @@
             justify-content: space-between;
             align-items: center;
             width: 90%;
-            margin-bottom: 5px;
+            margin: 10px 0; /* Boşluk ekle */
         }
 
         /* --- TAHTA VE PARÇA STİLİ (MOBİL UYUMLU) --- */
@@ -134,7 +134,7 @@
             height: 90vmin;
             max-width: 500px; 
             max-height: 500px; 
-            margin: 10px auto; 
+            margin: auto; /* Ortalamak için */
             border: 6px solid var(--tertiary-color); 
             box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
             transition: transform 0.5s; 
@@ -150,11 +150,18 @@
         .square.light { background-color: var(--square-light); }
         .square.dark { background-color: var(--square-dark); }
         
+        /* Sadece geçerli hamleler işaretlenecek */
         .square.possible-move::after {
             content: ''; position: absolute; width: 60%; height: 60%;
-            border-radius: 50%; background-color: rgba(46, 204, 113, 0.5); 
+            border-radius: 50%; background-color: rgba(46, 204, 113, 0.7); /* Yeşil Vurgu */
             pointer-events: none; z-index: 5;
+            animation: pulse 1s infinite alternate;
         }
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
 
         .piece {
             width: var(--piece-size); height: var(--piece-size); border-radius: 50%;
@@ -198,6 +205,10 @@
             font-size: 2em; width: 100%; text-align: center; margin: 15px 0;
             padding: 10px; border-radius: 8px; border: none;
             background-color: #3f5163; color: white;
+        }
+         @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
     </style>
@@ -298,7 +309,12 @@
     </div>
     
     <script>
-        // Lütfen burayı KENDİ ÇALIŞAN SUNUCU ADRESİNİZLE DEĞİŞTİRİN!
+        // =================================================================================
+        //                               İSTEMCİ KODU (Tarayıcıda Çalışan Kısım)
+        // =================================================================================
+
+        // ⚠️ BURAYI KENDİ ÇALIŞAN SUNUCU ADRESİNİZLE DEĞİŞTİRİN!
+        // Sunucunuz Node.js ile ayrı bir dosyada çalışmalıdır.
         const SERVER_URL = 'https://mario-io-1.onrender.com'; 
         const socket = io(SERVER_URL);
 
@@ -334,6 +350,7 @@
         let currentTurn = null;
         let currentUsername = null; 
         let selectedPiece = null; 
+        let possibleMoves = []; // Sunucudan gelen geçerli hamleler
         
         // --- Kullanıcı Adı Yönetimi ---
         function generateGuestName() {
@@ -374,7 +391,6 @@
             } else {
                 overlayElement.classList.remove('active');
                 
-                // Eğer oyun ekranında değilsek ve arama yapmıyorsak lobiye dön
                 if (!gameDiv.classList.contains('active') && !matchmakingOverlay.classList.contains('active')) {
                     entryScreen.classList.add('active');
                     if(socket.connected) setEntryButtons(true);
@@ -383,19 +399,17 @@
         }
 
         function resetGame() {
-            // Durum değişkenlerini sıfırla
             currentRoomId = null;
             playerRole = null;
             currentBoard = null;
             currentTurn = null;
             selectedPiece = null;
+            possibleMoves = [];
             clearSelections();
             
-            // UI sıfırla ve Giriş Ekranına dön
             gameDiv.classList.remove('active');
             entryScreen.classList.add('active');
             
-            // Oyun içi UI sıfırlama
             turnIndicator.textContent = 'Sıra: Bekleniyor...';
             boardDiv.classList.remove('player2-view');
             opponentCard.classList.remove('active-turn');
@@ -403,7 +417,6 @@
             opponentNameDisplay.innerHTML = 'Rakip Bekleniyor';
             myNameDisplay.innerHTML = `${currentUsername} (Taşlar: ?)`;
             
-            // Tüm overlayleri kapat
             document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
 
             if(socket.connected) {
@@ -413,6 +426,7 @@
         
         function clearSelections() {
             selectedPiece = null;
+            possibleMoves = [];
             document.querySelectorAll('.piece.selected').forEach(p => p.classList.remove('selected'));
             document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
         }
@@ -425,6 +439,7 @@
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     const square = document.createElement('div');
+                    // Türk daması tahtasındaki tüm kareler kullanılır, ancak görsel ayrım için koyu karelere odaklanılır
                     const isDark = (r + c) % 2 !== 0; 
                     square.className = `square ${isDark ? 'dark' : 'light'}`;
                     square.dataset.row = r;
@@ -437,8 +452,8 @@
                         let pieceClass = '';
                         let isKing = false;
 
-                        if (pieceType === 1 || pieceType === 3) pieceClass = 'black';
-                        if (pieceType === 2 || pieceType === 4) pieceClass = 'white';
+                        if (pieceType === 1 || pieceType === 3) pieceClass = 'black'; // Siyah (P1)
+                        if (pieceType === 2 || pieceType === 4) pieceClass = 'white'; // Beyaz (P2)
                         if (pieceType === 3 || pieceType === 4) isKing = true;
                         
                         const kingIcon = isKing ? '<i class="fas fa-crown"></i>' : '';
@@ -468,6 +483,16 @@
             }
         }
 
+        function highlightMoves(moves) {
+            document.querySelectorAll('.square.possible-move').forEach(s => s.classList.remove('possible-move'));
+            moves.forEach(move => {
+                const square = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
+                if (square) {
+                    square.classList.add('possible-move');
+                }
+            });
+        }
+        
         function handlePieceClick(event) {
             event.stopPropagation();
             const piece = event.currentTarget;
@@ -479,12 +504,17 @@
                              (playerRole === 'player2' && (pieceType === 2 || pieceType === 4));
             
             if (currentTurn === playerRole && isMyPiece) {
-                clearSelections();
-                selectedPiece = clickedPos;
-                piece.classList.add('selected');
-
-                // Geçerli hamleleri vurgula (Sunucu kontrol eder)
-                document.querySelectorAll('.square.dark').forEach(s => s.classList.add('possible-move'));
+                if (selectedPiece && selectedPiece.row === clickedPos.row && selectedPiece.col === clickedPos.col) {
+                    // Aynı taşa tekrar tıklandı: Seçimi kaldır
+                    clearSelections();
+                } else {
+                    // Yeni bir taş seçildi: Sunucudan geçerli hamleleri iste
+                    clearSelections();
+                    selectedPiece = clickedPos;
+                    piece.classList.add('selected');
+                    
+                    socket.emit('getPossibleMoves', { roomId: currentRoomId, from: clickedPos });
+                }
             } else {
                 clearSelections();
             }
@@ -494,7 +524,9 @@
             const square = event.currentTarget;
             const target = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
 
-            if (selectedPiece && square.classList.contains('dark')) {
+            // Eğer bir taş seçiliyse ve tıklanan kare geçerli hamlelerden biriyse
+            if (selectedPiece && square.classList.contains('possible-move')) {
+                // Hamle isteğini sunucuya gönder
                 socket.emit('move', { 
                     roomId: currentRoomId, 
                     from: selectedPiece, 
@@ -511,7 +543,7 @@
             statusDiv.classList.remove('error');
             statusDiv.classList.add('green');
             socket.emit('playerIdentity', { username: currentUsername });
-            resetGame(); // Bağlanınca lobiyi resetle
+            resetGame();
         });
 
         socket.on('readyToPlay', () => {
@@ -538,15 +570,12 @@
         });
         
         socket.on('gameStart', (data) => {
-            // FIX: Oyunun görünmeme sorunu bu blokun çalışmamasıydı.
             entryScreen.classList.remove('active');
             gameDiv.classList.add('active');
             
-            // Tüm overlay'leri kapat (Eşleşmeden gelmiş olabilir)
             document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
 
             currentRoomId = data.roomId;
-            // Rolü teyit et
             playerRole = data.player1Name === currentUsername ? 'player1' : 'player2';
             
             const isPlayer1 = playerRole === 'player1';
@@ -568,15 +597,27 @@
             }
         });
         
+        // Sunucudan hamle listesi geldiğinde
+        socket.on('possibleMoves', (moves) => {
+             possibleMoves = moves;
+             highlightMoves(moves);
+        });
+
+
         socket.on('boardUpdate', (data) => {
             updateBoard(data.board);
             updateTurn(data.turn);
-            // ... (zincirleme vurma mesajı) ...
+            // Zincirleme vurma durumunda kullanıcının tekrar hamle yapması gerekir.
+            if (data.chained) {
+                 statusDiv.textContent = 'ZİNCİRLEME VURMA! Aynı taşla devam edin.';
+                 // Zincirleme vurmada taş seçimi değişmez, yeni hamleleri göstermek gerekir.
+                 // (Daha karmaşık bir senaryo, bu simülasyonda tekrar taşa tıklanması gerekir.)
+            }
         });
 
         socket.on('gameOver', (data) => {
             const isMe = data.winner === playerRole;
-            alert(isMe ? 'TEBRİKLER! Oyunu Kazandınız! 🎉' : 'Üzgünüm, Oyunu Kaybettiniz. 😔');
+            alert(`OYUN BİTTİ! ${isMe ? 'TEBRİKLER! Oyunu Kazandınız! 🎉' : 'Üzgünüm, Oyunu Kaybettiniz. 😔'} Sebep: ${data.reason}`);
             resetGame();
         });
 
@@ -590,7 +631,13 @@
              resetGame();
         });
 
-        // --- LOBİ KONTROL OLAYLARI ---
+        // KRİTİK: GEÇERSİZ HAMLE BİLDİRİMİ
+        socket.on('invalidMove', (data) => {
+            alert("Geçersiz Hamle: " + data.message);
+            clearSelections(); // Hata varsa seçimi kaldır
+        });
+
+        // --- BUTON OLAYLARI (Lobi Kontrolü) ---
 
         // Dereceli Arama Başlat
         rankedBtn.addEventListener('click', () => {
@@ -615,7 +662,7 @@
                     currentRoomId = response.roomId;
                     playerRole = response.role;
                     currentRoomCode.textContent = currentRoomId; 
-                    document.getElementById('createStatus').textContent = 'Rakip bekleniyor...';
+                    document.getElementById('createStatus').textContent = 'Rakip bekleniyor... (Oda Kodu: ' + currentRoomId + ')';
                 } else {
                     currentRoomCode.textContent = 'HATA';
                     document.getElementById('createStatus').textContent = 'Oda kurulamadı: ' + response.message;
@@ -638,15 +685,14 @@
                 return;
             }
             toggleOverlay(joinOverlay, false);
-            // Sunucuya katılma isteği gönder
+            
             socket.emit('joinGame', { roomId: roomId }, (response) => {
                 if (!response.success) {
                     alert('Hata: ' + response.message);
-                    resetGame(); // Giriş ekranına dön
+                    resetGame();
                 } else {
                     currentRoomId = response.roomId;
                     playerRole = response.role;
-                    // Başarılı katılım sonrası 'gameStart' beklenir
                 }
             });
         });
@@ -678,6 +724,276 @@
 
         // İlk tahtayı çiz
         updateBoard(Array(8).fill(0).map(() => Array(8).fill(0)));
+    </script>
+
+
+    <script id="server-side-script" type="text/javascript">
+        // ** Bu Kısım SADECE server.js Dosyası İçin Geçerlidir ve Tarayıcıda Çalışmaz **
+        
+        /* const express = require('express');
+        const http = require('http');
+        const socketio = require('socket.io');
+
+        const PORT = process.env.PORT || 3000; 
+        const app = express();
+        const server = http.createServer(app);
+        const io = socketio(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
+
+        const users = {}; 
+        let rankedQueue = []; 
+        const games = {}; 
+        */
+
+
+        // --- DAMA MANTIĞI FONKSİYONLARI ---
+
+        // Tahta Kodları: 0=Boş, 1=Siyah Taş (P1), 2=Beyaz Taş (P2), 3=Siyah Kral, 4=Beyaz Kral
+        
+        function initializeBoard() {
+            const board = Array(8).fill(0).map(() => Array(8).fill(0));
+            // Beyaz (P2) - Üst 3 sıra (0-2)
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 8; c++) {
+                    board[r][c] = 2; 
+                }
+            }
+            // Siyah (P1) - Alt 3 sıra (5-7)
+            for (let r = 5; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    board[r][c] = 1; 
+                }
+            }
+            return board;
+        }
+        
+        // Yardımcı Fonksiyon: Rakip rengi bulur
+        function getOpponentPieceCodes(pieceType) {
+            if (pieceType === 1 || pieceType === 3) return [2, 4]; // Siyahın rakibi Beyaz
+            if (pieceType === 2 || pieceType === 4) return [1, 3]; // Beyazın rakibi Siyah
+            return [];
+        }
+
+        // --- TEMEL HAREKET VE VURMA MANTIKLARI ---
+        
+        function getPossibleMoves(game, r, c) {
+            const board = game.board;
+            const pieceType = board[r][c];
+            if (pieceType === 0) return [];
+
+            const isKing = pieceType === 3 || pieceType === 4;
+            const isBlack = pieceType === 1 || pieceType === 3;
+            const opponentCodes = getOpponentPieceCodes(pieceType);
+            
+            let moves = [];
+            let hits = [];
+            
+            // Dama kuralları: Dikey ve Yatay hareketler
+            const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Sağ, Sol, Aşağı, Yukarı
+
+            for (const [dr, dc] of directions) {
+                let currR = r + dr;
+                let currC = c + dc;
+                
+                // Normal Taşlar sadece ileri/yana gider
+                if (!isKing) {
+                    // Normal taşlar geri gidemez
+                    if (isBlack && dr === -1 && dc === 0) continue; // Siyah geriye (yukarı) gidemez
+                    if (!isBlack && dr === 1 && dc === 0) continue; // Beyaz geriye (aşağı) gidemez
+                }
+
+                // 1. ADIM: Vurma Kontrolü (Rakip taşın hemen yanındaki boş kare)
+                if (currR >= 0 && currR < 8 && currC >= 0 && currC < 8) {
+                    if (opponentCodes.includes(board[currR][currC])) {
+                        // Yanında rakip var: Atlama pozisyonunu kontrol et
+                        let landR = currR + dr;
+                        let landC = currC + dc;
+
+                        if (landR >= 0 && landR < 8 && landC >= 0 && landC < 8 && board[landR][landC] === 0) {
+                            hits.push({ row: landR, col: landC, targetR: currR, targetC: currC, isHit: true });
+                        }
+                    }
+                }
+                
+                // 2. ADIM: Normal Hareket Kontrolü (Sadece 1 adım ileri/yana)
+                if (hits.length === 0) {
+                    if (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR][currC] === 0) {
+                        // Eğer Kral değilse ve vuruş yoksa, sadece 1 adım hareket edebilir
+                        if (!isKing) {
+                            moves.push({ row: currR, col: currC, isHit: false });
+                        } else {
+                            // Kral ise, gittiği yönde ilerleyebilir (bu simülasyon için 1 adım yeterli)
+                            moves.push({ row: currR, col: currC, isHit: false });
+                        }
+                    }
+                }
+            }
+            
+            // Kral, normal taşların aksine birden fazla boş kare atlayabilir
+            // Bu simülasyonu basit tutmak için, Kral'ın da normal hareketini 1 adımla sınırlıyoruz.
+
+            // ÖNEMLİ KURAL: Vurma varsa, sadece vurma hamleleri geçerlidir.
+            if (hits.length > 0) return hits;
+            
+            return moves;
+        }
+
+        function getAllPossibleMoves(game, role) {
+            const board = game.board;
+            let allMoves = [];
+            const pieceCodes = role === 'player1' ? [1, 3] : [2, 4];
+            
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (pieceCodes.includes(board[r][c])) {
+                        const moves = getPossibleMoves(game, r, c);
+                        moves.forEach(move => {
+                            move.fromR = r;
+                            move.fromC = c;
+                            allMoves.push(move);
+                        });
+                    }
+                }
+            }
+            
+            const hasHits = allMoves.some(move => move.isHit);
+            if (hasHits) {
+                // Vurma zorunlu: Sadece vurma hamlelerini döndür.
+                return allMoves.filter(move => move.isHit);
+            }
+            
+            return allMoves;
+        }
+
+        function applyMove(game, from, to) {
+            const board = game.board;
+            const pieceType = board[from.row][from.col];
+            const currentRole = game.turn;
+
+            const allMoves = getAllPossibleMoves(game, currentRole);
+            
+            // Geçerli hamle kontrolü (Seçilen taştan gelen hamle, hedef kare ile eşleşmeli)
+            const validMove = allMoves.find(move => 
+                move.fromR === from.row && 
+                move.fromC === from.col && 
+                move.row === to.row && 
+                move.col === to.col
+            );
+
+            if (!validMove) {
+                // Hamle listesinde yoksa, ya vurma zorunludur ya da geçersiz hareket
+                const hasAnyHit = allMoves.some(m => m.isHit);
+                if (hasAnyHit) {
+                    return { success: false, message: 'Vurma zorunludur! Başka bir taşı seçmelisiniz.' };
+                }
+                return { success: false, message: 'Geçersiz hamle.' };
+            }
+
+            // --- Hamle Geçerli: Uygula ---
+            
+            // 1. Vurma işlemi
+            if (validMove.isHit) {
+                board[validMove.targetR][validMove.targetC] = 0; // Rakip taşı tahtadan sil
+            }
+
+            // 2. Taşı yeni konuma taşı
+            board[to.row][to.col] = pieceType;
+            board[from.row][from.col] = 0;
+
+            // 3. Kral Olma Kontrolü
+            if (pieceType === 1 && to.row === 0) board[to.row][to.col] = 3; // Siyah Kral
+            if (pieceType === 2 && to.row === 7) board[to.row][to.col] = 4; // Beyaz Kral
+            
+            // 4. Zincirleme Vurma Kontrolü (Vurma varsa, aynı taşla devam etme zorunluluğu)
+            let chained = false;
+            if (validMove.isHit) {
+                // Yeni pozisyonda bu taşın tekrar vurabileceği hamle var mı?
+                const nextMoves = getPossibleMoves(game, to.row, to.col);
+                if (nextMoves.some(m => m.isHit)) {
+                    chained = true;
+                }
+            }
+            
+            // 5. Sırayı değiştir (Zincirleme yoksa)
+            if (!chained) {
+                game.turn = currentRole === 'player1' ? 'player2' : 'player1';
+            }
+
+            return { success: true, board: board, turn: game.turn, chained: chained };
+        }
+
+        function checkWinCondition(game) {
+            const p1Pieces = game.board.flat().filter(p => p === 1 || p === 3).length;
+            const p2Pieces = game.board.flat().filter(p => p === 2 || p === 4).length;
+            
+            if (p1Pieces === 0) return { winner: 'player2', reason: 'Rakibin taşı kalmadı.' };
+            if (p2Pieces === 0) return { winner: 'player1', reason: 'Rakibin taşı kalmadı.' };
+
+            // Hamle yapamama kontrolü (Karmaşık, basitleştirildi)
+            const nextTurn = game.turn;
+            const possibleMovesForNextTurn = getAllPossibleMoves(game, nextTurn);
+            
+            if (possibleMovesForNextTurn.length === 0) {
+                const winner = nextTurn === 'player1' ? 'player2' : 'player1';
+                return { winner: winner, reason: `${nextTurn === 'player1' ? game.player1Name : game.player2Name} hareket edemiyor.` };
+            }
+
+            return null; // Oyun devam ediyor
+        }
+
+        // --- Sunucu ve Socket.io Mantığı (AYRI `server.js` dosyasında olmalı) ---
+        
+        /* io.on('connection', (socket) => {
+            // ... (Tüm Lobi ve Bağlantı Mantığı Buraya Gelir) ...
+
+            // Hamle Kontrolü İstek
+            socket.on('getPossibleMoves', (data) => {
+                const game = games[data.roomId];
+                if (!game || game.turn !== (game.player1Id === socket.id ? 'player1' : 'player2')) return;
+
+                const pieceRole = game.player1Id === socket.id ? 'player1' : 'player2';
+                const allValidMoves = getAllPossibleMoves(game, pieceRole);
+                
+                // Seçilen taşa ait olan geçerli hamleleri filtrele
+                const specificMoves = allValidMoves
+                    .filter(m => m.fromR === data.from.row && m.fromC === data.from.col)
+                    .map(m => ({ row: m.row, col: m.col }));
+                
+                socket.emit('possibleMoves', specificMoves);
+            });
+
+            // Hamle Yapma Olayı
+            socket.on('move', (data) => {
+                const game = games[data.roomId];
+                // ... (Sıra kontrolü) ...
+
+                const result = applyMove(game, data.from, data.to);
+
+                if (result.success) {
+                    const winResult = checkWinCondition(game);
+
+                    if (winResult) {
+                        io.to(data.roomId).emit('gameOver', winResult);
+                        delete games[data.roomId];
+                    } else {
+                        io.to(data.roomId).emit('boardUpdate', { 
+                            board: result.board, 
+                            turn: result.turn, 
+                            chained: result.chained 
+                        });
+                    }
+                } else {
+                    socket.emit('invalidMove', { message: result.message });
+                }
+            });
+
+            // ... (Diğer disconnect ve leaveGame olayları buraya gelir) ...
+        });
+
+        server.listen(PORT, () => {
+            console.log(`Sunucu ${PORT} portunda çalışıyor.`);
+        });
+        */
+        
     </script>
 </body>
 </html>
