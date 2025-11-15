@@ -1,203 +1,115 @@
-/* Base styles */
 body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+    font-family: 'Arial', sans-serif;
+    background-color: #333; /* Koyu arka plan */
+    color: #eee;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #1f1c2c, #928dab);
-    color: #eee;
-    font-family: 'Roboto', sans-serif;
-    touch-action: none;
-    -webkit-tap-highlight-color: transparent;
+    margin: 0;
 }
 
-/* Main container */
-#main-wrapper {
+/* --- Lobi Stilleri --- */
+#lobby {
+    background: #444;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+#roomIdInput, #createBtn, #joinBtn {
+    margin: 5px;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+#createBtn:hover, #joinBtn:hover {
+    cursor: pointer;
+    transform: translateY(-2px);
+}
+
+/* --- Oyun Tahtası Stilleri --- */
+#board {
+    display: grid;
+    grid-template-columns: repeat(8, 60px); /* Kare boyutu */
+    grid-template-rows: repeat(8, 60px);
+    width: 480px; /* 8 * 60px */
+    height: 480px;
+    margin: 20px auto;
+    border: 5px solid #8B4513; /* Tahta kenarlığı */
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+}
+
+.square {
     width: 100%;
     height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 10px;
-    box-sizing: border-box;
-}
-
-/* Game container */
-#game-container {
     position: relative;
-    width: 100%;
-    max-width: 800px; /* Maksimum genişlik */
-    aspect-ratio: 1/1; /* Kare oranını koru */
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
-    border-radius: 10px;
-    overflow: hidden;
-    background-color: #00000070;
-    margin: 0 auto;
 }
 
-/* Mobile landscape */
-@media (max-height: 500px) and (orientation: landscape) {
-    #game-container {
-        max-height: 90vh;
-        max-width: 90vh;
-    }
+.light {
+    background-color: #D2B48C; /* Açık kareler */
 }
 
-/* Mobile portrait */
-@media (orientation: portrait) {
-    #game-container {
-        max-width: 95vw;
-        max-height: 95vw;
-    }
+.dark {
+    background-color: #8B4513; /* Koyu (oynanabilir) kareler */
 }
 
-canvas {
-    display: block;
-    background-color: transparent;
-    position: absolute; /* Canvas'ın tam konuma oturmasını sağlar */
-    top: 0;
-    left: 0;
-}
-
-/* FOTOĞRAF DİVLERİ VE KILINÇ İKONLARI */
-.moving-photo {
-    position: absolute;
-    width: 15%;
-    height: auto;
-    aspect-ratio: 1/1;
+/* --- Taş Stilleri ve Animasyonlar --- */
+.piece {
+    width: 80%;
+    height: 80%;
     border-radius: 50%;
-    transform: translate(-50%, -50%); 
-    pointer-events: none;
-    user-select: none;
-    z-index: 10;
-    background-size: cover;
-    background-position: center;
-    border: 4px solid #fff; 
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
-    transition: box-shadow 0.1s ease-out;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 5vw;
-    box-sizing: border-box;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out; /* Animasyon! */
+    position: absolute; /* Hareket animasyonları için */
 }
 
-/* Adjust for larger screens */
-@media (min-width: 768px) {
-    .moving-photo {
-        font-size: 3vw;
-        border-width: 5px;
-    }
+.black {
+    background: linear-gradient(145deg, #1e1e1e, #000000);
+    border: 3px solid #333;
 }
 
-.sword-icon {
-    position: absolute;
-    font-size: 50px; 
-    top: -30px; 
-    right: -30px; 
-    transition: transform 0.1s ease-out;
-    pointer-events: none;
+.white {
+    background: linear-gradient(145deg, #f0f0f0, #ccc);
+    border: 3px solid #888;
 }
 
-/* Vuruş/Hasar Efekti */
-.hit-effect {
-    box-shadow: 0 0 15px 10px rgba(255, 0, 0, 0.8), 0 0 30px 15px rgba(255, 100, 100, 0.4);
-    border-radius: 50%;
-    transition: box-shadow 0.1s ease-out;
+.piece:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.6);
 }
 
-/* Eşya Emojisi */
-.item-emoji {
-    position: absolute;
-    font-size: 5vw;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    user-select: none;
-    z-index: 11;
-    display: none;
-    animation: rotateItem 4s linear infinite;
+/* Kral taşı stili */
+.king {
+    border: 5px solid gold;
+    /* Kral tacı görseli için after/before kullanılabilir */
 }
 
-/* Adjust for larger screens */
-@media (min-width: 768px) {
-    .item-emoji {
-        font-size: 2.5vw;
-    }
-}
-
-@keyframes rotateItem {
-    from { transform: translate(-50%, -50%) rotate(0deg); }
-    to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-/* STATUS BAR STİLİ */
-#status-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 20px;
-    z-index: 20;
-    background-color: #00000070;
-    box-sizing: border-box;
-}
-
-/* ... (Can Çubuğu Stilleri Aynı Kalır) ... */
-
-/* ! YENİ: Alt Özelleştirme Butonu */
-#customize-button {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 20;
-    padding: 10px 15px;
-    font-size: 14px;
-    background-color: #f1c40f;
-    color: #333;
-    border: none;
+/* Sıra Göstergesi Animasyonu */
+#turnIndicator {
+    font-size: 24px;
+    padding: 10px;
     border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s;
+    margin-bottom: 20px;
 }
-#customize-button:hover {
-    background-color: #f39c12;
+.turn-mine {
+    background-color: #4CAF50; /* Yeşil */
+    animation: pulse 1.5s infinite;
 }
-
-
-/* OYUN BİTTİ MODALI STİLLERİ */
-.modal-actions {
-    display: flex;
-    gap: 15px;
-    margin-top: 20px;
+.turn-opponent {
+    background-color: #f44336; /* Kırmızı */
 }
 
-.modal-btn {
-    padding: 10px 20px;
-    font-size: 16px;
-    font-weight: bold;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-#restart-button {
-    background-color: #2ECC71; /* Yeşil - Aynı Ayarla Başlat */
-}
-#restart-button:hover {
-    background-color: #27AE60;
-}
-
-#new-game-button {
-    background-color: #3498DB; /* Mavi - Yeni Kurulum */
-}
-#new-game-button:hover {
-    background-color: #2980B9;
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
 }
