@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🏆 Şaşki ELO (Dama)</title>
+    <title>🎮 Dama Oyunu</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
         /* Ana Ekran Yönetimi */
@@ -198,28 +197,37 @@
 </head>
 <body>
     <!-- Ana Menü -->
-    <div id="mainMenu" class="flex flex-col items-center">
-        <h1 class="text-3xl font-bold mb-8">🏆 Şaşki ELO</h1>
+    <div id="mainMenu" class="flex flex-col items-center p-4 w-full max-w-md mx-auto">
+        <h1 class="text-3xl font-bold mb-8 text-center">🎮 Dama Oyunu</h1>
         
-        <div id="status" class="status" style="display: none;"></div>
+        <div id="status" class="status mb-6 text-center"></div>
         
-        <button id="rankedButton" class="btn btn-primary">
-            <i class="fas fa-trophy mr-2"></i> Dereceli Maç
-        </button>
-        
-        <button id="privateButton" class="btn">
-            <i class="fas fa-user-friends mr-2"></i> Özel Oda Oluştur
-        </button>
-        
-        <div class="input-group">
-            <input type="text" id="roomCodeInput" placeholder="Oda Kodunu Girin" class="w-full">
+        <div class="w-full space-y-4">
+            <button id="createGameBtn" class="btn btn-primary w-full">
+                <i class="fas fa-plus-circle mr-2"></i> Yeni Oyun Başlat
+            </button>
+            
+            <div class="flex items-center my-4">
+                <div class="flex-grow border-t border-gray-600"></div>
+                <span class="px-4 text-gray-400">veya</span>
+                <div class="flex-grow border-t border-gray-600"></div>
+            </div>
+            
+            <div class="relative">
+                <input type="text" id="roomCodeInput" 
+                       class="w-full px-4 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="Oda Kodunu Girin">
+                <button id="joinButton" class="btn btn-success w-full mt-2">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Odaya Katıl
+                </button>
+            </div>
         </div>
         
-        <button id="joinButton" class="btn btn-success">
-            <i class="fas fa-sign-in-alt mr-2"></i> Odaya Katıl
-        </button>
-        
-        <div id="roomCodeDisplay" class="mt-4 text-lg font-semibold hidden"></div>
+        <div id="roomInfo" class="mt-6 text-center hidden">
+            <p class="text-gray-400 mb-2">Oda Kodu:</p>
+            <div id="roomCodeDisplay" class="text-2xl font-bold text-blue-400"></div>
+            <p class="text-sm text-gray-400 mt-2">Bu kodu arkadaşınıza verin</p>
+        </div>
     </div>
     
     <!-- Oyun Ekranı -->
@@ -571,21 +579,8 @@
         
         // --------------- 3. SOCKET BAĞLANTI VE OYUN OLAYLARI ---------------
         
-        // Socket.IO bağlantısı - Doğrudan bağlantı
-        const serverUrl = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
-        const socket = io(serverUrl, {
-            reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-            timeout: 20000,
-            transports: ['websocket', 'polling'],
-            upgrade: true,
-            forceNew: true,
-            withCredentials: true,
-            extraHeaders: {
-                'Access-Control-Allow-Origin': '*'
-            }
-        });
+        // Socket.IO bağlantısı game.js içinde yapılıyor
+        // Buradaki fazladan socket bağlantısını kaldırıyoruz
 
         // Sayfa yüklendiğinde doğrudan lobby ekranını göster
         $(document).ready(function() {
@@ -595,108 +590,108 @@
         });
 
         // Bağlantı başarılı olduğunda
-        socket.on('connect', () => {
-            console.log('Sunucuya bağlandı!');
-        });
+        //socket.on('connect', () => {
+        //    console.log('Sunucuya bağlandı!');
+        //});
 
         // Hata durumunda
-        socket.on('connect_error', (error) => {
-            console.error('Bağlantı hatası:', error);
-            fetchLeaderboard();
-        });
+        //socket.on('connect_error', (error) => {
+        //    console.error('Bağlantı hatası:', error);
+        //    fetchLeaderboard();
+        //});
 
         // YENİ: Kuyruğa Girildiğinde
-        socket.on('queueEntered', () => {
-            showScreen('queueScreen');
-            startQueueTimer();
-        });
+        //socket.on('queueEntered', () => {
+        //    showScreen('queueScreen');
+        //    startQueueTimer();
+        //});
         
         // YENİ: Kuyruktan Çıkıldığında
-        socket.on('queueLeft', () => {
-            stopQueueTimer();
-            showScreen('lobby');
-            showMessage('Dereceli arama iptal edildi.');
-        });
+        //socket.on('queueLeft', () => {
+        //    stopQueueTimer();
+        //    showScreen('lobby');
+        //    showMessage('Dereceli arama iptal edildi.');
+        //});
 
 
-        socket.on('disconnect', () => {
-            stopQueueTimer(); // Bağlantı kesilirse sayacı durdur
-            showMessage('Bağlantı kesildi. Tekrar deneniyor...', true);
-            $('#loadingMessage').fadeIn(300);
-            $('#loadingText').text('Bağlantı kesildi, tekrar deneniyor...');
-        });
+        //socket.on('disconnect', () => {
+        //    stopQueueTimer(); // Bağlantı kesilirse sayacı durdur
+        //    showMessage('Bağlantı kesildi. Tekrar deneniyor...', true);
+        //    $('#loadingMessage').fadeIn(300);
+        //    $('#loadingText').text('Bağlantı kesildi, tekrar deneniyor...');
+        //});
 
-        socket.on('error', (message) => { 
-            stopQueueTimer(); // Hata alınırsa sayacı durdur
-            showMessage(message, true); 
-            if ($('#queueScreen').hasClass('active')) {
-                showScreen('lobby');
-            }
-        });
+        //socket.on('error', (message) => { 
+        //    stopQueueTimer(); // Hata alınırsa sayacı durdur
+        //    showMessage(message, true); 
+        //    if ($('#queueScreen').hasClass('active')) {
+        //        showScreen('lobby');
+        //    }
+        //});
         
-        socket.on('rankUpdate', fetchLeaderboard);
+        //socket.on('rankUpdate', fetchLeaderboard);
 
         // ODA OLUŞTURMA (Sadece Arkadaşla Oyna Modunda Çalışır)
-        socket.on('roomCreated', (data) => {
-            currentRoomId = data.roomId;
-            myColor = data.color;
-            CURRENT_ELO = data.elo;
-            updateWelcomeMessage();
-            $('#waitRoomCode').text(`Oda Kodu: ${data.roomId}`);
-            $('#waitGameType').text(data.isRanked ? 'Dereceli Oyun' : 'Eğlence Oyunu');
-            showScreen('waitScreen');
-        });
+        //socket.on('roomCreated', (data) => {
+        //    currentRoomId = data.roomId;
+        //    myColor = data.color;
+        //    CURRENT_ELO = data.elo;
+        //    updateWelcomeMessage();
+        //    $('#waitRoomCode').text(`Oda Kodu: ${data.roomId}`);
+        //    $('#waitGameType').text(data.isRanked ? 'Dereceli Oyun' : 'Eğlence Oyunu');
+        //    showScreen('waitScreen');
+        //});
 
         // Odaya Katılma (Sadece Arkadaşla Oyna Modunda Çalışır)
-        socket.on('roomJoined', (roomId) => {
-            currentRoomId = roomId;
-            showScreen('waitScreen'); 
-        });
+        //socket.on('roomJoined', (roomId) => {
+        //    currentRoomId = roomId;
+        //    showScreen('waitScreen'); 
+        //});
 
-        socket.on('gameStart', (data) => {
-            stopQueueTimer(); // Oyun başladığında sayacı durdur
-            myColor = data.blackName === USERNAME ? 'black' : 'white';
-            game = data; 
-            showMessage('Rakip bulundu! Oyun Başlıyor.', false);
-            showScreen('gameScreen');
-            drawBoard(); 
-            updateBoard(data);
-        });
+        //socket.on('gameStart', (data) => {
+        //    stopQueueTimer(); // Oyun başladığında sayacı durdur
+        //    myColor = data.blackName === USERNAME ? 'black' : 'white';
+        //    game = data; 
+        //    showMessage('Rakip bulundu! Oyun Başlıyor.', false);
+        //    showScreen('gameScreen');
+        //    drawBoard(); 
+        //    updateBoard(data);
+        //});
 
-        socket.on('boardUpdate', (data) => {
-            game = { ...game, ...data };
-            updateBoard(game);
-        });
+        //socket.on('boardUpdate', (data) => {
+        //    game = { ...game, ...data };
+        //    updateBoard(game);
+        //});
 
-        socket.on('gameOver', (data) => {
-            stopQueueTimer(); 
-            const winnerName = data.winner;
-            const isWinner = winnerName === USERNAME;
+        //socket.on('gameOver', (data) => {
+        //    stopQueueTimer(); 
+        //    const winnerName = data.winner;
+        //    const isWinner = winnerName === USERNAME;
             
-            let message = isWinner ? 'Tebrikler, kazandınız!' : 'Maalesef, kaybettiniz.';
+        //    let message = isWinner ? 'Tebrikler, kazandınız!' : 'Maalesef, kaybettiniz.';
             
-            if(data.isRanked) {
-                const eloChange = isWinner ? data.winnerEloChange : -data.winnerEloChange;
-                message += ` ELO Puanı: ${eloChange > 0 ? '+' : ''}${eloChange}`;
-                $('#playAgainCasualBtn').hide(); // Derecelide tekrar oyna yok
-            } else {
-                $('#playAgainCasualBtn').show(); // Casual ise tekrar oyna butonu görünür
-            }
+        //    if(data.isRanked) {
+        //        const eloChange = isWinner ? data.winnerEloChange : -data.winnerEloChange;
+        //        message += ` ELO Puanı: ${eloChange > 0 ? '+' : ''}${eloChange}`;
+        //        $('#playAgainCasualBtn').hide(); // Derecelide tekrar oyna yok
+        //    } else {
+        //        $('#playAgainCasualBtn').show(); // Casual ise tekrar oyna butonu görünür
+        //    }
 
-            $('#gameOverResult').text(isWinner ? '🏆 ZAFER!' : '😔 MAĞLUBİYET!');
-            $('#gameOverMessage').html(`Kazanan: <span class="font-bold text-lg text-yellow-300">${winnerName}</span><br>${message}`);
+        //    $('#gameOverResult').text(isWinner ? '🏆 ZAFER!' : '😔 MAĞLUBİYET!');
+        //    $('#gameOverMessage').html(`Kazanan: <span class="font-bold text-lg text-yellow-300">${winnerName}</span><br>${message}`);
             
-            showScreen('gameOverScreen');
-            fetchLeaderboard();
-        });
+        //    showScreen('gameOverScreen');
+        //    fetchLeaderboard();
+        //});
         
-        socket.on('opponentLeft', (message) => {
-            stopQueueTimer();
-            showMessage(message, true);
-            socket.emit('leaveRoom', currentRoomId);
-            currentRoomId = null;
-            showScreen('lobby');
-        });
+        //socket.on('opponentLeft', (message) => {
+        //    stopQueueTimer();
+        //    showMessage(message, true);
+        //    socket.emit('leaveRoom', currentRoomId);
+        //    currentRoomId = null;
+        //    showScreen('lobby');
+        //});
 
 
         // --------------- 4. OYUN TAHTASI VE ARAYÜZ GÜNCELLEMELERİ (Aynı Kalır) ---------------
@@ -798,15 +793,20 @@
 
 
         // --------------- 5. SKOR TABLOSU ÇEKME (Aynı Kalır) ---------------
-        function fetchLeaderboard() {
-            const API_URL = `${RENDER_URL}/api/leaderboard`; 
+        //function fetchLeaderboard() {
+        //    const API_URL = `${RENDER_URL}/api/leaderboard`; 
             
-            fetch(`${API_URL}?id=${TELEGRAM_ID}`)
-                .then(res => {
-                    if (!res.ok) throw new Error('API yanıtı hatalı.');
-                    return res.json();
-                })
-                .then(data => {
+        //    fetch(`${API_URL}?id=${TELEGRAM_ID}`)
+        //        .then(res => {
+        //            if (!res.ok) throw new Error('API yanıtı hatalı.');
+        //            return res.json();
+        //        })
+        //        .then(data => {
+        //            const top10 = data.top10 || [];
+        //            const userStats = data.userStats;
+        //            const tbody = $('#leaderboardBody');
+        //            const userRankInfo = $('#userRankInfo');
+        //            tbody.empty();
                     const top10 = data.top10 || [];
                     const userStats = data.userStats;
                     const tbody = $('#leaderboardBody');
@@ -853,16 +853,16 @@
         $(document).ready(function() {
             loadTelegramData(); 
 
-            // Eşleşme Başlatma
-            $('#createRankedBtn, #createCasualBtn').on('click', function() {
-                const isRanked = $(this).data('ranked');
-                
-                if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
-                    return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
-                }
+            // Eşleşme Başlatma - Bu butonlar artık kullanılmıyor
+            // $('#createRankedBtn, #createCasualBtn').on('click', function() {
+            //     const isRanked = $(this).data('ranked');
+            //     
+            //     if (isRanked && TELEGRAM_ID.startsWith('GUEST_')) {
+            //         return showMessage("Dereceli oynamak için Telegram girişi gereklidir.", true);
+            //     }
 
-                socket.emit('createRoom', { 
-                    username: USERNAME, 
+            //     socket.emit('createRoom', { 
+            //         username: USERNAME, 
                     telegramId: TELEGRAM_ID, 
                     isRanked: isRanked 
                 });
@@ -930,6 +930,10 @@
             });
         });
         
+        // Oyunu başlat
+        document.addEventListener('DOMContentLoaded', function() {
+            initGame();
+        });
     </script>
 </body>
 </html>
