@@ -7,19 +7,29 @@ const { Client } = require('pg');
 const app = express();
 const server = http.createServer(app);
 
-// CORS ve Transport Ayarları
+// CORS ve WebSocket Ayarları
 const io = new Server(server, {
     cors: {
-        origin: true, // Tüm kaynaklara izin ver
-        methods: ["GET", "POST", "OPTIONS"],
+        origin: '*', // Tüm kaynaklara izin ver
+        methods: ['GET', 'POST', 'OPTIONS'],
         credentials: true,
-        allowedHeaders: ["Content-Type", "Authorization"]
+        allowedHeaders: ['Content-Type', 'Authorization']
     },
     transports: ['websocket', 'polling'],
     allowEIO3: true,
     pingTimeout: 60000,
     pingInterval: 25000,
-    cookie: false
+    cookie: false,
+    serveClient: false,
+    path: '/socket.io/'
+});
+
+// HTTP isteklerini yönlendir
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    next();
 });
 
 // Oyun odalarını ve oyuncuları tutacak yapılar
