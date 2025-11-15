@@ -124,13 +124,15 @@ function clearSelections() {
 function updateBoard(board) {
     currentBoard = board;
     boardDiv.innerHTML = '';
-    clearSelections(); // Tahta her güncellendiğinde seçim ve vurgulamaları sıfırla
     
+    // Tahtayı yeniden oluştururken, önceki seçimi koruyamayız, bu yüzden sıfırlarız.
+    // Ancak zincirleme vurmada seçili taşı korumak için, selectedPiece'in içeriğini kaybetmeyiz.
+    const tempSelected = selectedPiece;
+    clearSelections();
+
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const square = document.createElement('div');
-            // Dama tahtasında tüm kareler kullanılabilir, ancak Türk damasında genelde koyu kareler kullanılır.
-            // Oyun mantığında tüm kareleri kullandığımız için görselde de hepsini kullanabiliriz (Klasik dama tahtası rengi).
             const isDark = (r + c) % 2 !== 0; 
             square.className = `square ${isDark ? 'dark' : 'light'}`;
             square.dataset.row = r;
@@ -151,8 +153,14 @@ function updateBoard(board) {
 
                 piece.className = `piece ${pieceClass} ${isKing ? 'king' : ''}`;
                 piece.innerHTML = kingIcon;
-                // Taşa tıklama olayını ekle
                 piece.addEventListener('click', handlePieceClick);
+                
+                // Eğer tahta güncellenirken bir taş seçili kalmalıysa (zincirleme vurma)
+                if (tempSelected && tempSelected.row === r && tempSelected.col === c) {
+                     piece.classList.add('selected');
+                     selectedPiece = tempSelected; // Seçili taşı geri yükle
+                }
+
                 square.appendChild(piece);
             }
             boardDiv.appendChild(square);
@@ -221,7 +229,6 @@ function handleSquareClick(event) {
     const target = { row: parseInt(square.dataset.row), col: parseInt(square.dataset.col) };
 
     // Eğer bir taş seçiliyse ve tıklanan kare geçerli hamlelerden biriyse
-    // possibleMoves dizisinde bu hedef koordinatın olup olmadığını kontrol et.
     const isPossible = possibleMoves.some(move => move.row === target.row && move.col === target.col);
 
     if (selectedPiece && isPossible) {
@@ -231,7 +238,8 @@ function handleSquareClick(event) {
             from: selectedPiece, 
             to: target 
         });
-        clearSelections();
+        // Hamle yapıldıktan sonra yerel seçimi kaldır
+        clearSelections(); 
     } else {
         // Geçerli hamle olmayan yere tıklandıysa, seçimi kaldır.
         clearSelections();
@@ -277,7 +285,6 @@ socket.on('gameStart', (data) => {
     
     document.querySelectorAll('.sub-screen-overlay').forEach(o => o.classList.remove('active'));
 
-    // Rolü belirle (matchFound'dan gelmiş olabilir ama burada kesinleştirelim)
     playerRole = data.player1Name === currentUsername ? 'player1' : 'player2';
     
     const isPlayer1 = playerRole === 'player1';
@@ -292,7 +299,6 @@ socket.on('gameStart', (data) => {
     updateBoard(data.board);
     updateTurn(data.turn);
 
-    // Tahtayı kendi bakış açımıza göre çevir
     if (!isPlayer1) {
         boardDiv.classList.add('player2-view');
     } else {
@@ -311,14 +317,28 @@ socket.on('possibleMoves', (moves) => {
 
 socket.on('boardUpdate', (data) => {
     // Hamle yapıldıktan sonra tahtayı güncelle
+    // Eğer zincirleme vurma varsa, tahtayı güncelledikten sonra seçili taşı tekrar işaretleyip hamleleri göster
     updateBoard(data.board);
     updateTurn(data.turn);
+
     if (data.chained) {
          statusDiv.textContent = 'ZİNCİRLEME VURMA! Aynı taşla devam edin.';
-         // Zincirleme vurmada otomatik olarak tekrar hamle isteği yapabiliriz (opsiyonel)
-         // Şu anki koddaki gibi kullanıcıdan tekrar taşa tıklamasını beklemek de geçerli.
+         // Zincirleme vurmada taş hala seçili kalmalıdır.
+         const pieceElement = document.querySelector(`[data-row="${data.to.row}"][data-col="${data.to.col}"] .piece`);
+         if (pieceElement) {
+            selectedPiece = data.to;
+            pieceElement.classList.add('selected');
+            // Yeni pozisyon için geçerli hamleleri tekrar iste
+            socket.emit('getPossibleMoves', { roomId: currentRoomId, from: selectedPiece });
+         } else {
+             // Taş bir nedenden dolayı görünmezse, sıfırla.
+             clearSelections(); 
+         }
+    } else {
+         clearSelections();
     }
 });
+
 
 socket.on('gameOver', (data) => {
     const isMe = data.winner === playerRole;
@@ -336,7 +356,6 @@ socket.on('gameLeft', () => {
      resetGame();
 });
 
-// KRİTİK: GEÇERSİZ HAMLE BİLDİRİMİ
 socket.on('invalidMove', (data) => {
     alert("Geçersiz Hamle: " + data.message);
     clearSelections(); // Hata varsa seçimi kaldır
