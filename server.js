@@ -195,6 +195,123 @@ function initializeBoard() {
 }
 
 // Socket bağlantılarını dinle
+// Özel oda oluşturma
+io.on('createPrivateRoom', ({ username }, callback) => {
+    try {
+        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+        
+        games[code] = {
+            isRanked: false,
+            players: {
+                'black': {
+                    id: socket.id,
+                    username: username || `Oyuncu_${Math.floor(1000 + Math.random() * 9000)}`,
+                    ready: true
+                },
+                'white': null
+            },
+            board: initializeCheckersBoard(),
+            turn: 'black',
+            lastJump: null,
+            isGameOver: false,
+            createdAt: Date.now()
+        };
+
+        socketToRoom[socket.id] = code;
+        socket.join(code);
+
+        console.log(`Yeni oda oluşturuldu: ${code} - Oluşturan: ${socket.id}`);
+        
+        if (callback) {
+            callback({ 
+                success: true, 
+                roomCode: code,
+                playerColor: 'black'
+            });
+        }
+    } catch (error) {
+        console.error('Oda oluşturulurken hata:', error);
+        if (callback) {
+            callback({ 
+                success: false, 
+                error: 'Oda oluşturulamadı' 
+            });
+        }
+    }
+});
+
+// Özel odaya katılma
+io.on('joinPrivateRoom', ({ roomCode, username }, callback) => {
+    try {
+        roomCode = roomCode.toUpperCase().trim();
+        const game = games[roomCode];
+        
+        if (!game) {
+            return callback({ 
+                success: false, 
+                error: 'Oda bulunamadı' 
+            });
+        }
+
+        // Eğer oda doluysa
+        if (game.players.white) {
+            return callback({ 
+                success: false, 
+                error: 'Oda dolu' 
+            });
+        }
+
+        // İkinci oyuncuyu ekle
+        game.players.white = {
+            id: socket.id,
+            username: username || `Oyuncu_${Math.floor(1000 + Math.random() * 9000)}`,
+            ready: true
+        };
+
+        socketToRoom[socket.id] = roomCode;
+        socket.join(roomCode);
+
+        // Oyun başlat
+        const blackPlayer = game.players.black;
+        const whitePlayer = game.players.white;
+
+        // Her iki oyuncuya da oyun başlangıç bilgilerini gönder
+        io.to(blackPlayer.id).emit('gameStart', {
+            roomCode,
+            board: game.board,
+            turn: game.turn,
+            playerColor: 'black',
+            opponentName: whitePlayer.username
+        });
+
+        io.to(whitePlayer.id).emit('gameStart', {
+            roomCode,
+            board: game.board,
+            turn: game.turn,
+            playerColor: 'white',
+            opponentName: blackPlayer.username
+        });
+
+        console.log(`Oda ${roomCode} başarıyla dolduruldu. Oyun başlıyor...`);
+        
+        if (callback) {
+            callback({ 
+                success: true,
+                roomCode,
+                playerColor: 'white'
+            });
+        }
+    } catch (error) {
+        console.error('Odaya katılırken hata:', error);
+        if (callback) {
+            callback({ 
+                success: false, 
+                error: 'Odaya katılamadı' 
+            });
+        }
+    }
+});
+
 io.on('connection', (socket) => {
     console.log('Yeni bir kullanıcı bağlandı:', socket.id);
     
