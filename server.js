@@ -8,7 +8,6 @@ const server = http.createServer(app);
 // **Render ve Github Pages için CORS Ayarları**
 const io = socketio(server, {
     cors: {
-        // Her kaynaktan bağlantıya izin verilir (Güvenlik için spesifik alan adı önerilir!)
         origin: "*", 
         methods: ["GET", "POST"]
     }
@@ -18,33 +17,35 @@ const PORT = process.env.PORT || 10000;
 
 // --- SUNUCU OYUN DURUMU YÖNETİMİ ---
 let lobbies = {}; 
-// Socket ID'leri yerine, { socketId: '...', username: '...' } objeleri tutulacak.
-let rankingQueue = []; 
+let rankingQueue = []; // [{ socketId: '...', username: '...' }]
 
-// Basit Dama Başlangıç Tahtası
 const INITIAL_BOARD_STATE = [
-    [0, 2, 0, 2, 0, 2, 0, 2],
-    [2, 0, 2, 0, 2, 0, 2, 0],
-    [0, 2, 0, 2, 0, 2, 0, 2],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0],
-    [1, 0, 1, 0, 1, 0, 1, 0],
-    [0, 1, 0, 1, 0, 1, 0, 1],
-    [1, 0, 1, 0, 1, 0, 1, 0]
+    [0, 2, 0, 2, 0, 2, 0, 2], [2, 0, 2, 0, 2, 0, 2, 0],
+    [0, 2, 0, 2, 0, 2, 0, 2], [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0], [1, 0, 1, 0, 1, 0, 1, 0],
+    [0, 1, 0, 1, 0, 1, 0, 1], [1, 0, 1, 0, 1, 0, 1, 0]
 ];
 
-// Benzersiz 4 haneli oda kodu üretir
 function generateLobbyId() {
-    return Math.random().toString(36).substring(2, 6).toUpperCase();
+    // 4 Rakamlı Oda Kodu
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+// Socket'i eşleştirme kuyruğundan bulup çıkarır
+function removeSocketFromQueue(socketId) {
+    const index = rankingQueue.findIndex(q => q.socketId === socketId);
+    if (index > -1) {
+        rankingQueue.splice(index, 1);
+        return true;
+    }
+    return false;
 }
 
 io.on('connection', (socket) => {
-    console.log(`✅ Yeni bir kullanıcı bağlandı: ${socket.id}`);
-
-    // Kullanıcının hangi lobide olduğunu saklar
+    console.log(`✅ Yeni kullanıcı: ${socket.id}`);
     socket.data.lobbyId = null;
 
-    // --- LOBİ KURMA ---
+    // --- LOBİ KURMA (ARKADAŞLA OYNA) ---
     socket.on('create_lobby', (username) => {
         if (socket.data.lobbyId) return socket.emit('error', 'Zaten bir oyundasınız.');
 
@@ -60,8 +61,9 @@ io.on('connection', (socket) => {
         socket.join(lobbyId);
         socket.data.lobbyId = lobbyId;
         
+        // P1'e oda kodunu gönder
         socket.emit('lobby_created', { lobbyId, playerRole: 1, username });
-        console.log(`🎲 Lobi kuruldu: ${lobbyId} (P1: ${username})`);
+        console.log(`🎲 Lobi kuruldu: ${lobbyId}`);
     });
 
     // --- ODAYA KATILMA ---
@@ -70,29 +72,25 @@ io.on('connection', (socket) => {
         const lobby = lobbies[lobbyId];
 
         if (!lobby || lobby.player2) {
-            return socket.emit('error', 'Oda kodu geçersiz, mevcut değil veya dolu.');
+            return socket.emit('error', 'Oda kodu geçersiz veya dolu. Kod: ' + lobbyId);
         }
 
         lobby.player2 = { socketId: socket.id, username: username, role: 2 };
         socket.join(lobbyId);
         socket.data.lobbyId = lobbyId;
 
-        // P2'ye bilgiyi gönder
         socket.emit('lobby_joined', { lobbyId, playerRole: 2, username });
-        
-        // P1'e P2'nin katıldığını bildir
-        io.to(lobby.player1.socketId).emit('player2_joined', username); 
         
         // Oyunu başlatma sinyali (Her iki oyuncuya da)
         io.to(lobbyId).emit('game_start', { 
             lobbyId, 
             initialState: lobby.boardState, 
             turn: lobby.turn,
-            player1Username: lobby.player1.username,
-            player2Username: username
+            player1: lobby.player1,
+            player2: lobby.player2
         });
         
-        console.log(`🤝 Oyuncu 2 katıldı: ${lobbyId} (P2: ${username})`);
+        console.log(`🤝 Oyuncu 2 katıldı: ${lobbyId}`);
     });
 
     // --- DERECE LOBİSİ VE EŞLEŞTİRME ---
@@ -102,7 +100,18 @@ io.on('connection', (socket) => {
         
         // 1. Eşleşme bulunduysa
         if (rankingQueue.length > 0) {
-            const opponent = rankingQueue.shift(); // İlk bekleyeni al
+            const opponent = rankingQueue.shift(); // Sırada bekleyen ilk kişiyi al
+            
+            // Rakip soketin hala bağlı olduğundan emin ol
+            const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+            if (!opponentSocket) {
+                 console.log(`❌ Rakip soket bulunamadı, sıradan atlandı: ${opponent.socketId}`);
+                 // Bu kişiyi sıraya geri ekle
+                 rankingQueue.push({ socketId: socket.id, username: username });
+                 socket.emit('waiting_for_opponent', 'Geçici sorun oluştu, tekrar aranıyor...');
+                 return;
+            }
+
             const lobbyId = generateLobbyId();
             
             const newLobby = {
@@ -115,49 +124,48 @@ io.on('connection', (socket) => {
             };
             lobbies[lobbyId] = newLobby;
             
-            // Odaya dahil etme
+            // Odaya dahil etme ve lobiId atama
             socket.join(lobbyId);
-            io.to(opponent.socketId).join(lobbyId);
+            opponentSocket.join(lobbyId);
             socket.data.lobbyId = lobbyId;
-            io.sockets.sockets.get(opponent.socketId).data.lobbyId = lobbyId;
+            opponentSocket.data.lobbyId = lobbyId;
 
             // Oyunu başlatma sinyali (Her iki oyuncuya da)
-            io.to(lobbyId).emit('rank_match_start', { lobbyId, player1Username: opponent.username, player2Username: username });
+            io.to(lobbyId).emit('rank_match_start', { lobbyId });
             
             io.to(lobbyId).emit('game_start', { 
                 lobbyId, 
                 initialState: newLobby.boardState, 
                 turn: newLobby.turn,
-                player1Username: opponent.username,
-                player2Username: username
+                player1: newLobby.player1,
+                player2: newLobby.player2
             });
 
             console.log(`👑 Dereceli Eşleşme Başladı: ${lobbyId}`);
         } else {
             // 2. Sıraya ekle
             rankingQueue.push({ socketId: socket.id, username: username });
-            socket.emit('waiting_for_opponent', 'Dereceli eşleşme bekleniyor...');
+            socket.emit('waiting_for_opponent', 'Dereceli eşleşme aranıyor. Lütfen bekleyiniz...');
             console.log(`⏳ Sıraya eklendi: ${socket.id} (${username})`);
         }
     });
-
+    
     // --- OYUN İÇİ HAMLE İLETİMİ ---
-
     socket.on('make_move', (data) => {
         const { lobbyId, move } = data;
         const lobby = lobbies[lobbyId];
 
         if (!lobby || socket.data.lobbyId !== lobbyId) return socket.emit('error', 'Geçersiz lobi veya yetkisiz hamle.');
         
-        // Hamleyi yapan oyuncu rolü (1 veya 2)
         const playerRole = (socket.id === lobby.player1.socketId) ? 1 : 2;
 
-        // **SIRA KONTROLÜ**
+        // SIRA KONTROLÜ
         if (playerRole !== lobby.turn) { 
              return socket.emit('error', 'Sıra sizde değil!'); 
         }
 
-        // *** GEREKİRSE BURAYA GELİŞMİŞ OYUN KURAL KONTROLÜ EKLENMELİ ***
+        // *** GERÇEK DAMA KURALLARI VE TAHTA GÜNCELLEMESİ BURAYA EKLENMELİ ***
+        // Şu an sadece hamleyi iletiyoruz:
 
         // Hamleyi lobi içerisindeki diğer oyuncuya ilet
         socket.to(lobbyId).emit('opponent_moved', move); 
@@ -165,17 +173,19 @@ io.on('connection', (socket) => {
         // Sunucudaki sırayı değiştir
         lobby.turn = (lobby.turn === 1) ? 2 : 1;
         
+        // Frontend'in sıranın değiştiğini bilmesi için sinyal gönder
+        io.to(lobbyId).emit('turn_changed', { newTurn: lobby.turn });
+
         console.log(`➡️ Hamle İletildi (${lobbyId}): P${playerRole} -> P${lobby.turn}`);
     });
-
+    
     // --- BAĞLANTI KESİLMESİ İŞLEMLERİ ---
-
     socket.on('disconnect', () => {
         console.log(`❌ Kullanıcı ayrıldı: ${socket.id}`);
         const currentLobbyId = socket.data.lobbyId;
 
         // 1. Eşleştirme kuyruğundan çıkar
-        rankingQueue = rankingQueue.filter(q => q.socketId !== socket.id);
+        removeSocketFromQueue(socket.id);
 
         // 2. Lobiden çıkar ve rakibe haber ver
         if (currentLobbyId && lobbies[currentLobbyId]) {
@@ -190,7 +200,6 @@ io.on('connection', (socket) => {
 
             if (opponentId) {
                 io.to(opponentId).emit('opponent_disconnected', 'Rakip bağlantıyı kesti. Oyunu kazandınız!');
-                // Rakibin lobisini de temizle
                 const opponentSocket = io.sockets.sockets.get(opponentId);
                 if (opponentSocket) opponentSocket.data.lobbyId = null;
             }
