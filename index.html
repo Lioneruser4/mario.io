@@ -7,26 +7,23 @@
     <style>
         /* CSS Başlangıcı */
         :root {
-            /* Renk Paleti */
             --primary-color: #007bff; /* Mavi */
-            --secondary-color: #6c757d; /* Gri */
-            --success-color: #28a745; /* Yeşil */
             --danger-color: #dc3545; /* Kırmızı */
-            --bg-start: #1a1a2e; /* Koyu Mavi/Mor */
-            --bg-end: #16213e; /* Daha Koyu Mavi */
-            --text-color: #e9e4ff; /* Açık Lavanta */
+            --bg-start: #1a1a2e; 
+            --bg-end: #16213e; 
+            --text-color: #e9e4ff; 
+            --accent-color: #ffd700; /* Altın Sarısı */
+            --ranked-color: #ff4500; /* Dereceli Turuncu */
+            --casual-color: #00bcd4; /* Normal Mavi */
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             color: var(--text-color);
-            /* Animasyonlu Arkaplan */
             background: linear-gradient(-45deg, var(--bg-start), var(--bg-end), #0f3460, #1b3a5e);
             background-size: 400% 400%;
             animation: GradientBG 15s ease infinite;
@@ -39,207 +36,335 @@
         }
 
         .container {
-            background-color: rgba(30, 40, 60, 0.9); /* Yarı saydam koyu kutu */
+            background-color: rgba(30, 40, 60, 0.95);
             padding: 40px;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             text-align: center;
             width: 90%;
-            max-width: 400px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: transform 0.3s ease;
-        }
-
-        .container:hover {
-            transform: translateY(-5px);
+            max-width: 500px;
         }
 
         h1 {
             color: var(--primary-color);
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-size: 1.8em;
         }
+
+        /* Lobi Durum Alanı */
+        .lobby-info {
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+            border-left: 5px solid var(--accent-color);
+        }
+        
+        .lobby-info p { margin: 5px 0; font-size: 0.95em; }
+        .lobby-id-text { color: var(--accent-color); font-weight: bold; }
+        
+        /* Eşleştirme Tipi Etiketi */
+        .type-tag {
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            font-weight: bold;
+            float: right;
+        }
+        .ranked { background-color: var(--ranked-color); }
+        .casual { background-color: var(--casual-color); }
 
         .timer-display {
             font-size: 3em;
             font-weight: bold;
             margin: 20px 0;
-            color: #4CAF50; /* Sayaç rengi */
-            min-height: 1.5em; /* Metin olmadığında kaymayı önlemek için */
-            display: block;
+            color: #4CAF50;
         }
 
         .status-message {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-size: 1.2em;
-            height: 20px;
+            min-height: 20px;
         }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-group.vertical { flex-direction: column; }
 
         .btn {
-            padding: 15px 30px;
-            font-size: 1.1em;
+            padding: 12px 20px;
+            font-size: 1em;
             font-weight: bold;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.1s;
+            transition: background-color 0.3s ease;
+            flex-grow: 1; 
+        }
+
+        /* Buton Renkleri */
+        #createRankedBtn { background-color: var(--ranked-color); color: white; }
+        #createCasualBtn { background-color: var(--casual-color); color: white; }
+        #joinLobbyBtn { background-color: #8bc34a; color: white; }
+        #leaveLobbyBtn { background-color: #6c757d; color: white; }
+        #joinQueueBtn { background-color: var(--primary-color); color: white; }
+        #cancelQueueBtn { background-color: var(--danger-color); color: white; }
+
+        input[type="text"] {
+            padding: 10px;
             width: 100%;
-            margin-top: 10px;
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-        }
-
-        /* Eşleştirme Başlatma Butonu */
-        #joinBtn {
-            background-color: var(--primary-color);
+            box-sizing: border-box;
+            border: 1px solid #555;
+            background-color: #333;
             color: white;
-        }
-
-        #joinBtn:hover {
-            background-color: #0056b3;
-        }
-
-        /* İptal Butonu */
-        #cancelBtn {
-            background-color: var(--danger-color);
-            color: white;
-            display: none; /* Başlangıçta gizli */
-        }
-
-        #cancelBtn:hover {
-            background-color: #bd2130;
+            border-radius: 5px;
+            margin-top: 5px;
         }
         
-        /* Loading Animasyonu (Dönen Halka) */
-        .loading-ring {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 10px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        .loading-ring { /* ... önceki loading kodu ... */ }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Sadece lobide değilken görünen kısım */
+        .no-lobby-state { display: block; } 
+        /* Sadece lobideyken görünen kısım */
+        .in-lobby-state { display: none; } 
         /* CSS Sonu */
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>🎮 Eşleştirme Sistemi</h1>
+        <h1>🎮 Lobi & Eşleştirme</h1>
         
-        <p class="status-message" id="statusMessage">
-            Hazır Ol.
-        </p>
+        <p style="font-size: 0.9em; margin-bottom: 15px;">Oyuncu ID: <span id="currentIdDisplay" style="color: var(--accent-color); font-weight: bold;">YÜKLENİYOR...</span></p>
 
-        <span class="timer-display" id="timerDisplay">
-            00:00
-        </span>
+        <hr style="border-color: rgba(255, 255, 255, 0.1); margin: 20px 0;">
+
+        <div class="lobby-info" id="lobbyInfoDisplay">
+            <span class="type-tag" id="lobbyTypeTag"></span>
+            <p>Durum: <span id="lobbyStatus">Lobide Değil</span></p>
+            <p>Lobi ID: <span class="lobby-id-text" id="currentLobbyId">--</span></p>
+            <p>Lider: <span id="lobbyLeader">--</span></p>
+            <p>Üyeler (<span id="memberCount">1</span>): <span id="lobbyMembers">--</span></p>
+        </div>
         
-        <button id="joinBtn" class="btn">
-            Eşleştirme Başlat
-        </button>
+        <div id="noLobbyState" class="no-lobby-state">
+            <div class="btn-group vertical">
+                <button id="createRankedBtn" class="btn">🥇 Dereceli Lobi Oluştur</button>
+                <button id="createCasualBtn" class="btn">🤝 Arkadaşla Oyna (Normal)</button>
+            </div>
+            <input type="text" id="joinLobbyIdInput" placeholder="Katılmak istediğiniz Lobi ID'sini girin...">
+            <button id="joinLobbyBtn" class="btn">Lobiye Katıl</button>
+        </div>
         
-        <button id="cancelBtn" class="btn">
-            Eşleştirmeyi İptal Et
-        </button>
+        <div id="inLobbyState" class="in-lobby-state">
+            <button id="leaveLobbyBtn" class="btn">Lobiden Ayrıl</button>
+        </div>
+
+        <hr style="border-color: rgba(255, 255, 255, 0.1); margin: 20px 0;">
+
+        <p class="status-message" id="statusMessage">Hazır Ol.</p>
+
+        <span class="timer-display" id="timerDisplay">00:00</span>
+        
+        <button id="joinQueueBtn" class="btn">Eşleştirme Başlat</button>
+        <button id="cancelQueueBtn" class="btn" style="display: none;">Eşleştirmeyi İptal Et</button>
     </div>
 
     <script>
         // JavaScript Başlangıcı
-        const timerDisplay = document.getElementById('timerDisplay');
-        const statusMessage = document.getElementById('statusMessage');
-        const joinBtn = document.getElementById('joinBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-
+        const SERVER_URL = 'http://localhost:3000'; 
+        
+        // Durum Değişkenleri
+        let currentPlayerId = null;
+        let currentLobby = null; // Lobi verisini tutar
         let isInQueue = false;
         let startTime = 0;
         let intervalId;
 
-        // Zamanı MM:SS formatında biçimlendiren fonksiyon
+        // UI Elementleri (Kısaltıldı)
+        const D = id => document.getElementById(id);
+        
+        // ... (Tüm element tanımlamaları burada olacaktır: currentIdDisplay, joinQueueBtn vb.) ...
+
+        // ---------------------------------------------
+        // I. ARKA PLAN MANTIĞI VE ZAMANLAYICI
+        // ---------------------------------------------
+
         function formatTime(totalSeconds) {
             const minutes = Math.floor(totalSeconds / 60);
             const seconds = totalSeconds % 60;
             return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
 
-        // Süreyi güncelleyen fonksiyon
         function updateTimer() {
             if (!isInQueue) return;
-
-            const currentTime = Date.now();
-            const elapsedMilliseconds = currentTime - startTime;
-            const elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
-
-            timerDisplay.textContent = formatTime(elapsedSeconds);
+            const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+            D('timerDisplay').textContent = formatTime(elapsedSeconds);
             
-            // Profesyonel detay: Her 15 saniyede bir durumu güncelle
             if (elapsedSeconds > 0 && elapsedSeconds % 15 === 0) {
-                 statusMessage.innerHTML = `<span class="loading-ring"></span> Yüksek seviyeli rakipler aranıyor...`;
+                 D('statusMessage').innerHTML = `<span class="loading-ring"></span> Genişletilmiş arama yapılıyor...`;
             }
         }
+        
+        // ---------------------------------------------
+        // II. UI YÖNETİMİ
+        // ---------------------------------------------
+        
+        function updateLobbyUI() {
+            const isLobbyLeader = currentLobby && currentLobby.leader === currentPlayerId;
+            
+            // 1. Genel Durum Görüntüleme
+            D('currentIdDisplay').textContent = currentPlayerId || 'Bilinmiyor';
 
+            // 2. Lobi Bilgileri Alanı
+            if (currentLobby) {
+                D('lobbyStatus').textContent = isLobbyLeader ? "Lider" : "Üye";
+                D('currentLobbyId').textContent = currentLobby.id;
+                D('lobbyLeader').textContent = currentLobby.leader;
+                D('memberCount').textContent = currentLobby.members.length;
+                D('lobbyMembers').textContent = currentLobby.members.join(', ');
+                D('lobbyTypeTag').textContent = currentLobby.type === 'ranked' ? 'DERECELİ' : 'NORMAL';
+                D('lobbyTypeTag').className = `type-tag ${currentLobby.type}`;
+
+                D('noLobbyState').style.display = 'none';
+                D('inLobbyState').style.display = 'block';
+
+            } else {
+                D('lobbyStatus').textContent = "Lobide Değil";
+                D('currentLobbyId').textContent = "--";
+                D('lobbyLeader').textContent = "--";
+                D('memberCount').textContent = 1;
+                D('lobbyMembers').textContent = currentPlayerId || '--';
+                D('lobbyTypeTag').textContent = '';
+
+                D('noLobbyState').style.display = 'block';
+                D('inLobbyState').style.display = 'none';
+            }
+            
+            // 3. Eşleştirme Butonları
+            const isReadyToQueue = currentLobby && !isInQueue;
+            D('joinQueueBtn').style.display = isReadyToQueue ? 'block' : 'none';
+            D('cancelQueueBtn').style.display = isInQueue ? 'block' : 'none';
+            D('joinQueueBtn').disabled = !isLobbyLeader;
+            D('joinQueueBtn').textContent = !isLobbyLeader ? "Sadece Lider Başlatabilir" : "Eşleştirme Başlat";
+            
+            D('statusMessage').textContent = currentLobby ? (isInQueue ? D('statusMessage').textContent : "Eşleştirmeyi başlatmaya hazır.") : "Lobi oluşturun veya katılın.";
+        }
+        
+        // ---------------------------------------------
+        // III. SUNUCU İLETİŞİMİ
+        // ---------------------------------------------
+        
+        async function sendRequest(endpoint, payload = {}) {
+            try {
+                const response = await fetch(`${SERVER_URL}/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (!data.success && data.message) {
+                    alert('HATA: ' + data.message);
+                }
+                return data;
+
+            } catch (error) {
+                console.error('Sunucu Hatası:', error);
+                alert('Sunucuya bağlanılamadı. Lütfen server.js dosyasının çalıştığından emin olun (http://localhost:3000).');
+                return { success: false, message: 'Bağlantı Hatası' };
+            }
+        }
+        
+        // ---------------------------------------------
+        // IV. BUTON İŞLEVLERİ
+        // ---------------------------------------------
+        
+        // Lobi Oluşturma (Dereceli veya Normal)
+        async function createLobby(type) {
+            if (!currentPlayerId) return alert("Önce Oyuncu ID'nizi başlatın (Sayfa yüklendi).");
+            const res = await sendRequest('createLobby', { leaderId: currentPlayerId, type: type });
+            if (res.success) {
+                currentLobby = res.lobby;
+                updateLobbyUI();
+            }
+        }
+        D('createRankedBtn').addEventListener('click', () => createLobby('ranked'));
+        D('createCasualBtn').addEventListener('click', () => createLobby('casual'));
+
+        // Lobiye Katılma
+        D('joinLobbyBtn').addEventListener('click', async () => {
+            if (!currentPlayerId) return alert("Önce Oyuncu ID'nizi başlatın.");
+            const lobbyIdToJoin = D('joinLobbyIdInput').value.trim();
+            if (!lobbyIdToJoin) return alert("Lütfen Lobi ID'sini girin.");
+            
+            const res = await sendRequest('joinLobby', { lobbyId: lobbyIdToJoin, playerId: currentPlayerId });
+            if (res.success) {
+                currentLobby = res.lobby;
+                updateLobbyUI();
+            }
+        });
+        
+        // Lobiden Ayrılma
+        D('leaveLobbyBtn').addEventListener('click', async () => {
+            const res = await sendRequest('leaveLobby', { playerId: currentPlayerId });
+            if (res.success) {
+                currentLobby = res.lobby; // Eğer lobi kapanmadıysa, yeni lobi objesi gelir.
+                updateLobbyUI();
+            }
+        });
+        
         // Eşleştirme Başlatma
-        joinBtn.addEventListener('click', () => {
-            if (isInQueue) return;
-
-            isInQueue = true;
-            startTime = Date.now();
+        D('joinQueueBtn').addEventListener('click', async () => {
+            if (!currentLobby || currentLobby.leader !== currentPlayerId) return; // Yetki kontrolü
             
-            // UI Güncellemeleri
-            joinBtn.style.display = 'none';
-            cancelBtn.style.display = 'block';
-            statusMessage.innerHTML = `<span class="loading-ring"></span> Rakip aranıyor...`;
-            timerDisplay.textContent = "00:00";
-            
-            // Sayacı başlat
-            intervalId = setInterval(updateTimer, 1000); // Her saniye güncelle
-            
-            console.log("Eşleştirme Başlatıldı.");
-
-            // **Gerçek Oyunda:** Sunucuya eşleştirme isteği gönderilir.
-            // SimulateMatchFound(); // Rakip Bulma simülasyonu eklenebilir
+            const res = await sendRequest('joinQueue', { leaderId: currentPlayerId });
+            if (res.success) {
+                isInQueue = true;
+                startTime = Date.now();
+                D('statusMessage').innerHTML = `<span class="loading-ring"></span> ${currentLobby.type.toUpperCase()} rakip aranıyor...`;
+                intervalId = setInterval(updateTimer, 1000); 
+                updateLobbyUI();
+            }
         });
 
         // Eşleştirmeyi İptal Etme
-        cancelBtn.addEventListener('click', () => {
-            if (!isInQueue) return;
-
-            // Sayacı durdur
-            clearInterval(intervalId);
-            isInQueue = false;
-
-            // UI Güncellemeleri
-            joinBtn.style.display = 'block';
-            cancelBtn.style.display = 'none';
-            statusMessage.textContent = "❌ Eşleştirme İptal Edildi.";
-            timerDisplay.textContent = "00:00"; 
-
-            // **Gerçek Oyunda:** Sunucuya iptal isteği gönderilir.
-
-            console.log("Eşleştirme İptal Edildi.");
+        D('cancelQueueBtn').addEventListener('click', async () => {
+            if (!currentLobby || currentLobby.leader !== currentPlayerId || !isInQueue) return;
+            
+            const res = await sendRequest('cancelQueue', { leaderId: currentPlayerId });
+            if (res.success) {
+                clearInterval(intervalId);
+                isInQueue = false;
+                D('statusMessage').textContent = `❌ Eşleştirme İptal Edildi.`;
+                D('timerDisplay').textContent = "00:00";
+                updateLobbyUI();
+            }
         });
-
-        // Rakip Bulma Simülasyonu (Opsiyonel)
-        function SimulateMatchFound() {
-            setTimeout(() => {
-                if (isInQueue) {
-                    clearInterval(intervalId);
-                    isInQueue = false;
-                    statusMessage.textContent = "✅ Rakip Bulundu! Maç Başlıyor...";
-                    joinBtn.style.display = 'block';
-                    cancelBtn.style.display = 'none';
-                    // (Gerçek oyunda burası maç ekranına yönlendirir)
-                }
-            }, Math.random() * 10000 + 5000); // 5-15 saniye arasında bulur
+        
+        // ---------------------------------------------
+        // V. BAŞLANGIÇ
+        // ---------------------------------------------
+        
+        // Sayfa yüklendiğinde otomatik ID al
+        async function initializePlayer() {
+            try {
+                const response = await fetch(`${SERVER_URL}/initPlayer`);
+                const data = await response.json();
+                currentPlayerId = data.playerId;
+                updateLobbyUI();
+            } catch (error) {
+                console.error("ID başlatılamadı:", error);
+                D('currentIdDisplay').textContent = "BAĞLANTI HATASI";
+            }
         }
+        
+        document.addEventListener('DOMContentLoaded', initializePlayer);
         // JavaScript Sonu
     </script>
 </body>
