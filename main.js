@@ -38,51 +38,128 @@ const dom = {
 // 1. SUNUCU İLETİŞİMİ
 // ==========================================================
 
+let connectionTimeout = null;
+
+function updateConnectionStatus(status, message) {
+    const statusEl = dom.connStatusEl;
+    if (!statusEl) return;
+    
+    // Remove all status classes
+    statusEl.classList.remove('connecting', 'connected', 'disconnected');
+    
+    // Add the appropriate status class
+    statusEl.classList.add(status);
+    
+    // Update the status text
+    const statusText = statusEl.querySelector('.status-text');
+    if (statusText) {
+        statusText.textContent = message;
+    }
+    
+    // Update the status icon
+    const statusIcon = statusEl.querySelector('.status-icon i');
+    if (statusIcon) {
+        statusIcon.className = ''; // Clear all classes
+        
+        switch(status) {
+            case 'connecting':
+                statusIcon.className = 'fas fa-sync-alt fa-spin';
+                break;
+            case 'connected':
+                statusIcon.className = 'fas fa-check-circle';
+                break;
+            case 'disconnected':
+                statusIcon.className = 'fas fa-exclamation-circle';
+                break;
+        }
+    }
+}
+
 function connect(urlIndex = 0) {
+    // Clear any existing socket
+    if (socket) {
+        socket.onopen = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.close();
+        }
+    }
+    
     if (urlIndex >= SERVER_URLS.length) {
-        urlIndex = 0; // Tüm sunucular denenmişse başa dön
+        urlIndex = 0; // Reset to first URL if we've tried all
         reconnectAttempts++;
         
         if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
-            dom.connStatusEl.className = 'status-box error';
-            dom.connStatusEl.textContent = '❌ Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.';
+            updateConnectionStatus('disconnected', 'Bağlantı başarısız. Lütfen sayfayı yenileyin.');
             return;
         }
     }
     
     const url = SERVER_URLS[urlIndex];
-    dom.connStatusEl.className = 'status-box connecting';
-    dom.connStatusEl.textContent = `Sunucuya Bağlanılıyor (${url})...`;
+    console.log(`Bağlanılıyor: ${url}`);
+    
+    updateConnectionStatus('connecting', 'Sunucuya bağlanılıyor...');
+    
+    // Set a connection timeout (10 seconds)
+    connectionTimeout = setTimeout(() => {
+        if (socket && socket.readyState !== WebSocket.OPEN) {
+            console.warn('Bağlantı zaman aşımına uğradı, bir sonraki sunucu deneniyor...');
+            socket.close();
+            connect((urlIndex + 1) % SERVER_URLS.length);
+        }
+    }, 10000);
     
     try {
         socket = new WebSocket(url);
-
-        socket.onopen = () => {
+        
+        socket.onopen = function() {
+            console.log('Sunucuya bağlandı');
+            clearTimeout(connectionTimeout);
             reconnectAttempts = 0;
             gameState.isConnected = true;
-            dom.connStatusEl.className = 'status-box connected';
-            dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
-            updateLobbyStatus('Bağlantı başarılı. Oyun modunu seçin.');
+            updateConnectionStatus('connected', 'Sunucuya bağlandı');
+            
+            // Odaya bağlanma işlemi burada yapılacak
         };
         
-        socket.onclose = () => {
+        socket.onclose = function(event) {
+            console.log(`Bağlantı kapatıldı. Kod: ${event.code}, Sebep: ${event.reason || 'Bilinmiyor'}`);
+            clearTimeout(connectionTimeout);
             gameState.isConnected = false;
-            dom.connStatusEl.className = 'status-box disconnected';
-            const nextUrlIndex = (urlIndex + 1) % SERVER_URLS.length;
-            dom.connStatusEl.textContent = `❌ Bağlantı Kesildi. Yeni sunucu deneniyor (${nextUrlIndex + 1}/${SERVER_URLS.length})...`;
-            setTimeout(() => connect(nextUrlIndex), 3000);
+            
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                updateConnectionStatus('disconnected', 'Bağlantı kesildi. Tekrar deneniyor...');
+                // 3 saniye sonra tekrar bağlanmayı dene
+                setTimeout(() => connect((urlIndex + 1) % SERVER_URLS.length), 3000);
+            }
         };
         
-        socket.onerror = (e) => {
-            console.error("WebSocket Hatası:", e);
-            socket.close(); // Hata durumunda bağlantıyı kapat
+        socket.onerror = function(error) {
+            console.error('WebSocket hatası:', error);
+            clearTimeout(connectionTimeout);
+            updateConnectionStatus('disconnected', 'Bağlantı hatası. Tekrar deneniyor...');
+            
+            // Hemen bir sonraki sunucuyu dene (zaman aşımı olmadan)
+            setTimeout(() => connect((urlIndex + 1) % SERVER_URLS.length), 1000);
         };
         
-        socket.onmessage = (event) => {
+        // Mesaj işleyicisi
+        socket.onmessage = function(event) {
             try {
-                handleServerMessage(JSON.parse(event.data));
-        } catch (e) { console.error("Geçersiz Sunucu Verisi:", event.data); }
-    };
+                const message = JSON.parse(event.data);
+                handleServerMessage(message);
+            } catch (e) {
+                console.error('Mesaj işlenirken hata:', e);
+            }
+        };
+        
+    } catch (error) {
+        console.error('WebSocket oluşturulurken hata:', error);
+        updateConnectionStatus('disconnected', 'Bağlantı hatası. Tekrar deneniyor...');
+        // 3 saniye sonra tekrar dene
+        setTimeout(() => connect((urlIndex + 1) % SERVER_URLS.length), 3000);
+    }
 }
 
 function sendMessage(type, payload = {}) {
