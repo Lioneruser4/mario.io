@@ -1,23 +1,17 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dama Oyunu - React</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal JS Game</title>
     <style>
-        /* Tipik olarak index.css dosyanızda bulunan Tailwind direktifleri */
-        @tailwind base;
-        @tailwind components;
-        @tailwind utilities;
-
-        /* Tailwind ile birlikte animasyon delay (gecikme) için ek stil */
-        .animation-delay-2000 {
-            animation-delay: 2000ms;
-        }
+        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #222; }
+        canvas { border: 1px solid #fff; }
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <canvas id="gameCanvas" width="480" height="320"></canvas>
+    
+    <script defer src="game.js"></script>
 </body>
 </html>
