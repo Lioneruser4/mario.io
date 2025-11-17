@@ -1,163 +1,82 @@
-// server.js - Tam Lobi ve Eşleştirme Sistemi
 const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const { v4: uuidv4 } = require('uuid');
+
 const app = express();
-const port = 3000;
-const { v4: uuidv4 } = require('uuid'); // Rastgele ID üretmek için
-
-// --- KURULUMLAR ---
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Content-Type");
-    next();
+const server = http.createServer(app);
+const io = new socketIo.Server(server, {
+    cors: {
+        origin: '*',
+    }
 });
-app.use(express.json());
 
-// --- VERİ YAPILARI ---
-let activeLobbies = {}; 
-let matchmakingQueue = []; // Tüm bekleyen oyuncular
-let playerCounter = 1;
+let queue = [];
+let games = {};
 
-// --- YARDIMCI FONKSİYONLAR ---
+io.on('connection', (socket) => {
+    console.log('Yeni bağlantı:', socket.id);
 
-function generatePlayerId() {
-    // Daha profesyonel bir kimliklendirme simülasyonu (UUID)
-    return `Player-${playerCounter++}-${uuidv4().substring(0, 4)}`;
-}
-
-function findLobbyByPlayerId(playerId) {
-    for (const id in activeLobbies) {
-        if (activeLobbies[id].members.includes(playerId)) {
-            return activeLobbies[id];
+    socket.on('joinQueue', () => {
+        queue.push(socket.id);
+        if (queue.length >= 2) {
+            const player1 = queue.shift();
+            const player2 = queue.shift();
+            const gameId = uuidv4();
+            games[gameId] = {
+                players: [player1, player2],
+                board: initializeBoard(),
+                currentPlayer: 'red'
+            };
+            io.to(player1).emit('gameStart', { gameId, color: 'red' });
+            io.to(player2).emit('gameStart', { gameId, color: 'black' });
         }
-    }
-    return null;
-}
+    });
 
-// ---------------------------------------------
-// API UÇ NOKTALARI (ROUTES)
-// ---------------------------------------------
+    socket.on('move', (data) => {
+        if (games[data.gameId]) {
+            games[data.gameId].board = data.board;
+            games[data.gameId].currentPlayer = data.currentPlayer;
+            const players = games[data.gameId].players;
+            players.forEach(player => {
+                io.to(player).emit('updateState', {
+                    board: data.board,
+                    currentPlayer: data.currentPlayer
+                });
+            });
+        }
+    });
 
-// 1. Oyuncu ID'si Atama (Lobi sisteminde ilk giriş)
-app.get('/initPlayer', (req, res) => {
-    const newId = generatePlayerId();
-    console.log(`🆕 Yeni oyuncu başlatıldı: ${newId}`);
-    res.status(200).send({ playerId: newId });
-});
+    socket.on('endGame', (gameId) => {
+        if (games[gameId]) {
+            delete games[gameId];
+        }
+    });
 
-// 2. Lobi Oluşturma
-app.post('/createLobby', (req, res) => {
-    const leaderId = req.body.leaderId;
-    const lobbyType = req.body.type; // 'ranked' veya 'casual'
-
-    if (findLobbyByPlayerId(leaderId)) {
-        return res.status(400).send({ success: false, message: 'Zaten bir lobidesiniz.' });
-    }
-    if (!['ranked', 'casual'].includes(lobbyType)) {
-        return res.status(400).send({ success: false, message: 'Geçersiz lobi tipi.' });
-    }
-
-    const lobbyId = `LBY-${Math.floor(Math.random() * 9000) + 1000}`; // 4 haneli rastgele ID
-    activeLobbies[lobbyId] = {
-        id: lobbyId,
-        leader: leaderId,
-        members: [leaderId],
-        isInQueue: false,
-        type: lobbyType // Lobi tipi eklendi
-    };
-
-    console.log(`🎉 Lobi ${lobbyId} oluşturuldu. Tip: ${lobbyType}`);
-    res.status(200).send({ 
-        success: true, 
-        lobby: activeLobbies[lobbyId] 
+    socket.on('disconnect', () => {
+        queue = queue.filter(id => id !== socket.id);
+        // Oyunlardan kaldır vb.
     });
 });
 
-// 3. Lobiye Katılma
-app.post('/joinLobby', (req, res) => {
-    const { lobbyId, playerId } = req.body;
-    const lobby = activeLobbies[lobbyId];
-
-    if (!lobby) {
-        return res.status(404).send({ success: false, message: 'Lobi bulunamadı.' });
-    }
-    if (findLobbyByPlayerId(playerId)) {
-        return res.status(400).send({ success: false, message: 'Zaten bir lobidesiniz.' });
-    }
-    if (lobby.members.length >= 4) { // Max 4 kişilik lobi simülasyonu
-        return res.status(400).send({ success: false, message: 'Lobi dolu.' });
-    }
-
-    lobby.members.push(playerId);
-    console.log(`➡️ Oyuncu ${playerId}, Lobi ${lobbyId}'e katıldı.`);
-    
-    res.status(200).send({ success: true, lobby: lobby });
-});
-
-// 4. Lobiden Ayrılma
-app.post('/leaveLobby', (req, res) => {
-    const playerId = req.body.playerId;
-    const lobby = findLobbyByPlayerId(playerId);
-
-    if (!lobby) {
-        return res.status(404).send({ success: false, message: 'Herhangi bir lobide değilsiniz.' });
-    }
-
-    lobby.members = lobby.members.filter(id => id !== playerId);
-    
-    // Eğer oyuncu lobi lideriyse
-    if (lobby.leader === playerId) {
-        if (lobby.members.length > 0) {
-            lobby.leader = lobby.members[0]; // Yeni lider ata
-        } else {
-            delete activeLobbies[lobby.id]; // Lobi boşaldı, kapat
-            console.log(`Lobi ${lobby.id} kapandı.`);
+function initializeBoard() {
+    let board = Array.from({length: 8}, () => Array(8).fill(null));
+    for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 8; col++) {
+            if ((row + col) % 2 !== 0) {
+                board[row][col] = { color: 'black', king: false };
+            }
         }
     }
-    
-    res.status(200).send({ success: true, lobby: lobby.members.length > 0 ? lobby : null });
-});
-
-// 5. Eşleştirme Başlatma
-app.post('/joinQueue', (req, res) => {
-    const leaderId = req.body.leaderId;
-    const lobby = findLobbyByPlayerId(leaderId);
-
-    if (!lobby || lobby.leader !== leaderId || lobby.isInQueue) {
-        return res.status(403).send({ success: false, message: 'İzin yok veya zaten kuyrukta.' });
+    for (let row = 5; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            if ((row + col) % 2 !== 0) {
+                board[row][col] = { color: 'red', king: false };
+            }
+        }
     }
-    
-    lobby.isInQueue = true;
-    
-    // Tüm lobi üyelerini kuyruğa ekle
-    lobby.members.forEach(memberId => {
-        matchmakingQueue.push({ id: memberId, joinTime: Date.now(), lobbyId: lobby.id, type: lobby.type });
-    });
-    
-    console.log(`🚀 Lobi ${lobby.id} kuyruğa katıldı. Tip: ${lobby.type}`);
-    // Burada eşleştirme algoritması çalışır...
-    
-    res.status(200).send({ success: true, message: 'Eşleştirme başladı.' });
-});
+    return board;
+}
 
-// 6. Eşleştirmeyi İptal Etme
-app.post('/cancelQueue', (req, res) => {
-    const leaderId = req.body.leaderId;
-    const lobby = findLobbyByPlayerId(leaderId);
-    
-    if (!lobby || lobby.leader !== leaderId || !lobby.isInQueue) {
-         return res.status(403).send({ success: false, message: 'İzin yok veya kuyrukta değilsiniz.' });
-    }
-
-    // Lobi üyelerini kuyruktan filtrele
-    matchmakingQueue = matchmakingQueue.filter(p => p.lobbyId !== lobby.id);
-    lobby.isInQueue = false;
-
-    console.log(`🛑 Lobi ${lobby.id} kuyruktan ayrıldı.`);
-    return res.status(200).send({ success: true, message: 'Eşleştirme iptal edildi.' });
-});
-
-
-// Sunucuyu başlat
-app.listen(port, () => {
-    console.log(`✅ Eşleştirme sunucusu http://localhost:${port} adresinde çalışıyor.`);
-});
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor`));
