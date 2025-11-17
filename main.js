@@ -1,12 +1,20 @@
 // main.js - Amerikan Daması İstemci Mantığı (Frontend)
 
-const SERVER_URL = "wss://mario-io-1.onrender.com";
+// Sunucu URL'si
+const SERVER_URLS = [
+    "wss://mario-io-1.onrender.com"
+];
+
 let socket = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 let gameState = {
     gameId: null,
     myColor: null, // "red" veya "black"
     isMyTurn: false,
-    selectedPiecePos: null // Tıklanan taşın pozisyonu
+    selectedPiecePos: null, // Tıklanan taşın pozisyonu
+    isConnected: false
 };
 
 // DOM Elementleri
@@ -21,33 +29,58 @@ const dom = {
     btnConnectRoom: document.getElementById('btn-connect-room'),
     btnCopyCode: document.getElementById('btn-copy-code'),
     playerTurnStatus: document.getElementById('player-turn-status'),
-    gameBoard: document.getElementById('game-board')
+    gameBoard: document.getElementById('game-board'),
+    lobbyStatus: document.getElementById('lobby-status'),
+    roomCodeDisplay: document.getElementById('room-code-display')
 };
 
 // ==========================================================
 // 1. SUNUCU İLETİŞİMİ
 // ==========================================================
 
-function connect() {
+function connect(urlIndex = 0) {
+    if (urlIndex >= SERVER_URLS.length) {
+        urlIndex = 0; // Tüm sunucular denenmişse başa dön
+        reconnectAttempts++;
+        
+        if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+            dom.connStatusEl.className = 'status-box error';
+            dom.connStatusEl.textContent = '❌ Sunucuya bağlanılamadı. Lütfen sayfayı yenileyin.';
+            return;
+        }
+    }
+    
+    const url = SERVER_URLS[urlIndex];
     dom.connStatusEl.className = 'status-box connecting';
-    dom.connStatusEl.textContent = 'Sunucuya Bağlanılıyor...';
+    dom.connStatusEl.textContent = `Sunucuya Bağlanılıyor (${url})...`;
     
-    socket = new WebSocket(SERVER_URL);
+    try {
+        socket = new WebSocket(url);
 
-    socket.onopen = () => {
-        dom.connStatusEl.className = 'status-box connected';
-        dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
-    };
-    socket.onclose = () => {
-        dom.connStatusEl.className = 'status-box disconnected';
-        dom.connStatusEl.textContent = '❌ Bağlantı Kesildi. 5s Sonra Yeniden Deneniyor...';
-        setTimeout(connect, 5000);
-    };
-    socket.onerror = (e) => console.error("WebSocket Hatası:", e);
-    
-    socket.onmessage = (event) => {
-        try {
-            handleServerMessage(JSON.parse(event.data));
+        socket.onopen = () => {
+            reconnectAttempts = 0;
+            gameState.isConnected = true;
+            dom.connStatusEl.className = 'status-box connected';
+            dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
+            updateLobbyStatus('Bağlantı başarılı. Oyun modunu seçin.');
+        };
+        
+        socket.onclose = () => {
+            gameState.isConnected = false;
+            dom.connStatusEl.className = 'status-box disconnected';
+            const nextUrlIndex = (urlIndex + 1) % SERVER_URLS.length;
+            dom.connStatusEl.textContent = `❌ Bağlantı Kesildi. Yeni sunucu deneniyor (${nextUrlIndex + 1}/${SERVER_URLS.length})...`;
+            setTimeout(() => connect(nextUrlIndex), 3000);
+        };
+        
+        socket.onerror = (e) => {
+            console.error("WebSocket Hatası:", e);
+            socket.close(); // Hata durumunda bağlantıyı kapat
+        };
+        
+        socket.onmessage = (event) => {
+            try {
+                handleServerMessage(JSON.parse(event.data));
         } catch (e) { console.error("Geçersiz Sunucu Verisi:", event.data); }
     };
 }
@@ -114,21 +147,64 @@ function stopSearching() {
     dom.btnConnectRoom.disabled = false;
 }
 
-dom.btnCreateRoom.addEventListener('click', () => sendMessage('CREATE_ROOM'));
+// Lobi durumunu güncelleme fonksiyonu
+function updateLobbyStatus(message, isError = false) {
+    if (dom.lobbyStatus) {
+        dom.lobbyStatus.textContent = message;
+        dom.lobbyStatus.className = isError ? 'lobby-status error' : 'lobby-status';
+    }
+}
 
+// Oda kodu gösterimi güncelleme
+function updateRoomCode(roomCode) {
+    if (dom.roomCodeDisplay) {
+        dom.roomCodeDisplay.textContent = `Oda Kodu: ${roomCode}`;
+        dom.roomCodeDisplay.classList.remove('hidden');
+    }
+}
+
+// Oda oluşturma butonu
+dom.btnCreateRoom.addEventListener('click', () => {
+    if (!gameState.isConnected) {
+        updateLobbyStatus('❌ Sunucuya bağlı değil', true);
+        return;
+    }
+    updateLobbyStatus('Oda oluşturuluyor...');
+    sendMessage('CREATE_ROOM');
+});
+
+// Odaya bağlanma butonu
 dom.btnConnectRoom.addEventListener('click', () => {
-    const code = dom.roomCodeInput.value.trim();
+    if (!gameState.isConnected) {
+        updateLobbyStatus('❌ Sunucuya bağlı değil', true);
+        return;
+    }
+    
+    const code = dom.roomCodeInput.value.trim().toUpperCase();
     if (code.length === 4) {
+        updateLobbyStatus('Odaya bağlanılıyor...');
         sendMessage('JOIN_ROOM', { roomCode: code });
     } else {
-        alert('Lütfen 4 haneli kodu giriniz.');
+        updateLobbyStatus('❌ Lütfen 4 haneli kodu giriniz.', true);
     }
 });
 
+// Kopyalama butonu
 dom.btnCopyCode.addEventListener('click', () => {
-    navigator.clipboard.writeText(dom.roomCodeInput.value);
-    dom.btnCopyCode.textContent = "Kopyalandı!";
-    setTimeout(() => dom.btnCopyCode.textContent = "Kodu Kopyala", 1500);
+    const code = dom.roomCodeInput.value.trim();
+    if (code) {
+        navigator.clipboard.writeText(code);
+        const originalText = dom.btnCopyCode.textContent;
+        dom.btnCopyCode.textContent = "✅ Kopyalandı!";
+        setTimeout(() => dom.btnCopyCode.textContent = originalText, 2000);
+    }
+});
+
+// Oda kodu giriş alanına sadece harf ve rakam girişine izin ver
+dom.roomCodeInput.addEventListener('input', (e) => {
+    let value = e.target.value.toUpperCase();
+    value = value.replace(/[^A-Z0-9]/g, ''); // Sadece harf ve rakam
+    e.target.value = value.substring(0, 4); // Maksimum 4 karakter
 });
 
 // ==========================================================
