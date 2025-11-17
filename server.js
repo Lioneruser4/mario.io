@@ -1,37 +1,47 @@
+
 // server.js (Render.com Sunucunuzda Çalışacak Dosya)
+
 const WebSocket = require('ws');
 const http = require('http');
 
-// Basit bir HTTP sunucusu oluşturun (WebSocket için gereklidir)
+// Basit bir HTTP sunucusu
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Checkers WebSocket Server Running on Render.com');
+    res.end('Checkers WebSocket Server Running.');
 });
 
 const wss = new WebSocket.Server({ server });
 
 // Sunucu Durumları
-const games = {}; // Aktif oyunları tutar: { gameId: { players: [...], boardState: {...}, turn: 'red' } }
-const waitingForMatch = []; // Dereceli eşleşme bekleyenler: [ws]
-const roomLobbies = {}; // Özel oda lobileri: { roomCode: { host: ws, guest: ws/null } }
+const games = {}; 
+const waitingForMatch = []; 
+const roomLobbies = {}; 
 
-// Amerikan Daması (Checkers) Oyun Kuralları ve Başlangıç Tahtası
+// Yardımcı Fonksiyon: Oyunculara mesaj gönder
+function broadcastGameUpdate(gameId, type, payload) {
+    const game = games[gameId];
+    if (!game) return;
+    const message = JSON.stringify({ type, ...payload });
+    game.players.forEach(p => {
+        if (p.readyState === WebSocket.OPEN) {
+            p.send(message);
+        }
+    });
+}
+
+// Amerikan Daması (Checkers) Başlangıç Tahtası
 function initializeBoard() {
     const board = {};
-    const initialPositions = [
-        // Kırmızı (Red) altta, siyaha doğru hareket eder (1. sıra)
-        { color: 'red', rows: [1, 2, 3] }, 
-        // Siyah (Black) üstte, kırmızıya doğru hareket eder (8. sıra)
-        { color: 'black', rows: [6, 7, 8] }
-    ];
+    // Siyah: 6, 7, 8. Satırlar (Üstte) | Kırmızı: 1, 2, 3. Satırlar (Altta)
+    const initialRows = { 'red': [1, 2, 3], 'black': [6, 7, 8] }; 
 
-    for (const config of initialPositions) {
-        for (const r of config.rows) {
+    for (const color in initialRows) {
+        for (const r of initialRows[color]) {
             for (let c = 1; c <= 8; c++) {
-                // Sadece koyu karelere taş konur (A1, C1, E1, G1 gibi)
+                // Sadece koyu (dark) karelere taş konur: (Satır + Sütun) tek olmalı
                 if ((r + c) % 2 !== 0) { 
                     const pos = String.fromCharCode(64 + c) + r;
-                    board[pos] = { color: config.color, isKing: false };
+                    board[pos] = { color, isKing: false };
                 }
             }
         }
@@ -39,21 +49,25 @@ function initializeBoard() {
     return board;
 }
 
-// Yardımcı Fonksiyon: Oyunculara mesaj gönder
-function broadcastGameUpdate(gameId, type, payload) {
-    const game = games[gameId];
-    if (!game) return;
-    const message = JSON.stringify({ type, ...payload });
-    game.players.forEach(p => p.send(message));
+// Amerikan Daması Basit Kural Kontrolü Simülasyonu
+// **GERÇEK OYUN İÇİN BU FONKSİYONUN TAMAMLANMASI GEREKİR**
+function getLegalMoves(gameId, pos, color) {
+    // Gerçek Amerikan Daması mantığı burada çalışır (çapraz hareket, yeme zorunluluğu)
+    
+    // Şimdilik sadece simülasyon amaçlı rastgele hareket döndürülür:
+    if (pos === 'A3') return ['B4'];
+    if (pos === 'F6') return ['E5', 'G5']; 
+    if (pos === 'C1') return ['D2'];
+
+    return [];
 }
 
+
 // ==========================================================
-// WEBSOCKET BAĞLANTI İŞLEYİCİ
+// WEBSOCKET BAĞLANTI VE EYLEM İŞLEYİCİ
 // ==========================================================
 
 wss.on('connection', (ws) => {
-    console.log('Yeni istemci bağlandı.');
-
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
@@ -64,28 +78,17 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        console.log('İstemci bağlantısı kesildi.');
-        // Bağlantısı kesilen oyuncuyu eşleşme kuyruğundan ve odalardan kaldır
         const index = waitingForMatch.indexOf(ws);
-        if (index > -1) {
-            waitingForMatch.splice(index, 1);
-        }
-        // Oyunu terk etme/silme mantığı (karmaşık olduğu için atlandı)
+        if (index > -1) waitingForMatch.splice(index, 1);
+        // İstemci disconnect olduğunda oyun temizleme mantığı buraya gelir
     });
 });
 
-// ==========================================================
-// İSTEMCİ EYLEM İŞLEYİCİ
-// ==========================================================
-
 function handleClientAction(ws, data) {
     switch (data.type) {
-        
-        // 1. DERECE LOBİ
         case 'FIND_MATCH':
             if (waitingForMatch.length > 0) {
                 const opponentWs = waitingForMatch.shift();
-                // Eşleşme bulundu, oyunu başlat
                 startNewGame(ws, opponentWs);
             } else {
                 waitingForMatch.push(ws);
@@ -97,10 +100,9 @@ function handleClientAction(ws, data) {
             if (index > -1) waitingForMatch.splice(index, 1);
             break;
             
-        // 2. VE 3. ÖZEL ODA LOBİSİ
         case 'CREATE_ROOM':
             const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
-            roomLobbies[roomCode] = { host: ws, guest: null };
+            roomLobbies[roomCode] = { host: ws, guest: null, hostColor: 'red' };
             ws.send(JSON.stringify({ type: 'ROOM_CREATED', roomCode }));
             break;
 
@@ -108,28 +110,35 @@ function handleClientAction(ws, data) {
             const room = roomLobbies[data.roomCode];
             if (room && !room.guest) {
                 room.guest = ws;
-                // Oyunu başlat
                 startNewGame(room.host, room.guest);
-                delete roomLobbies[data.roomCode]; // Oda lobisini temizle
+                delete roomLobbies[data.roomCode]; 
             } else {
                 ws.send(JSON.stringify({ type: 'ERROR', message: 'Oda bulunamadı veya dolu.' }));
             }
             break;
 
-        // 4. OYUN İÇİ EYLEMLER
         case 'GET_LEGAL_MOVES':
-            // ... Burada Amerikan Daması kural mantığı çalışır ...
-            // Basitlik için rastgele hamle döndürelim:
-            const moves = ['C4', 'E4']; 
-            ws.send(JSON.stringify({ type: 'LEGAL_MOVES', moves }));
+            const game = games[data.gameId];
+            if (!game || ws !== game.playerData[game.turn]) return; // Sıra kontrolü
+            
+            const legalMoves = getLegalMoves(data.gameId, data.pos, game.turn);
+            ws.send(JSON.stringify({ type: 'LEGAL_MOVES', moves: legalMoves }));
             break;
 
         case 'MAKE_MOVE':
-            // ... Hamleyi kontrol et ve tahta durumunu güncelle ...
-            // Başarılı ise tüm oyunculara güncelleme gönder
-            // const newBoard = applyMove(data.gameId, data.from, data.to);
-            // broadcastGameUpdate(data.gameId, 'GAME_UPDATE', { boardState: newBoard, turn: 'black' });
-            // ...
+            // Gerçek tahta hareketini uygula ve kural kontrolü yap
+            // Eğer legal ve başarılıysa:
+            // const newBoard = applyMove(data.gameId, data.from, data.to); 
+            // games[data.gameId].turn = (games[data.gameId].turn === 'red' ? 'black' : 'red');
+            
+            // Simülasyon: Oyunu güncelle
+            const simGame = games[data.gameId];
+            const nextTurn = simGame.turn === 'red' ? 'black' : 'red';
+
+            // Burası tamamen sunucu mantığına bağlıdır. Başarılı bir hareket olduğunu varsayıyoruz:
+            const newBoardState = simGame.boardState; // Tahtayı burada güncelle
+            
+            broadcastGameUpdate(data.gameId, 'GAME_UPDATE', { boardState: newBoardState, turn: nextTurn });
             break;
             
     }
@@ -139,11 +148,10 @@ function startNewGame(player1, player2) {
     const gameId = Date.now().toString();
     const boardState = initializeBoard();
     
-    // Rastgele renk atama
-    const colors = ['red', 'black'];
-    const p1Color = colors[Math.floor(Math.random() * 2)];
+    // Rastgele renk atama: Kırmızı ve Siyah
+    const p1Color = Math.random() < 0.5 ? 'red' : 'black';
     const p2Color = p1Color === 'red' ? 'black' : 'red';
-    const firstTurn = 'red'; // Kırmızı başlar
+    const firstTurn = 'red'; // Kırmızı (Altta olan) başlar
 
     games[gameId] = {
         players: [player1, player2],
@@ -155,7 +163,6 @@ function startNewGame(player1, player2) {
     // Oyunculara oyunu başlatma emri gönder
     player1.send(JSON.stringify({ type: 'MATCH_FOUND', gameId, color: p1Color, boardState, turn: firstTurn }));
     player2.send(JSON.stringify({ type: 'MATCH_FOUND', gameId, color: p2Color, boardState, turn: firstTurn }));
-    console.log(`Yeni oyun başladı: ${gameId}`);
 }
 
 
@@ -164,3 +171,4 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`WebSocket sunucusu ${PORT} portunda çalışıyor.`);
 });
+
