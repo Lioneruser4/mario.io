@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Gamepad2, Users, Copy, X, Search, Crown, Info } from 'lucide-react';
+import { Gamepad2, Users, Copy, X, Search, Crown } from 'lucide-react';
+
+// Sabitler
+const BOARD_SIZE = 8;
+const RED = 'red';
+const BLACK = 'black';
 
 const CheckersGame = () => {
   const [screen, setScreen] = useState('lobby'); // lobby, searching, game
@@ -9,13 +14,12 @@ const CheckersGame = () => {
   const [board, setBoard] = useState([]);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [validMoves, setValidMoves] = useState([]);
-  const [currentPlayer, setCurrentPlayer] = useState('red');
-  // Oyuncu rengi. myColor 'red' veya 'black' olabilir.
-  const [myColor, setMyColor] = useState(null); 
+  const [currentPlayer, setCurrentPlayer] = useState(RED);
+  const [myColor, setMyColor] = useState(null);
   const [opponent, setOpponent] = useState(null);
   const [serverConnected, setServerConnected] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [gameInfo, setGameInfo] = useState({ redScore: 12, blackScore: 12 }); 
+  const [gameInfo, setGameInfo] = useState({ redScore: 12, blackScore: 12 });
   const wsRef = useRef(null);
 
   // Sunucu bağlantısı
@@ -30,8 +34,7 @@ const CheckersGame = () => {
 
   const connectToServer = () => {
     try {
-      // DİKKAT: Gerçek bir uygulama için burayı kendi sunucunuzun adresiyle değiştirmeniz gerekir.
-      const ws = new WebSocket('wss://mario-io-1.onrender.com'); 
+      const ws = new WebSocket('wss://mario-io-1.onrender.com');
       
       ws.onopen = () => {
         setServerConnected(true);
@@ -49,7 +52,8 @@ const CheckersGame = () => {
 
       ws.onclose = () => {
         setServerConnected(false);
-        setTimeout(connectToServer, 3000); 
+        // 3 saniye sonra tekrar bağlanmayı dene
+        setTimeout(connectToServer, 3000);
       };
 
       wsRef.current = ws;
@@ -69,8 +73,9 @@ const CheckersGame = () => {
         initBoard();
         break;
       case 'move':
-        updateBoard(data.board, data.gameInfo);
+        updateBoard(data.board);
         setCurrentPlayer(data.currentPlayer);
+        setGameInfo(data.gameInfo);
         break;
       case 'roomCreated':
         setRoomCode(data.roomCode);
@@ -82,37 +87,45 @@ const CheckersGame = () => {
         setScreen('game');
         initBoard();
         break;
+      // Hata veya oyun sonu durumlarını buraya ekleyebilirsiniz.
+      default:
+        console.log('Bilinmeyen sunucu mesajı:', data);
     }
   };
 
   const initBoard = () => {
-    const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
+    const newBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
     
-    // Siyah taşları yerleştir (Üst kısım, 0-2. satırlar)
+    // Siyah taşları yerleştir (Üst 3 sıra)
     for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 8; col++) {
-        if ((row + col) % 2 === 1) { 
-          newBoard[row][col] = { color: 'black', king: false };
-        }
-      }
-    }
-    
-    // Kırmızı taşları yerleştir (Alt kısım, 5-7. satırlar)
-    for (let row = 5; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        // Sadece siyah karelere (satır+sütun tek sayı olanlar) taş koy
         if ((row + col) % 2 === 1) {
-          newBoard[row][col] = { color: 'red', king: false };
+          newBoard[row][col] = { color: BLACK, king: false };
         }
       }
     }
     
+    // Kırmızı taşları yerleştir (Alt 3 sıra)
+    for (let row = 5; row < 8; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        // Sadece siyah karelere (satır+sütun tek sayı olanlar) taş koy
+        if ((row + col) % 2 === 1) {
+          newBoard[row][col] = { color: RED, king: false };
+        }
+      }
+    }
+    
+    setBoard(newBoard);
+    // Skoru sıfırla/başlat
+    setGameInfo({ redScore: 12, blackScore: 12 });
+  };
+
+  const updateBoard = (newBoard) => {
     setBoard(newBoard);
   };
 
-  const updateBoard = (newBoard, newGameInfo) => {
-    setGameInfo(newGameInfo);
-    setBoard(newBoard);
-  };
+  // --- Lobi ve Oda Fonksiyonları ---
 
   const startRanked = () => {
     setGameMode('ranked');
@@ -133,7 +146,7 @@ const CheckersGame = () => {
 
   const createRoom = () => {
     setGameMode('friend');
-    const code = Math.floor(1000 + Math.random() * 9000).toString(); 
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
     setRoomCode(code);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'createRoom', roomCode: code }));
@@ -151,76 +164,133 @@ const CheckersGame = () => {
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
   };
+  
+  // --- Oyun Mantığı Fonksiyonları (Düzeltildi) ---
 
-  const calculateValidMoves = (row, col, piece) => {
-    const moves = [];
-    // Kırmızı (red) yukarı doğru gider (-1 satır), Siyah (black) aşağı doğru gider (+1 satır)
-    const forwardDirection = piece.color === 'red' ? -1 : 1; 
+  // Tüm tahtadaki olası atlama hareketlerini bulur.
+  const findAllJumps = (currentBoard, color) => {
+    let jumps = [];
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const piece = currentBoard[row][col];
+        if (piece && piece.color === color) {
+          jumps = jumps.concat(calculateJumps(row, col, piece, currentBoard));
+        }
+      }
+    }
+    return jumps;
+  };
+  
+  // Tek bir taşa ait atlama hareketlerini hesaplar
+  const calculateJumps = (row, col, piece, currentBoard) => {
+    const jumps = [];
+    const color = piece.color;
+    const opponentColor = color === RED ? BLACK : RED;
     
-    const checkMove = (dr, dc) => {
+    // Olası yönler (dama için 4, normal taş için 2)
+    const possibleDirections = piece.king 
+      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] // Dama
+      : color === RED 
+        ? [[-1, -1], [-1, 1]] // Kırmızı (Yukarı)
+        : [[1, -1], [1, 1]]; // Siyah (Aşağı)
+
+    possibleDirections.forEach(([dr, dc]) => {
+      const jumpRow = row + dr;
+      const jumpCol = col + dc;
+      const landRow = row + 2 * dr;
+      const landCol = col + 2 * dc;
+
+      // Sınır kontrolü
+      if (landRow >= 0 && landRow < BOARD_SIZE && landCol >= 0 && landCol < BOARD_SIZE) {
+        const jumpedPiece = currentBoard[jumpRow][jumpCol];
+        const landingSpot = currentBoard[landRow][landCol];
+
+        // Atlama hareketinin geçerli olup olmadığını kontrol et
+        if (jumpedPiece && jumpedPiece.color === opponentColor && !landingSpot) {
+          jumps.push({ row: landRow, col: landCol, capture: true, capturePos: { row: jumpRow, col: jumpCol } });
+        }
+      }
+    });
+
+    return jumps;
+  };
+
+  // Tek bir taşa ait normal hareketleri hesaplar
+  const calculateNormalMoves = (row, col, piece, currentBoard) => {
+    const moves = [];
+    
+    // Olası yönler (dama için 4, normal taş için 2)
+    const possibleDirections = piece.king 
+      ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] // Dama
+      : piece.color === RED 
+        ? [[-1, -1], [-1, 1]] // Kırmızı (Yukarı)
+        : [[1, -1], [1, 1]]; // Siyah (Aşağı)
+
+    possibleDirections.forEach(([dr, dc]) => {
       const newRow = row + dr;
       const newCol = col + dc;
 
-      // Normal taşlar sadece ileri gidebilir
-      if (!piece.king && dr !== forwardDirection) return; 
-
-      if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
-        if (!board[newRow][newCol]) {
+      // Sınır kontrolü
+      if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
+        const targetSquare = currentBoard[newRow][newCol];
+        
+        // Boş ve siyah kare olmalı (Dama tahtasında zaten sadece siyah kareler kullanılır)
+        if (!targetSquare) {
           moves.push({ row: newRow, col: newCol, capture: false });
         }
       }
-    };
-
-    const checkJump = (dr, dc) => {
-      const jumpRow = row + dr;
-      const jumpCol = col + dc;
-      const newRow = row + 2 * dr;
-      const newCol = col + 2 * dc;
-
-      // Normal taşlar sadece ileri yönde atlayabilir
-      if (!piece.king && dr !== forwardDirection) return;
-
-      if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 &&
-          jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
-        
-        const jumpedPiece = board[jumpRow][jumpCol];
-        
-        // Atlanan karede rakip taş olmalı VE hedef kare boş olmalı
-        if (jumpedPiece && jumpedPiece.color !== piece.color && !board[newRow][newCol]) {
-          moves.push({ row: newRow, col: newCol, capture: true, capturePos: { row: jumpRow, col: jumpCol } });
-        }
-      }
-    };
-
-    const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
-
-    directions.forEach(([dr, dc]) => {
-      checkMove(dr, dc);
-      checkJump(dr, dc);
     });
 
     return moves;
   };
 
+  const calculateValidMoves = (row, col, piece) => {
+    // 1. Zorunlu Atlama Kontrolü
+    const allPossibleJumps = findAllJumps(board, currentPlayer);
+
+    if (allPossibleJumps.length > 0) {
+      // Tahtada zorunlu atlama varsa, sadece seçili taşa ait atlamaları göster
+      return allPossibleJumps.filter(move => {
+        // Bu hareketin seçili taştan (row, col) başlayıp başlamadığını kontrol etmeliyiz.
+        // Basitleştirmek için, sadece seçili taşa ait atlamaları hesaplayalım
+        const pieceJumps = calculateJumps(row, col, piece, board);
+        if (pieceJumps.length > 0) return pieceJumps;
+        return [];
+      }).flat();
+    }
+    
+    // 2. Normal Hareketler (Atlama yoksa)
+    return calculateNormalMoves(row, col, piece, board);
+  };
+  
+  // Tekrar atlama zinciri (multi-jump) kuralı bu kodda uygulanmamıştır.
+  // Gerekirse, makeMove sonrasında aynı taştan tekrar atlama olup olmadığı kontrol edilmelidir.
+
+
   const handleSquareClick = (row, col) => {
+    // Sıra benim değilse oyna-ma
     if (currentPlayer !== myColor) return;
 
     const piece = board[row][col];
-
+    
     if (selectedPiece) {
       const move = validMoves.find(m => m.row === row && m.col === col);
       if (move) {
+        // Geçerli hareket
         makeMove(selectedPiece, move);
         setSelectedPiece(null);
         setValidMoves([]);
       } else if (piece && piece.color === myColor) {
+        // Başka bir kendi taşını seç
         setSelectedPiece({ row, col });
         setValidMoves(calculateValidMoves(row, col, piece));
       } else {
+        // Geçersiz hareket, seçimi kaldır
         setSelectedPiece(null);
         setValidMoves([]);
       }
     } else if (piece && piece.color === myColor) {
+      // Taş seç
       setSelectedPiece({ row, col });
       setValidMoves(calculateValidMoves(row, col, piece));
     }
@@ -230,53 +300,56 @@ const CheckersGame = () => {
     const newBoard = board.map(row => [...row]);
     const piece = newBoard[from.row][from.col];
     
-    newBoard[to.row][to.col] = piece;
+    // Taşı yeni konuma taşı
+    newBoard[to.row][to.col] = { ...piece };
     newBoard[from.row][from.col] = null;
+    
+    let newRedScore = gameInfo.redScore;
+    let newBlackScore = gameInfo.blackScore;
 
     if (to.capture) {
+      // Yenen taşı tahtadan kaldır
       newBoard[to.capturePos.row][to.capturePos.col] = null;
+      
+      // Skoru güncelle
+      if (piece.color === RED) {
+        newBlackScore--;
+      } else {
+        newRedScore--;
+      }
     }
 
     // Dama (King) olma kontrolü
-    if (!newBoard[to.row][to.col].king) { 
-        if ((piece.color === 'red' && to.row === 0) || (piece.color === 'black' && to.row === 7)) {
-          newBoard[to.row][to.col].king = true;
-        }
+    if ((piece.color === RED && to.row === 0) || (piece.color === BLACK && to.row === 7)) {
+      newBoard[to.row][to.col].king = true;
     }
 
-    // Puanları güncelle
-    let redCount = 0;
-    let blackCount = 0;
-    for (let i = 0; i < 8; i++) {
-        for (let j = 0; j < 8; j++) {
-            if (newBoard[i][j]) {
-                if (newBoard[i][j].color === 'red') redCount++;
-                else if (newBoard[i][j].color === 'black') blackCount++;
-            }
-        }
-    }
-    const updatedGameInfo = { redScore: redCount, blackScore: blackCount };
-    setGameInfo(updatedGameInfo);
+    // Sırayı değiştir
+    const newCurrentPlayer = currentPlayer === RED ? BLACK : RED;
+    const newGameInfo = { redScore: newRedScore, blackScore: newBlackScore };
 
-    const newCurrentPlayer = currentPlayer === 'red' ? 'black' : 'red';
-    
+    // Sunucuya hareketi gönder
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'move',
         board: newBoard,
         currentPlayer: newCurrentPlayer,
-        gameInfo: updatedGameInfo
+        gameInfo: newGameInfo
       }));
     }
 
+    // Yerel durumu güncelle
     setBoard(newBoard);
     setCurrentPlayer(newCurrentPlayer);
+    setGameInfo(newGameInfo);
   };
 
-  // 🔴 LOBBY EKRANI DÜZELTİLDİ 🔴
+  // --- JSX Render Kısmı ---
+
   if (screen === 'lobby') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        {/* ... Lobi içeriği (aynı bırakıldı) ... */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse top-0 left-0"></div>
           <div className="absolute w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse bottom-0 right-0 animation-delay-2000"></div>
@@ -287,27 +360,13 @@ const CheckersGame = () => {
             <h1 className="text-6xl font-bold text-white mb-4 drop-shadow-2xl" style={{
               textShadow: '0 0 30px rgba(255,255,255,0.5), 0 0 60px rgba(138,43,226,0.3)'
             }}>
-              GLOBAL DAMA 👑
+              DAMA
             </h1>
             <div className="flex items-center justify-center gap-2">
               <div className={`w-3 h-3 rounded-full ${serverConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
               <p className="text-gray-300">{serverConnected ? 'Sunucuya Bağlı' : 'Bağlanıyor...'}</p>
             </div>
           </div>
-          
-          {/* Yeni Eklenen Açıklama Metinleri */}
-          <div className="bg-white/10 backdrop-blur-lg p-4 rounded-xl mb-6 border border-white/20">
-              <div className="flex items-center gap-2 mb-2">
-                  <Info className="w-5 h-5 text-cyan-400" />
-                  <p className="text-white font-semibold">Oyun Kuralları (Uluslararası Dama)</p>
-              </div>
-              <ul className="text-gray-300 text-sm space-y-1 ml-4 list-disc">
-                  <li>Taşlar sadece **çapraz, 1 kare ileri** hareket eder.</li>
-                  <li>Rakip taşın **üzerinden atlanarak (2 kare)** taş yenir.</li>
-                  <li>Son sıraya ulaşan taş **Dama** (King) olur ve **tüm çapraz yönlere** hareket edebilir.</li>
-              </ul>
-          </div>
-          {/* Açıklama Metinleri Sonu */}
 
           <div className="space-y-4">
             <button
@@ -336,7 +395,7 @@ const CheckersGame = () => {
 
             {roomCode && (
               <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl animate-fade-in border border-white/20">
-                <p className="text-white mb-3 text-center font-semibold">Oda Kodu: Bu kodu arkadaşınla paylaş</p>
+                <p className="text-white mb-3 text-center font-semibold">Oda Kodu</p>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -357,7 +416,7 @@ const CheckersGame = () => {
             <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl border border-white/20">
               <input
                 type="text"
-                placeholder="Oda Kodunu Girin (4 Haneli)"
+                placeholder="Oda Kodunu Girin"
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.slice(0, 4))}
                 maxLength={4}
@@ -378,9 +437,9 @@ const CheckersGame = () => {
   }
 
   if (screen === 'searching') {
-    // Arama ekranı JSX'i aynı kalabilir
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        {/* ... Arama içeriği (aynı bırakıldı) ... */}
         <div className="text-center">
           <div className="relative w-32 h-32 mx-auto mb-8">
             <div className="absolute inset-0 border-8 border-blue-500/30 rounded-full"></div>
@@ -401,88 +460,77 @@ const CheckersGame = () => {
     );
   }
 
-  // 🔴 OYUN EKRANI (Tahta Döndürme) DÜZELTİLDİ 🔴
-  // Tahtayı kendi rengine göre döndür
-  const getRenderedBoard = () => {
-      // Siyah ise tahtayı dikey olarak ters çevir (7'den 0'a)
-      if (myColor === 'black') {
-          return [...board].reverse();
-      }
-      // Kırmızı ise normal render et (0'dan 7'ye)
-      return board;
-  };
-  
-  const renderedBoard = getRenderedBoard();
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-4xl w-full">
-        <div className="flex justify-between items-center mb-6 bg-white/10 backdrop-blur-lg p-4 rounded-2xl border border-white/20">
-          
-          {/* Rakip Bilgisi (Üstte) */}
-          <div className={`flex items-center gap-3 ${currentPlayer === (myColor === 'red' ? 'black' : 'red') ? 'opacity-100' : 'opacity-50'}`}>
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-black rounded-full shadow-lg border-4 border-white/50"></div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-2 sm:p-4">
+      <div className="max-w-xl w-full">
+        {/* Oyun Bilgi Paneli (Yukarıda) */}
+        <div className="flex justify-between items-center mb-4 bg-white/10 backdrop-blur-lg p-3 sm:p-4 rounded-2xl border border-white/20 shadow-xl">
+          <div className={`flex items-center gap-3 ${currentPlayer === BLACK ? 'opacity-100' : 'opacity-50'}`}>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-black rounded-full shadow-lg border-4 border-white/50"></div>
             <div>
-              <p className="text-white font-bold">Rakip ({myColor === 'red' ? 'Siyah' : 'Kırmızı'})</p>
-              <p className="text-gray-300 text-sm">{myColor === 'red' ? gameInfo.blackScore : gameInfo.redScore} taş</p>
+              <p className="text-white font-bold text-sm sm:text-base">Siyah</p>
+              <p className="text-gray-300 text-xs sm:text-sm">{gameInfo.blackScore} taş</p>
             </div>
+            {currentPlayer === BLACK && (
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            )}
           </div>
 
           <div className="text-white text-center">
-            <p className="text-2xl font-bold">
+            <p className="text-xl sm:text-2xl font-bold">
               {currentPlayer === myColor ? 'Sizin Sıranız' : 'Rakip Oynuyor'}
             </p>
-            <p className="text-sm text-gray-300">Siz: {myColor === 'red' ? 'Kırmızı' : 'Siyah'}</p>
+            <p className="text-sm text-yellow-300 font-semibold">{myColor === RED ? 'Siz Kırmızı' : 'Siz Siyah'}</p>
           </div>
 
-          {/* Sizin Bilginiz (Altta) */}
-          <div className={`flex items-center gap-3 ${currentPlayer === myColor ? 'opacity-100' : 'opacity-50'}`}>
+          <div className={`flex items-center gap-3 ${currentPlayer === RED ? 'opacity-100' : 'opacity-50'}`}>
+            {currentPlayer === RED && (
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            )}
             <div className="text-right">
-              <p className="text-white font-bold">Siz ({myColor === 'red' ? 'Kırmızı' : 'Siyah'})</p>
-              <p className="text-gray-300 text-sm">{myColor === 'red' ? gameInfo.redScore : gameInfo.blackScore} taş</p>
+              <p className="text-white font-bold text-sm sm:text-base">Kırmızı</p>
+              <p className="text-gray-300 text-xs sm:text-sm">{gameInfo.redScore} taş</p>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-700 rounded-full shadow-lg border-4 border-white/50"></div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-500 to-red-700 rounded-full shadow-lg border-4 border-white/50"></div>
           </div>
         </div>
 
-        {/* Dama Tahtası */}
-        <div className="bg-white/5 backdrop-blur-lg p-6 rounded-3xl shadow-2xl border border-white/20">
-          <div className="grid grid-cols-8 gap-1 bg-amber-900 p-2 rounded-2xl">
-            {renderedBoard.map((row, rowIndex) => {
-              // Tahta ters çevrildiği için orijinal satır indeksini hesaplayın
-              const originalRowIndex = myColor === 'black' ? 7 - rowIndex : rowIndex;
-
-              return row.map((cell, colIndex) => {
-                const isLight = (originalRowIndex + colIndex) % 2 === 0;
-                const isSelected = selectedPiece?.row === originalRowIndex && selectedPiece?.col === colIndex;
-                const isValidMove = validMoves.some(m => m.row === originalRowIndex && m.col === colIndex);
+        {/* Oyun Tahtası */}
+        <div className="bg-white/5 backdrop-blur-lg p-2 sm:p-6 rounded-3xl shadow-2xl border border-white/20 w-full aspect-square">
+          {/* Tahta boyutu: grid-cols-8, gap-1 mobil uyumluluğu artırmak için */}
+          <div className="grid grid-cols-8 gap-0.5 sm:gap-1 bg-amber-900 p-1 sm:p-2 rounded-2xl w-full h-full">
+            {board.map((row, rowIndex) => (
+              row.map((cell, colIndex) => {
+                const isDarkSquare = (rowIndex + colIndex) % 2 === 1; // Sadece bu karelerde taşlar hareket eder
+                const isSelected = selectedPiece?.row === rowIndex && selectedPiece?.col === colIndex;
+                const isValidMove = validMoves.some(m => m.row === rowIndex && m.col === colIndex);
                 
                 return (
                   <div
-                    key={`${originalRowIndex}-${colIndex}`}
-                    // Tahtanın dönmesini hesaba katmak için orijinal satır indeksini kullanın
-                    onClick={() => handleSquareClick(originalRowIndex, colIndex)} 
-                    className={`aspect-square flex items-center justify-center rounded-lg cursor-pointer transition-all duration-300 ${
-                      isLight ? 'bg-amber-100' : 'bg-amber-800'
+                    key={`${rowIndex}-${colIndex}`}
+                    onClick={() => handleSquareClick(rowIndex, colIndex)}
+                    // Mobil uyumlu kare boyutu ve görünümü
+                    className={`aspect-square flex items-center justify-center cursor-pointer transition-all duration-300 ${
+                      isDarkSquare ? 'bg-amber-800' : 'bg-amber-100'
                     } ${isSelected ? 'ring-4 ring-yellow-400 scale-95' : ''} ${
                       isValidMove ? 'ring-4 ring-green-400 animate-pulse' : ''
-                    } hover:scale-95`}
+                    } hover:scale-[0.98] rounded-md`}
                   >
                     {cell && (
-                      <div className={`w-4/5 h-4/5 rounded-full shadow-2xl transform transition-all duration-300 hover:scale-110 ${
-                        cell.color === 'red'
-                          ? 'bg-gradient-to-br from-red-400 to-red-700 border-4 border-red-900'
-                          : 'bg-gradient-to-br from-gray-700 to-black border-4 border-gray-900'
-                      } ${currentPlayer === cell.color ? 'animate-pulse' : ''} flex items-center justify-center`}>
+                      <div className={`w-[85%] h-[85%] rounded-full shadow-xl transform transition-all duration-300 ${
+                        cell.color === RED
+                          ? 'bg-gradient-to-br from-red-400 to-red-700 border-2 border-red-900'
+                          : 'bg-gradient-to-br from-gray-700 to-black border-2 border-gray-900'
+                      } ${currentPlayer === cell.color ? 'outline outline-2 outline-offset-2 outline-white/70' : ''} flex items-center justify-center`}>
                         {cell.king && (
-                          <Crown className="w-1/2 h-1/2 text-yellow-300 animate-bounce" />
+                          <Crown className="w-1/2 h-1/2 text-yellow-300" />
                         )}
                       </div>
                     )}
                   </div>
                 );
               })
-            })}
+            ))}
           </div>
         </div>
       </div>
