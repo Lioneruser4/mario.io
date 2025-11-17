@@ -6,17 +6,11 @@ let gameState = {
     gameId: null,
     myColor: null, // "red" veya "black"
     isMyTurn: false,
-    selectedPiecePos: null, // Tıklanan taşın pozisyonu
-    stats: {
-        onlinePlayers: 0,
-        activeGames: 0,
-        totalMatches: 0
-    }
+    selectedPiecePos: null // Tıklanan taşın pozisyonu
 };
 
 // DOM Elementleri
 const dom = {
-    // Lobby Elements
     connStatusEl: document.getElementById('connection-status'),
     lobbyContainer: document.getElementById('lobby-container'),
     gameContainer: document.getElementById('game-container'),
@@ -26,146 +20,35 @@ const dom = {
     roomCodeInput: document.getElementById('room-code-input'),
     btnConnectRoom: document.getElementById('btn-connect-room'),
     btnCopyCode: document.getElementById('btn-copy-code'),
-    
-    // Game Elements
     playerTurnStatus: document.getElementById('player-turn-status'),
-    gameBoard: document.getElementById('game-board'),
-    
-    // Stats Elements
-    onlinePlayersEl: document.getElementById('online-players'),
-    activeGamesEl: document.getElementById('active-games'),
-    totalMatchesEl: document.getElementById('total-matches')
+    gameBoard: document.getElementById('game-board')
 };
-
-// Lobby Functions
-function updateConnectionStatus(status, message) {
-    dom.connStatusEl.className = `status-box ${status}`;
-    dom.connStatusEl.innerHTML = status === 'connecting' 
-        ? '<div class="spinner"></div><span>Sunucuya Bağlanılıyor...</span>'
-        : status === 'connected'
-            ? '✅ <span>Sunucuya Bağlandı</span>'
-            : '❌ <span>Bağlantı Kesildi</span>';
-
-    if (message) {
-        dom.connStatusEl.innerHTML += `<div class="status-message">${message}</div>`;
-    }
-}
-
-function updateStats(stats) {
-    if (stats.onlinePlayers !== undefined) {
-        gameState.stats.onlinePlayers = stats.onlinePlayers;
-        if (dom.onlinePlayersEl) {
-            dom.onlinePlayersEl.textContent = stats.onlinePlayers.toLocaleString();
-        }
-    }
-    if (stats.activeGames !== undefined) {
-        gameState.stats.activeGames = stats.activeGames;
-        if (dom.activeGamesEl) {
-            dom.activeGamesEl.textContent = stats.activeGames.toLocaleString();
-        }
-    }
-    if (stats.totalMatches !== undefined) {
-        gameState.stats.totalMatches = stats.totalMatches;
-        if (dom.totalMatchesEl) {
-            dom.totalMatchesEl.textContent = stats.totalMatches.toLocaleString();
-        }
-    }
-}
-
-function animateStatCounters() {
-    // Initial random stats for demo
-    const initialStats = {
-        onlinePlayers: Math.floor(Math.random() * 1000) + 500,
-        activeGames: Math.floor(Math.random() * 200) + 100,
-        totalMatches: Math.floor(Math.random() * 10000) + 5000
-    };
-    
-    updateStats(initialStats);
-    
-    // Simulate stats updates
-    setInterval(() => {
-        const newStats = {
-            onlinePlayers: Math.max(100, gameState.stats.onlinePlayers + Math.floor(Math.random() * 10) - 5),
-            activeGames: Math.max(10, gameState.stats.activeGames + Math.floor(Math.random() * 3) - 1),
-            totalMatches: gameState.stats.totalMatches + Math.floor(Math.random() * 10)
-        };
-        updateStats(newStats);
-    }, 5000);
-}
-
-function initLobby() {
-    // Copy room code button
-    if (dom.btnCopyCode) {
-        dom.btnCopyCode.addEventListener('click', function() {
-            const roomCode = dom.roomCodeInput.value;
-            if (roomCode) {
-                navigator.clipboard.writeText(roomCode);
-                const btn = this;
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<span>Kopyalandı!</span>';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.classList.remove('copied');
-                }, 2000);
-            }
-        });
-    }
-
-    // Add hover effect to mode cards
-    const modeCards = document.querySelectorAll('.mode-card');
-    modeCards.forEach(card => {
-        card.addEventListener('mousemove', (e) => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            card.style.setProperty('--mouse-x', `${x}px`);
-            card.style.setProperty('--mouse-y', `${y}px`);
-        });
-    });
-
-    // Initialize stats animation
-    animateStatCounters();
-}
 
 // ==========================================================
 // 1. SUNUCU İLETİŞİMİ
 // ==========================================================
 
 function connect() {
-    updateConnectionStatus('connecting');
+    dom.connStatusEl.className = 'status-box connecting';
+    dom.connStatusEl.textContent = 'Sunucuya Bağlanılıyor...';
     
     socket = new WebSocket(SERVER_URL);
 
     socket.onopen = () => {
-        updateConnectionStatus('connected');
-        // Initialize lobby after connection
-        initLobby();
+        dom.connStatusEl.className = 'status-box connected';
+        dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
     };
-    
     socket.onclose = () => {
-        updateConnectionStatus('disconnected', '5s sonra yeniden deneniyor...');
+        dom.connStatusEl.className = 'status-box disconnected';
+        dom.connStatusEl.textContent = '❌ Bağlantı Kesildi. 5s Sonra Yeniden Deneniyor...';
         setTimeout(connect, 5000);
     };
-    
-    socket.onerror = (e) => {
-        console.error("WebSocket Hatası:", e);
-        updateConnectionStatus('disconnected', 'Bağlantı hatası. Tekrar deneniyor...');
-    };
+    socket.onerror = (e) => console.error("WebSocket Hatası:", e);
     
     socket.onmessage = (event) => {
         try {
-            const data = JSON.parse(event.data);
-            handleServerMessage(data);
-            
-            // Update stats if received from server
-            if (data.onlinePlayers !== undefined || data.activeGames !== undefined || data.totalMatches !== undefined) {
-                updateStats(data);
-            }
-        } catch (e) { 
-            console.error("Geçersiz Sunucu Verisi:", event.data); 
-        }
+            handleServerMessage(JSON.parse(event.data));
+        } catch (e) { console.error("Geçersiz Sunucu Verisi:", event.data); }
     };
 }
 
@@ -179,101 +62,28 @@ function sendMessage(type, payload = {}) {
 }
 
 function handleServerMessage(data) {
-    console.log('Server Message:', data);
-    
     switch (data.type) {
         case 'MATCH_FOUND':
-            updateConnectionStatus('connected', 'Rakip bulundu! Oyun başlıyor...');
-            startGame(data.gameId, data.color, data.boardState, data.turn);
-            break;
-            
         case 'ROOM_JOINED':
-            updateConnectionStatus('connected', 'Odaya bağlanıldı! Oyun başlıyor...');
             startGame(data.gameId, data.color, data.boardState, data.turn);
             break;
-            
         case 'ROOM_CREATED':
             dom.roomCodeInput.value = data.roomCode;
             dom.btnCopyCode.classList.remove('hidden');
-            updateConnectionStatus('connected', `Oda oluşturuldu! Kod: ${data.roomCode}`);
-            
-            // Show a nice notification instead of alert
-            const notification = document.createElement('div');
-            notification.className = 'notification';
-            notification.innerHTML = `
-                <div class="notification-content">
-                    <h4>Oda Oluşturuldu!</h4>
-                    <p>Oda kodunuz: <strong>${data.roomCode}</strong></p>
-                    <p>Bu kodu arkadaşlarınızla paylaşın.</p>
-                </div>
-                <button class="close-notification">×</button>
-            `;
-            document.body.appendChild(notification);
-            
-            // Auto-hide notification after 5 seconds
-            setTimeout(() => {
-                notification.classList.add('show');
-                setTimeout(() => {
-                    notification.classList.remove('show');
-                    setTimeout(() => notification.remove(), 300);
-                }, 5000);
-            }, 100);
-            
-            // Close button handler
-            notification.querySelector('.close-notification').addEventListener('click', () => {
-                notification.classList.remove('show');
-                setTimeout(() => notification.remove(), 300);
-            });
+            alert(`Oda Kodu: ${data.roomCode}. Arkadaşına gönder.`);
             break;
-            
         case 'GAME_UPDATE':
+            // Tahta ve sıra güncellendi
             updateBoard(data.boardState);
             updateTurn(data.turn);
             break;
-            
         case 'LEGAL_MOVES':
-            highlightLegalMoves(data.moves);
+            // Sunucudan gelen yasal hamleleri renklendir
+            highlightLegalMoves(data.moves); 
             break;
-            
-        case 'PLAYER_JOINED':
-            if (data.roomCode) {
-                updateConnectionStatus('connected', `Oyuncu odaya katıldı! Oyun başlıyor...`);
-            }
-            break;
-            
         case 'ERROR':
-            console.error('Sunucu Hatası:', data.message);
-            updateConnectionStatus('error', data.message || 'Bir hata oluştu');
+            alert(`Sunucu Hatası: ${data.message}`);
             stopSearching();
-            
-            // Show error notification
-            const errorNotif = document.createElement('div');
-            errorNotif.className = 'notification error';
-            errorNotif.innerHTML = `
-                <div class="notification-content">
-                    <h4>Hata!</h4>
-                    <p>${data.message || 'Bir hata oluştu'}</p>
-                </div>
-                <button class="close-notification">×</button>
-            `;
-            document.body.appendChild(errorNotif);
-            
-            setTimeout(() => {
-                errorNotif.classList.add('show');
-                setTimeout(() => {
-                    errorNotif.classList.remove('show');
-                    setTimeout(() => errorNotif.remove(), 300);
-                }, 5000);
-            }, 100);
-            
-            errorNotif.querySelector('.close-notification').addEventListener('click', () => {
-                errorNotif.classList.remove('show');
-                setTimeout(() => errorNotif.remove(), 300);
-            });
-            break;
-            
-        case 'STATS_UPDATE':
-            updateStats(data);
             break;
     }
 }
@@ -354,38 +164,30 @@ function drawBoard() {
 }
 
 function updateBoard(boardState) {
-    // Clear existing pieces and highlights
+    // Mevcut taşları kaldır
     document.querySelectorAll('.piece').forEach(p => p.remove());
-    clearHighlights();
     
-    // Clear selected piece
-    gameState.selectedPiecePos = null;
-    
-    // Update each cell based on the board state
-    for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
+    // Yeni taşları ekle
+    for (const pos in boardState) {
+        const { color, isKing } = boardState[pos];
+        const cell = document.querySelector(`[data-pos="${pos}"]`);
+        if (cell) {
+            const piece = document.createElement('div');
+            piece.classList.add('piece', color);
+            if (isKing) piece.classList.add('king');
             
-            // Add smooth animation
+            // Taş sürükleme özelliği ekle
+            piece.draggable = true;
+            piece.addEventListener('dragstart', handleDragStart);
+            
+            // Animasyon ekle
             piece.style.animation = 'piece-drop 0.3s ease-out';
+            cell.appendChild(piece);
         }
     }
     
-    // Update turn indicator
-    if (gameState.turn) {
-        const turnColor = gameState.turn === 'red' ? 'beyaz' : 'siyah';
-        dom.playerTurnStatus.textContent = `Sıra: ${turnColor} taşlarda`;
-    const pieces = document.querySelectorAll('.piece');
-    if (gameState.myColor === 'black') {
-        dom.gameBoard.style.transform = 'rotate(180deg)';
-        pieces.forEach(piece => {
-            piece.style.transform = 'rotate(180deg)';
-        });
-    } else {
-        dom.gameBoard.style.transform = 'rotate(0deg)';
-        pieces.forEach(piece => {
-            piece.style.transform = 'rotate(0deg)';
-        });
-    }
+    // Hücrelere tıklama olaylarını ayarla
+    setupCellClickHandlers();
 }
 
 function updateTurn(turnColor) {
@@ -399,112 +201,119 @@ function updateTurn(turnColor) {
     dom.playerTurnStatus.classList.add(gameState.isMyTurn ? 'my-turn-light' : 'opponent-turn-light');
 }
 
+// Sürükleme işlemi başladığında
+function handleDragStart(e) {
+    if (!gameState.isMyTurn) {
+        e.preventDefault();
+        return;
+    }
+    
+    const piece = e.target;
+    const cell = piece.parentElement;
+    const pos = cell.dataset.pos;
+    
+    // Seçili taşı işaretle
+    gameState.selectedPiecePos = pos;
+    
+    // Yasal hamleleri iste
+    sendMessage('GET_LEGAL_MOVES', { 
+        gameId: gameState.gameId, 
+        pos: pos 
+    });
+    
+    // Sürüklenen taşın şeffaflığını azalt
+    piece.style.opacity = '0.5';
+    
+    // Sürükleme verisini ayarla
+    e.dataTransfer.setData('text/plain', '');
+}
+
+// Hücre tıklama işleyicilerini ayarla
+function setupCellClickHandlers() {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+        // Eski olay dinleyicilerini kaldır
+        cell.removeEventListener('dragover', handleDragOver);
+        cell.removeEventListener('drop', handleDrop);
+        
+        // Yeni olay dinleyicilerini ekle
+        cell.addEventListener('dragover', handleDragOver);
+        cell.addEventListener('drop', handleDrop);
+    });
+}
+
+// Sürükleme sırasında üzerine gelindiğinde
+function handleDragOver(e) {
+    e.preventDefault();
+}
+
+// Bırakma işlemi
+function handleDrop(e) {
+    e.preventDefault();
+    
+    if (!gameState.isMyTurn || !gameState.selectedPiecePos) return;
+    
+    const toCell = e.currentTarget;
+    const fromPos = gameState.selectedPiecePos;
+    const toPos = toCell.dataset.pos;
+    
+    // Hamleyi sunucuya gönder
+    sendMessage('MAKE_MOVE', {
+        gameId: gameState.gameId,
+        from: fromPos,
+        to: toPos
+    });
+    
+    // Seçili taşı sıfırla
+    gameState.selectedPiecePos = null;
+    
+    // Tüm vurguları kaldır
+    clearHighlights();
+}
+
 function handleCellClick(event) {
     if (!gameState.isMyTurn || !gameState.gameId) return;
-    
+
     const cell = event.currentTarget;
     const pos = cell.dataset.pos;
-    const piece = cell.querySelector('.piece');
-    
-    // If clicking on a piece that belongs to the current player
-    if (piece && (piece.classList.contains(gameState.myColor) || 
-                 (gameState.myColor === 'red' && piece.classList.contains('white')) ||
-                 (gameState.myColor === 'white' && piece.classList.contains('red')))) {
-        // Clear previous selection
+    const hasMyPiece = cell.querySelector(`.piece.${gameState.myColor}`);
+
+    if (hasMyPiece) {
+        // Taşa tıklandı: Legal hamleleri iste
         clearHighlights();
-        
-        // Select this piece
         gameState.selectedPiecePos = pos;
         cell.classList.add('selected');
-        
-        // Request legal moves for this piece
-        sendMessage('GET_LEGAL_MOVES', { 
-            gameId: gameState.gameId, 
-            pos: pos 
-        });
-    }
-    // If clicking on a highlighted move
-    else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
-        // Make the move
-        sendMessage('MAKE_MOVE', {
-            gameId: gameState.gameId,
-            from: gameState.selectedPiecePos,
-            to: pos
-        });
-        
-        // Clear highlights after move
-        clearHighlights();
-    }
-        // Select new piece
-        gameState.selectedPiecePos = pos;
-        cell.classList.add('selected');
-        
-        // Request legal moves for this piece
-        sendMessage('GET_LEGAL_MOVES', { 
-            gameId: gameState.gameId, 
-            pos: pos 
-        });
-    } 
-    // If clicking on a legal move cell with a selected piece
-    else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
-        // Make the move
+        sendMessage('GET_LEGAL_MOVES', { gameId: gameState.gameId, pos: pos });
+
+    } else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
+        // Vurgulanmış hedefe tıklandı: Hamleyi yap
         sendMessage('MAKE_MOVE', { 
             gameId: gameState.gameId, 
             from: gameState.selectedPiecePos, 
             to: pos 
         });
-        
-        // Clear selection after move
         clearHighlights();
-    } 
-    // If clicking on an empty cell that's not a legal move
-    else {
-        // If we have a selected piece, keep it selected
-        if (gameState.selectedPiecePos) {
-            // If clicking on another empty cell, keep the current selection
-            return;
-        }
-        // Otherwise clear selection
+    } else {
+        // Geçersiz tıklama: Seçimi kaldır
         clearHighlights();
     }
 }
 
 function highlightLegalMoves(moves) {
-    // Clear previous highlights but keep the selected piece
-    const selectedCell = gameState.selectedPiecePos ? 
-        document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`) : null;
+    clearHighlights(); 
+    // Seçili taşı tekrar vurgula
+    if(gameState.selectedPiecePos) document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`).classList.add('selected');
     
-    clearHighlights();
-    
-    // Re-add selected piece highlight
-    if (selectedCell) {
-        selectedCell.classList.add('selected');
-    }
-    
-    // Highlight legal moves
-    moves.forEach(move => {
-        const cell = document.querySelector(`[data-pos="${move}"]`);
-        if (cell) {
-            // Check if it's a capture move (jump)
-            const isCapture = move.includes('x');
-            cell.classList.add('legal-move');
-            
-            // Add capture indicator for better UX
-            if (isCapture) {
-                cell.classList.add('capture-move');
-            }
-        }
+    // Yasal hamleleri renklendir (CSS: .legal-move)
+    moves.forEach(pos => {
+        const cell = document.querySelector(`[data-pos="${pos}"]`);
+        if (cell) cell.classList.add('legal-move');
     });
 }
 
 function clearHighlights() {
-    // Remove all highlight classes
-    document.querySelectorAll('.selected, .legal-move, .capture-move').forEach(c => {
-        c.classList.remove('selected', 'legal-move', 'capture-move');
-    });
-    
-    // Don't clear selectedPiecePos here, as it's needed for multi-jump moves
-    // It will be cleared explicitly when needed (e.g., after move is made)
+    document.querySelectorAll('.selected, .legal-move').forEach(c => c.classList.remove('selected', 'legal-move'));
+    gameState.selectedPiecePos = null;
 }
 
 // 🚀 Uygulama Başlangıcı
