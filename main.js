@@ -164,17 +164,51 @@ function drawBoard() {
 }
 
 function updateBoard(boardState) {
+    // Clear existing pieces and highlights
     document.querySelectorAll('.piece').forEach(p => p.remove());
-    for (const pos in boardState) {
-        const { color, isKing } = boardState[pos];
-        const cell = document.querySelector(`[data-pos="${pos}"]`);
-        if (cell) {
-            const piece = document.createElement('div');
-            piece.classList.add('piece', color, isKing ? 'king' : 'standard');
-            // Yeni taşa ufak bir "düşme" animasyonu
-            piece.style.animation = 'piece-drop 0.3s ease-out';
-            cell.appendChild(piece);
+    clearHighlights();
+    
+    // Clear selected piece
+    gameState.selectedPiecePos = null;
+    
+    // Update each cell based on the board state
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const pos = String.fromCharCode(65 + col) + (8 - row);
+            const piece = boardState[pos];
+            const cell = document.querySelector(`[data-pos="${pos}"]`);
+            
+            if (cell) {
+                // Clear any existing piece classes
+                cell.className = 'cell';
+                cell.classList.add((row + col) % 2 === 0 ? 'light' : 'dark');
+                
+                // Add piece if exists
+                if (piece) {
+                    const pieceEl = document.createElement('div');
+                    pieceEl.className = `piece ${piece.color}`;
+                    if (piece.isKing) pieceEl.classList.add('king');
+                    
+                    // Add animation
+                    pieceEl.style.animation = 'piece-drop 0.3s ease-out';
+                    cell.appendChild(pieceEl);
+                }
+            }
         }
+    }
+    
+    // Rotate the board based on player color
+    const pieces = document.querySelectorAll('.piece');
+    if (gameState.myColor === 'black') {
+        dom.gameBoard.style.transform = 'rotate(180deg)';
+        pieces.forEach(piece => {
+            piece.style.transform = 'rotate(180deg)';
+        });
+    } else {
+        dom.gameBoard.style.transform = 'rotate(0deg)';
+        pieces.forEach(piece => {
+            piece.style.transform = 'rotate(0deg)';
+        });
     }
 }
 
@@ -191,47 +225,86 @@ function updateTurn(turnColor) {
 
 function handleCellClick(event) {
     if (!gameState.isMyTurn || !gameState.gameId) return;
-
+    
     const cell = event.currentTarget;
     const pos = cell.dataset.pos;
-    const hasMyPiece = cell.querySelector(`.piece.${gameState.myColor}`);
-
-    if (hasMyPiece) {
-        // Taşa tıklandı: Legal hamleleri iste
+    const piece = cell.querySelector('.piece');
+    
+    // If clicking on your own piece, select it
+    if (piece && piece.classList.contains(gameState.myColor)) {
+        // Clear previous selection
         clearHighlights();
+        
+        // Select new piece
         gameState.selectedPiecePos = pos;
         cell.classList.add('selected');
-        sendMessage('GET_LEGAL_MOVES', { gameId: gameState.gameId, pos: pos });
-
-    } else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
-        // Vurgulanmış hedefe tıklandı: Hamleyi yap
+        
+        // Request legal moves for this piece
+        sendMessage('GET_LEGAL_MOVES', { 
+            gameId: gameState.gameId, 
+            pos: pos 
+        });
+    } 
+    // If clicking on a legal move cell with a selected piece
+    else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
+        // Make the move
         sendMessage('MAKE_MOVE', { 
             gameId: gameState.gameId, 
             from: gameState.selectedPiecePos, 
             to: pos 
         });
+        
+        // Clear selection after move
         clearHighlights();
-    } else {
-        // Geçersiz tıklama: Seçimi kaldır
+    } 
+    // If clicking on an empty cell that's not a legal move
+    else {
+        // If we have a selected piece, keep it selected
+        if (gameState.selectedPiecePos) {
+            // If clicking on another empty cell, keep the current selection
+            return;
+        }
+        // Otherwise clear selection
         clearHighlights();
     }
 }
 
 function highlightLegalMoves(moves) {
-    clearHighlights(); 
-    // Seçili taşı tekrar vurgula
-    if(gameState.selectedPiecePos) document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`).classList.add('selected');
+    // Clear previous highlights but keep the selected piece
+    const selectedCell = gameState.selectedPiecePos ? 
+        document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`) : null;
     
-    // Yasal hamleleri renklendir (CSS: .legal-move)
-    moves.forEach(pos => {
-        const cell = document.querySelector(`[data-pos="${pos}"]`);
-        if (cell) cell.classList.add('legal-move');
+    clearHighlights();
+    
+    // Re-add selected piece highlight
+    if (selectedCell) {
+        selectedCell.classList.add('selected');
+    }
+    
+    // Highlight legal moves
+    moves.forEach(move => {
+        const cell = document.querySelector(`[data-pos="${move}"]`);
+        if (cell) {
+            // Check if it's a capture move (jump)
+            const isCapture = move.includes('x');
+            cell.classList.add('legal-move');
+            
+            // Add capture indicator for better UX
+            if (isCapture) {
+                cell.classList.add('capture-move');
+            }
+        }
     });
 }
 
 function clearHighlights() {
-    document.querySelectorAll('.selected, .legal-move').forEach(c => c.classList.remove('selected', 'legal-move'));
-    gameState.selectedPiecePos = null;
+    // Remove all highlight classes
+    document.querySelectorAll('.selected, .legal-move, .capture-move').forEach(c => {
+        c.classList.remove('selected', 'legal-move', 'capture-move');
+    });
+    
+    // Don't clear selectedPiecePos here, as it's needed for multi-jump moves
+    // It will be cleared explicitly when needed (e.g., after move is made)
 }
 
 // 🚀 Uygulama Başlangıcı
