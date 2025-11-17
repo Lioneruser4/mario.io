@@ -7,23 +7,50 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Çevrimiçi Türk Daması (Şaşki)</h1>
+    
+    <div id="connectionStatus">Bağlanıyor...</div>
 
-    <div id="lobby">
-        <h2>Lobi</h2>
-        <button id="createRoomBtn">Oda Kur</button>
-        <div>
-            <input type="text" id="roomCodeInput" placeholder="Oda Kodu Gir">
-            <button id="joinRoomBtn">Odaya Katıl</button>
+    <div id="lobby" class="hidden">
+        <h1 class="logo-title">ŞAŞKİ</h1>
+        <div class="lobby-menu">
+            <button id="rankedBtn" class="lobby-btn primary">
+                <span class="icon">🏆</span> Dereceli Oyna
+            </button>
+            <button id="friendlyBtn" class="lobby-btn secondary">
+                <span class="icon">🤝</span> Arkadaşla Oyna
+            </button>
+            <div id="joinArea" class="join-area">
+                <input type="text" id="roomCodeInput" placeholder="Oda Kodu (4 Hane)" maxlength="4">
+                <button id="joinRoomBtn" class="lobby-btn tertiary">
+                    <span class="icon">🚪</span> Odaya Katıl
+                </button>
+            </div>
         </div>
-        <p id="lobbyInfo"></p>
+    </div>
+
+    <div id="searchingModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <h2>Rakip Aranıyor...</h2>
+            <div class="spinner"></div>
+            <button id="cancelSearchBtn" class="lobby-btn tertiary">İptal</button>
+        </div>
+    </div>
+
+    <div id="friendlyModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <h2>Oda Kuruldu</h2>
+            <p>Arkadaşınız bu kodla odaya katılabilir:</p>
+            <div id="roomCodeDisplay">1234</div>
+            <button id="copyCodeBtn" class="lobby-btn secondary">Kodu Kopyala</button>
+            <p id="copyInfo"></p>
+        </div>
     </div>
 
     <div id="gameArea" class="hidden">
         <h3 id="roomInfo"></h3>
         <div id="playerInfo">
-            <div id="playerWhite" class="player-box">Beyaz (Siz)</div>
-            <div id="playerBlack" class="player-box">Siyah (Rakip)</div>
+            <div id="playerWhite" class="player-box">Beyaz</div>
+            <div id="playerBlack" class="player-box">Siyah</div>
         </div>
         <div id="board"></div>
         <p id="gameStatus">Oyun başlıyor...</p>
