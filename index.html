@@ -478,4 +478,20 @@ const CheckersGame = () => {
                           ? 'bg-gradient-to-br from-red-400 to-red-700 border-4 border-red-900'
                           : 'bg-gradient-to-br from-gray-700 to-black border-4 border-gray-900'
                       } ${currentPlayer === cell.color ? 'animate-pulse' : ''} flex items-center justify-center`}>
-                        {cell
+                        {cell.king && (
+                          <Crown className="w-1/2 h-1/2 text-yellow-300 animate-bounce" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CheckersGame;
