@@ -1,411 +1,324 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Professional Online Checkers</title>
+    <title>Pro Dama Online - Profesyonel Dama Oyunu</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            font-family: 'Roboto', sans-serif;
-            color: #fff;
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%); 
+            color: #fff; font-family: 'Roboto', sans-serif; 
+            display: flex; justify-content: center; align-items: center; min-height: 100vh; 
+            overflow: hidden; position: relative;
         }
-        #game-container {
-            text-align: center;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); animation: sparkle 4s infinite; z-index: -1; }
+        @keyframes sparkle { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+        #game-container { 
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(20px); padding: 30px; border-radius: 20px; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1); 
+            text-align: center; max-width: 800px; width: 90%; position: relative;
+            animation: fadeIn 0.8s ease-out;
         }
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        h1 { font-family: 'Orbitron', monospace; font-size: 3em; margin-bottom: 20px; background: linear-gradient(45deg, #ff6b6b, #4ecdc4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 20px rgba(255,107,107,0.5); }
+        #connection-status { position: absolute; top: 10px; right: 10px; padding: 8px 12px; border-radius: 20px; font-size: 0.9em; font-weight: bold; transition: all 0.3s; }
+        .connected { background: #4caf50; color: white; box-shadow: 0 0 10px #4caf50; }
+        .disconnected { background: #f44336; color: white; box-shadow: 0 0 10px #f44336; }
+        #username-input { margin: 10px 0; padding: 10px; border: none; border-radius: 10px; background: rgba(255,255,255,0.1); color: white; font-size: 1em; width: 200px; }
+        #username-input::placeholder { color: rgba(255,255,255,0.6); }
+        button { 
+            padding: 15px 30px; font-size: 1.2em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            border: none; border-radius: 50px; color: #fff; cursor: pointer; transition: all 0.3s; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3); font-weight: bold; margin: 10px;
+            position: relative; overflow: hidden;
         }
-        #board {
-            display: grid;
-            grid-template-columns: repeat(8, 60px);
-            grid-template-rows: repeat(8, 60px);
-            border: 4px solid #fff;
-            margin: 20px auto;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        button::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); transition: left 0.5s; }
+        button:hover::before { left: 100%; }
+        button:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.4); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        #lobby { display: none; font-size: 1.5em; margin: 20px; animation: pulse 1.5s infinite; color: #4ecdc4; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        #board { 
+            display: grid; grid-template-columns: repeat(8, 65px); grid-template-rows: repeat(8, 65px); 
+            border: 4px solid #4ecdc4; border-radius: 15px; margin: 30px auto; box-shadow: 
+            0 0 30px rgba(78,205,196,0.5), inset 0 0 20px rgba(0,0,0,0.5); overflow: hidden;
+            background: linear-gradient(145deg, #1a1a2e, #16213e);
         }
-        .cell {
-            width: 60px;
-            height: 60px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            transition: background-color 0.3s ease;
+        .cell { 
+            display: flex; justify-content: center; align-items: center; position: relative; 
+            transition: all 0.3s; cursor: pointer;
         }
-        .black {
-            background-color: #4a4a4a;
+        .white { background: linear-gradient(145deg, #e0e0e0, #f5f5f5); }
+        .black { background: linear-gradient(145deg, #2d2d2d, #1a1a1a); }
+        .piece { 
+            width: 55px; height: 55px; border-radius: 50%; cursor: pointer; position: absolute; 
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+            display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold;
         }
-        .white {
-            background-color: #e0e0e0;
-        }
-        .piece {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            cursor: pointer;
-            position: absolute;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-        }
-        .piece:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
-        }
-        .red {
-            background: radial-gradient(circle, #ff416c, #ff4b2b);
-            border: 2px solid #d32f2f;
-        }
-        .black-piece {
-            background: radial-gradient(circle, #434343, #000000);
-            border: 2px solid #212121;
-        }
-        .king {
-            border: 4px solid gold;
-            box-shadow: 0 0 10px gold;
-        }
-        .possible-move {
-            background-color: rgba(0, 255, 0, 0.4) !important;
-            transform: scale(1.05);
-            transition: transform 0.2s ease;
-        }
-        .turn-highlight {
-            box-shadow: inset 0 0 15px 5px rgba(255, 255, 0, 0.5);
-        }
-        #status {
-            margin: 15px 0;
-            font-size: 1.2em;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
-        }
-        button {
-            padding: 12px 24px;
-            font-size: 1.1em;
-            margin: 10px;
-            cursor: pointer;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-        button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
-        }
-        button:active {
-            transform: translateY(1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-        #lobby {
-            display: none;
-            font-size: 1.2em;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 0.7; }
-            50% { opacity: 1; }
-            100% { opacity: 0.7; }
-        }
-        /* Animasyonlu Hareket için */
-        .moving {
-            transition: top 0.5s ease, left 0.5s ease;
-        }
+        .piece:hover { transform: scale(1.2) rotate(5deg); box-shadow: 0 12px 35px rgba(0,0,0,0.8); }
+        .red { background: linear-gradient(145deg, #ff4757, #ff6b7a); border: 3px solid #c44569; color: white; }
+        .black-piece { background: linear-gradient(145deg, #2f3542, #57606f); border: 3px solid #2f3542; color: #ddd; }
+        .king { border-width: 5px; border-color: #ffd700; box-shadow: 0 0 20px #ffd700; text-shadow: 0 0 10px #ffd700; }
+        .possible-move { background: rgba(76, 175, 80, 0.6) !important; transform: scale(1.05); box-shadow: inset 0 0 15px rgba(76,175,80,0.8); }
+        .turn-highlight { box-shadow: inset 0 0 25px 8px rgba(255, 193, 7, 0.7); animation: glow 1s infinite alternate; }
+        @keyframes glow { from { box-shadow: inset 0 0 25px 8px rgba(255,193,7,0.7); } to { box-shadow: inset 0 0 35px 12px rgba(255,193,7,1); } }
+        #status { margin: 20px 0; font-size: 1.4em; font-weight: bold; color: #4ecdc4; text-shadow: 0 0 10px rgba(78,205,196,0.5); }
+        #score { display: flex; justify-content: space-around; margin: 20px 0; font-size: 1.2em; }
+        .score-item { background: rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 10px; }
+        #timer { font-family: 'Orbitron', monospace; font-size: 2em; color: #ff6b6b; margin: 10px 0; }
+        .notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 15px 25px; background: #4caf50; color: white; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1000; animation: slideIn 0.5s ease; display: none; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @media (max-width: 768px) { #board { grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); } .piece { width: 40px; height: 40px; } h1 { font-size: 2em; } }
     </style>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
+    <div id="notification" class="notification"></div>
     <div id="game-container">
-        <h1>Professional Online Checkers</h1>
+        <div id="connection-status" class="disconnected">Bağlanıyor...</div>
+        <h1>Pro Dama Online</h1>
+        <input type="text" id="username-input" placeholder="Kullanıcı adın..." maxlength="15">
         <button id="ranked-play">Dereceli Oyna</button>
-        <div id="lobby">Eşleşme Aranıyor...</div>
-        <div id="board" style="display: none;"></div>
+        <div id="lobby">Eşleşme aranıyor... <span id="search-timer"></span></div>
+        <div id="board" style="display:none"></div>
         <div id="status"></div>
+        <div id="score">
+            <div class="score-item">Sen: <span id="your-score">0</span></div>
+            <div class="score-item">Rakip: <span id="opponent-score">0</span></div>
+        </div>
+        <div id="timer">00:30</div>
     </div>
 
     <script>
-        // Socket.io Bağlantısı
-        const socket = io('https://mario-io-1.onrender.com', { transports: ['websocket'] });
+        const socket = io('https://mario-io-1.onrender.com', { transports: ['websocket'], timeout: 20000 });
+        let board = [], currentPlayer = 'red', selectedPiece = null, playerColor = null, gameId = null, isMyTurn = false;
+        let username = '', gameTimer = null, searchTimer = null, turnTime = 30, timeLeft = 30;
+        let yourScore = 0, opponentScore = 0;
 
-        // Oyun Durumları
-        let board = [];
-        let currentPlayer = 'red'; // Kırmızı başlar
-        let selectedPiece = null;
-        let playerColor = null;
-        let gameId = null;
-        let isMyTurn = false;
+        function showNotification(msg, type = 'info') {
+            const notif = document.getElementById('notification');
+            notif.textContent = msg;
+            notif.style.background = type === 'success' ? '#4caf50' : type === 'error' ? '#f44336' : '#2196f3';
+            notif.style.display = 'block';
+            setTimeout(() => notif.style.display = 'none', 3000);
+        }
 
-        // Tahta Oluştur
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connection-status');
+            status.textContent = connected ? 'Bağlandı!' : 'Bağlantı Koptu!';
+            status.className = connected ? 'connected' : 'disconnected';
+        }
+
+        function updateTimer() {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            document.getElementById('timer').textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+            if (timeLeft <= 0 && isMyTurn) { showNotification('Zaman doldu! Sıra rakibe geçiyor.', 'error'); switchTurn(); }
+        }
+
+        function startTurnTimer() {
+            if (gameTimer) clearInterval(gameTimer);
+            timeLeft = 30;
+            updateTimer();
+            gameTimer = setInterval(() => { timeLeft--; updateTimer(); }, 1000);
+        }
+
         function initBoard() {
-            const boardElement = document.getElementById('board');
-            boardElement.innerHTML = '';
-            board = Array.from({length: 8}, () => Array(8).fill(null));
-
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell', (row + col) % 2 === 0 ? 'white' : 'black');
-                    cell.dataset.row = row;
-                    cell.dataset.col = col;
-                    cell.addEventListener('click', handleCellClick);
-                    boardElement.appendChild(cell);
-
-                    if (row < 3 && (row + col) % 2 !== 0) {
-                        placePiece(row, col, 'black');
-                    } else if (row > 4 && (row + col) % 2 !== 0) {
-                        placePiece(row, col, 'red');
-                    }
-                }
+            const b = document.getElementById('board'); b.innerHTML = ''; b.style.display = 'grid';
+            board = Array.from({length:8},()=>Array(8).fill(null));
+            for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+                const cell = document.createElement('div');
+                cell.classList.add('cell', (r+c)%2===0 ? 'white' : 'black');
+                cell.dataset.row = r; cell.dataset.col = c;
+                cell.addEventListener('click', handleCellClick);
+                b.appendChild(cell);
+                if(r<3 && (r+c)%2===1) placePiece(r,c,'black');
+                if(r>4 && (r+c)%2===1) placePiece(r,c,'red');
             }
-            boardElement.style.display = 'grid';
+            updateScores();
         }
 
-        function placePiece(row, col, color) {
-            const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-            const piece = document.createElement('div');
-            piece.classList.add('piece', color === 'red' ? 'red' : 'black-piece');
-            piece.dataset.color = color;
-            piece.dataset.king = 'false';
-            piece.addEventListener('click', handlePieceClick);
-            cell.appendChild(piece);
-            board[row][col] = { color, king: false };
+        function placePiece(r,c,color, isKing = false) {
+            const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+            if (cell.firstChild) cell.innerHTML = '';
+            const p = document.createElement('div');
+            p.classList.add('piece', color==='red'?'red':'black-piece');
+            p.dataset.color = color; p.innerHTML = isKing ? '👑' : color === 'red' ? '🔴' : '⚫';
+            p.addEventListener('click', e => { e.stopPropagation(); if(isMyTurn && color===playerColor){ clearHighlights(); selectedPiece=p; highlightPossibleMoves(r,c); } });
+            cell.appendChild(p);
+            board[r][c] = {color, king: isKing};
         }
 
-        // Taş Seçimi
-        function handlePieceClick(e) {
-            e.stopPropagation();
-            if (!isMyTurn || e.target.dataset.color !== playerColor) return;
-
-            clearHighlights();
-            selectedPiece = e.target;
-            const row = parseInt(selectedPiece.parentElement.dataset.row);
-            const col = parseInt(selectedPiece.parentElement.dataset.col);
-            highlightPossibleMoves(row, col);
+        function highlightPossibleMoves(r,c) {
+            const moves = getPossibleMoves(r,c, board[r][c].color==='red' ? -1 : 1, board[r][c].king);
+            moves.forEach(([tr,tc]) => document.querySelector(`[data-row="${tr}"][data-col="${tc}"]`).classList.add('possible-move'));
         }
 
-        // Hücre Tıklama (Hareket)
+        function getPossibleMoves(r,c,dir,isKing) {
+            const moves = [], dirs = isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[dir,-1],[dir,1]];
+            dirs.forEach(([dr,dc]) => {
+                let nr = r+dr, nc = c+dc;
+                if(nr>=0&&nr<8&&nc>=0&&nc<8 && !board[nr][nc]) moves.push([nr,nc]);
+                else if(nr>=0&&nr<8&&nc>=0&&nc<8 && board[nr][nc] && board[nr][nc].color !== board[r][c].color) {
+                    nr += dr; nc += dc;
+                    if(nr>=0&&nr<8&&nc>=0&&nc<8 && !board[nr][nc]) moves.push([nr,nc]);
+                }
+            });
+            const captures = moves.filter(m => Math.abs(m[0]-r)===2);
+            return captures.length ? captures : moves;
+        }
+
         function handleCellClick(e) {
-            if (!selectedPiece || !isMyTurn) return;
-
-            const fromRow = parseInt(selectedPiece.parentElement.dataset.row);
-            const fromCol = parseInt(selectedPiece.parentElement.dataset.col);
-            const toRow = parseInt(e.currentTarget.dataset.row);
-            const toCol = parseInt(e.currentTarget.dataset.col);
-
-            if (isValidMove(fromRow, fromCol, toRow, toCol)) {
-                animateMove(fromRow, fromCol, toRow, toCol, () => {
-                    movePiece(fromRow, fromCol, toRow, toCol);
-                    clearHighlights();
-                    selectedPiece = null;
+            if(!selectedPiece || !isMyTurn) return;
+            const fr = +selectedPiece.parentNode.dataset.row, fc = +selectedPiece.parentNode.dataset.col;
+            const tr = +e.currentTarget.dataset.row, tc = +e.currentTarget.dataset.col;
+            if(getPossibleMoves(fr,fc, board[fr][fc].color==='red'?-1:1, board[fr][fc].king).some(([mr,mc])=>mr===tr&&mc===tc)) {
+                animateMove(selectedPiece, fr, fc, tr, tc, () => {
+                    movePiece(fr, fc, tr, tc);
+                    clearHighlights(); selectedPiece = null;
+                    if (isMyTurn) yourScore++; else opponentScore++;
+                    updateScores();
                     switchTurn();
-                    updateGameState();
+                    socket.emit('move', {gameId, board, currentPlayer, scores: {your: yourScore, opponent: opponentScore}});
                     checkWin();
                 });
             }
         }
 
-        // Animasyonlu Hareket
-        function animateMove(fromRow, fromCol, toRow, toCol, callback) {
-            const piece = selectedPiece;
-            piece.classList.add('moving');
-            const fromCell = piece.parentElement;
-            const toCell = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
-
-            // Pozisyon hesapla
-            const fromRect = fromCell.getBoundingClientRect();
-            const toRect = toCell.getBoundingClientRect();
-            const dx = toRect.left - fromRect.left;
-            const dy = toRect.top - fromRect.top;
-
-            piece.style.position = 'absolute';
-            piece.style.left = '0';
-            piece.style.top = '0';
-            piece.style.transform = `translate(${dx}px, ${dy}px)`;
-
-            setTimeout(() => {
-                piece.style.transform = '';
-                piece.style.position = '';
-                piece.classList.remove('moving');
-                callback();
-            }, 500);
+        function animateMove(piece, fr, fc, tr, tc, cb) {
+            const fromCell = piece.parentNode, toCell = document.querySelector(`[data-row="${tr}"][data-col="${tc}"]`);
+            const rect1 = fromCell.getBoundingClientRect(), rect2 = toCell.getBoundingClientRect();
+            piece.style.position = 'fixed'; piece.style.zIndex = 1000; piece.style.transition = 'all 0.6s cubic-bezier(0.25,0.46,0.45,0.94)';
+            piece.style.left = rect1.left + 'px'; piece.style.top = rect1.top + 'px';
+            setTimeout(() => { piece.style.left = rect2.left + 'px'; piece.style.top = rect2.top + 'px'; }, 50);
+            setTimeout(() => { piece.style.position = ''; piece.style.left = ''; piece.style.top = ''; piece.style.zIndex = ''; cb(); }, 650);
         }
 
-        // Mümkün Hareketleri Göster
-        function highlightPossibleMoves(row, col) {
-            const piece = board[row][col];
-            const direction = piece.color === 'red' ? -1 : 1;
-            const moves = getPossibleMoves(row, col, direction, piece.king);
-
-            moves.forEach(([r, c]) => {
-                const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                cell.classList.add('possible-move');
-            });
-        }
-
-        function getPossibleMoves(row, col, direction, isKing) {
-            const moves = [];
-            const dirs = [[direction, -1], [direction, 1]];
-            if (isKing) dirs.push([-direction, -1], [-direction, 1]);
-
-            dirs.forEach(([dr, dc]) => {
-                let r = row + dr, c = col + dc;
-                if (r >= 0 && r < 8 && c >= 0 && c < 8 && !board[r][c]) {
-                    moves.push([r, c]);
-                } else if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] && board[r][c].color !== piece.color) {
-                    r += dr; c += dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8 && !board[r][c]) {
-                        moves.push([r, c]);
-                    }
-                }
-            });
-
-            const captures = moves.filter(m => Math.abs(m[0] - row) === 2);
-            return captures.length > 0 ? captures : moves;
-        }
-
-        function isValidMove(fromRow, fromCol, toRow, toCol) {
-            const piece = board[fromRow][fromCol];
-            const direction = piece.color === 'red' ? -1 : 1;
-            const moves = getPossibleMoves(fromRow, fromCol, direction, piece.king);
-            return moves.some(([r, c]) => r === toRow && c === toCol);
-        }
-
-        // Taş Hareket Ettir (Animasyondan sonra)
-        function movePiece(fromRow, fromCol, toRow, toCol) {
-            const piece = board[fromRow][fromCol];
-            board[toRow][toCol] = piece;
-            board[fromRow][fromCol] = null;
-
-            const cellFrom = document.querySelector(`[data-row="${fromRow}"][data-col="${fromCol}"]`);
-            const cellTo = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
-            cellTo.appendChild(cellFrom.firstChild);
-
-            // Yeme
-            if (Math.abs(toRow - fromRow) === 2) {
-                const midRow = (fromRow + toRow) / 2;
-                const midCol = (fromCol + toCol) / 2;
-                board[midRow][midCol] = null;
-                const midCell = document.querySelector(`[data-row="${midRow}"][data-col="${midCol}"]`);
-                midCell.innerHTML = '';
+        function movePiece(fr, fc, tr, tc) {
+            board[tr][tc] = board[fr][fc]; board[fr][fc] = null;
+            if(Math.abs(tr-fr)===2) {
+                const mr = (fr+tr)/2, mc = (fc+tc)/2;
+                board[mr][mc] = null;
+                document.querySelector(`[data-row="${mr}"][data-col="${mc}"]`).innerHTML = '';
             }
-
-            // Kral Olma
-            if ((piece.color === 'red' && toRow === 0) || (piece.color === 'black' && toRow === 7)) {
+            const targetCell = document.querySelector(`[data-row="${tr}"][data-col="${tc}"]`);
+            targetCell.appendChild(document.querySelector(`[data-row="${fr}"][data-col="${fc}"]`).firstChild);
+            const piece = board[tr][tc];
+            if((piece.color==='red' && tr===0) || (piece.color==='black' && tr===7)) {
                 piece.king = true;
-                cellTo.firstChild.classList.add('king');
-                cellTo.firstChild.dataset.king = 'true';
+                targetCell.firstChild.innerHTML = '👑';
+                targetCell.firstChild.classList.add('king');
             }
         }
 
-        function clearHighlights() {
-            document.querySelectorAll('.possible-move').forEach(el => el.classList.remove('possible-move'));
-        }
+        function clearHighlights() { document.querySelectorAll('.possible-move').forEach(el => el.classList.remove('possible-move')); }
 
-        // Sıra Değiştir
         function switchTurn() {
             currentPlayer = currentPlayer === 'red' ? 'black' : 'red';
             isMyTurn = currentPlayer === playerColor;
             updateTurnHighlight();
             document.getElementById('status').textContent = isMyTurn ? 'Sıra Sende!' : 'Rakibin Sırası...';
+            if (isMyTurn) startTurnTimer(); else if (gameTimer) clearInterval(gameTimer);
         }
 
         function updateTurnHighlight() {
-            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('turn-highlight'));
-            const startRow = currentPlayer === 'red' ? 5 : 0;
-            const endRow = currentPlayer === 'red' ? 8 : 3;
-            for (let row = startRow; row < endRow; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                    if (cell) cell.classList.add('turn-highlight');
-                }
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('turn-highlight'));
+            const start = currentPlayer === 'red' ? 5 : 0, end = currentPlayer === 'red' ? 8 : 3;
+            for(let r=start; r<end; r++) for(let c=0; c<8; c++) {
+                const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                if (cell) cell.classList.add('turn-highlight');
             }
         }
 
-        // Kazanma Kontrolü
+        function updateScores() {
+            document.getElementById('your-score').textContent = yourScore;
+            document.getElementById('opponent-score').textContent = opponentScore;
+        }
+
         function checkWin() {
-            const redPieces = board.flat().filter(p => p && p.color === 'red').length;
-            const blackPieces = board.flat().filter(p => p && p.color === 'black').length;
-            if (redPieces === 0) {
-                alert('Siyah Kazandı!');
-                endGame();
-            } else if (blackPieces === 0) {
-                alert('Kırmızı Kazandı!');
-                endGame();
+            const redCount = board.flat().filter(p => p && p.color === 'red').length;
+            const blackCount = board.flat().filter(p => p && p.color === 'black').length;
+            if (redCount === 0 || blackCount === 0) {
+                const winner = redCount === 0 ? 'Siyah' : 'Kırmızı';
+                showNotification(`${winner} Kazandı! Tebrikler!`, 'success');
+                socket.emit('endGame', gameId);
+                if (gameTimer) clearInterval(gameTimer);
+                document.getElementById('board').style.display = 'none';
+                document.getElementById('status').textContent = 'Oyun Bitti! Yeni Oyun İçin Butona Tıkla.';
+                document.getElementById('ranked-play').disabled = false;
             }
-        }
-
-        function endGame() {
-            socket.emit('endGame', gameId);
-            document.getElementById('board').style.display = 'none';
-            document.getElementById('status').textContent = 'Oyun Bitti!';
-            document.getElementById('ranked-play').disabled = false;
-        }
-
-        // Multiplayer İşlemleri
-        document.getElementById('ranked-play').addEventListener('click', startMatchmaking);
-
-        function startMatchmaking() {
-            document.getElementById('lobby').style.display = 'block';
-            document.getElementById('ranked-play').disabled = true;
-            socket.emit('joinQueue');
-        }
-
-        socket.on('gameStart', (data) => {
-            gameId = data.gameId;
-            playerColor = data.color;
-            initBoard();
-            document.getElementById('lobby').style.display = 'none';
-            isMyTurn = playerColor === 'red';
-            updateTurnHighlight();
-            document.getElementById('status').textContent = isMyTurn ? 'Sıra Sende!' : 'Rakibin Sırası...';
-        });
-
-        socket.on('updateState', (data) => {
-            board = data.board;
-            currentPlayer = data.currentPlayer;
-            isMyTurn = currentPlayer === playerColor;
-            renderBoardFromState();
-            updateTurnHighlight();
-            document.getElementById('status').textContent = isMyTurn ? 'Sıra Sende!' : 'Rakibin Sırası...';
-            checkWin();
-        });
-
-        function updateGameState() {
-            socket.emit('move', { gameId, board, currentPlayer });
         }
 
         function renderBoardFromState() {
             document.querySelectorAll('.cell').forEach(cell => {
                 cell.innerHTML = '';
-                const row = parseInt(cell.dataset.row);
-                const col = parseInt(cell.dataset.col);
-                if (board[row][col]) {
-                    placePiece(row, col, board[row][col].color);
-                    if (board[row][col].king) {
-                        cell.firstChild.classList.add('king');
-                        cell.firstChild.dataset.king = 'true';
-                    }
-                }
+                const r = +cell.dataset.row, c = +cell.dataset.col;
+                if (board[r][c]) placePiece(r, c, board[r][c].color, board[r][c].king);
             });
         }
 
-        socket.on('connect', () => console.log('Sunucuya bağlandı!'));
-        socket.on('disconnect', () => console.log('Sunucudan ayrıldı.'));
+        // Event Listeners
+        document.getElementById('username-input').addEventListener('input', e => username = e.target.value.trim());
+        document.getElementById('ranked-play').addEventListener('click', () => {
+            if (!username) { showNotification('Lütfen kullanıcı adını gir!', 'error'); return; }
+            document.getElementById('lobby').style.display = 'block';
+            document.getElementById('ranked-play').disabled = true;
+            socket.emit('joinQueue', username);
+            let searchCount = 0;
+            searchTimer = setInterval(() => {
+                searchCount++;
+                document.getElementById('search-timer').textContent = `(${searchCount}s)`;
+            }, 1000);
+        });
+
+        socket.on('connect', () => {
+            updateConnectionStatus(true);
+            showNotification('Sunucuya bağlandı!', 'success');
+        });
+
+        socket.on('disconnect', () => {
+            updateConnectionStatus(false);
+            showNotification('Bağlantı koptu! Yeniden bağlanılıyor...', 'error');
+        });
+
+        socket.on('gameStart', data => {
+            if (searchTimer) clearInterval(searchTimer);
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('search-timer').textContent = '';
+            gameId = data.gameId; playerColor = data.color; username = data.username || username;
+            initBoard();
+            isMyTurn = playerColor === 'red';
+            switchTurn();
+            showNotification(`Oyun başladı! Sen ${playerColor === 'red' ? 'Kırmızı' : 'Siyah'} taraftasın.`, 'success');
+            yourScore = 0; opponentScore = 0; updateScores();
+        });
+
+        socket.on('updateState', data => {
+            board = data.board; currentPlayer = data.currentPlayer;
+            yourScore = data.scores?.your || yourScore;
+            opponentScore = data.scores?.opponent || opponentScore;
+            isMyTurn = currentPlayer === playerColor;
+            renderBoardFromState();
+            updateScores();
+            updateTurnHighlight();
+            document.getElementById('status').textContent = isMyTurn ? 'Sıra Sende!' : 'Rakibin Sırası...';
+            if (isMyTurn) startTurnTimer();
+            checkWin();
+        });
+
+        socket.on('opponentDisconnected', () => {
+            showNotification('Rakip bağlantı koptu! Sen kazandın!', 'success');
+            endGame();
+        });
+
+        function endGame() {
+            if (gameTimer) clearInterval(gameTimer);
+            if (searchTimer) clearInterval(searchTimer);
+            document.getElementById('board').style.display = 'none';
+            document.getElementById('ranked-play').disabled = false;
+        }
     </script>
 </body>
 </html>
