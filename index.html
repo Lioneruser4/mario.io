@@ -1,17 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimal JS Game</title>
-    <style>
-        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #222; }
-        canvas { border: 1px solid #fff; }
-    </style>
+    <title>🏆 Amerikan Daması (Checkers) Online</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="gameCanvas" width="480" height="320"></canvas>
-    
-    <script defer src="game.js"></script>
+
+    <div id="app-container">
+        
+        <div id="lobby-container">
+            <h1 class="neon-text">⚡ ONLINE CHECKERS ARENA ⚡</h1>
+            
+            <div id="connection-status" class="status-box connecting">Sunucuya Bağlanılıyor...</div>
+
+            <div class="button-group">
+                <button id="btn-ranked" class="animated-button">
+                    <span id="ranked-text">Dereceli Eşleşme Bul</span>
+                </button>
+
+                <button id="btn-create-room" class="animated-button small">
+                    Oda Kur
+                </button>
+            </div>
+            
+            <div class="room-connect-form">
+                <input type="text" id="room-code-input" maxlength="4" placeholder="4 Rakamlı Oda Kodu">
+                <button id="btn-connect-room" class="animated-button small">Odaya Bağlan</button>
+                <button id="btn-copy-code" class="animated-button small hidden">Kodu Kopyala</button>
+            </div>
+        </div>
+
+        <div id="game-container" class="hidden">
+            <div class="game-info">
+                <h2 id="player-turn-status"></h2>
+                <div id="game-board">
+                    </div>
+                <div id="game-messages"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="main.js" type="module"></script>
 </body>
 </html>
