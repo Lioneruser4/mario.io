@@ -1,62 +1,430 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çevrimiçi Dama</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+import React, { useState, useEffect, useRef } from 'react';
+import { Gamepad2, Users, Copy, X, Search, Crown } from 'lucide-react';
+
+const CheckersGame = () => {
+  const [screen, setScreen] = useState('lobby'); // lobby, searching, game
+  const [gameMode, setGameMode] = useState(null); // ranked, friend
+  const [roomCode, setRoomCode] = useState('');
+  const [inputCode, setInputCode] = useState('');
+  const [board, setBoard] = useState([]);
+  const [selectedPiece, setSelectedPiece] = useState(null);
+  const [validMoves, setValidMoves] = useState([]);
+  const [currentPlayer, setCurrentPlayer] = useState('red');
+  const [myColor, setMyColor] = useState(null);
+  const [opponent, setOpponent] = useState(null);
+  const [serverConnected, setServerConnected] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [gameInfo, setGameInfo] = useState({ redScore: 12, blackScore: 12 });
+  const wsRef = useRef(null);
+
+  // Sunucu bağlantısı
+  useEffect(() => {
+    connectToServer();
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const connectToServer = () => {
+    try {
+      const ws = new WebSocket('wss://mario-io-1.onrender.com');
+      
+      ws.onopen = () => {
+        setServerConnected(true);
+        console.log('Sunucuya bağlandı');
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleServerMessage(data);
+      };
+
+      ws.onerror = () => {
+        setServerConnected(false);
+      };
+
+      ws.onclose = () => {
+        setServerConnected(false);
+        setTimeout(connectToServer, 3000);
+      };
+
+      wsRef.current = ws;
+    } catch (error) {
+      setServerConnected(false);
+      setTimeout(connectToServer, 3000);
+    }
+  };
+
+  const handleServerMessage = (data) => {
+    switch(data.type) {
+      case 'matched':
+        setOpponent(data.opponent);
+        setMyColor(data.yourColor);
+        setScreen('game');
+        setSearching(false);
+        initBoard();
+        break;
+      case 'move':
+        updateBoard(data.board);
+        setCurrentPlayer(data.currentPlayer);
+        setGameInfo(data.gameInfo);
+        break;
+      case 'roomCreated':
+        setRoomCode(data.roomCode);
+        break;
+      case 'joinedRoom':
+        setOpponent(data.opponent);
+        setMyColor(data.yourColor);
+        setScreen('game');
+        initBoard();
+        break;
+    }
+  };
+
+  const initBoard = () => {
+    const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
     
-    <div id="connectionStatus">Bağlanıyor...</div>
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 8; col++) {
+        if ((row + col) % 2 === 1) {
+          newBoard[row][col] = { color: 'black', king: false };
+        }
+      }
+    }
+    
+    for (let row = 5; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        if ((row + col) % 2 === 1) {
+          newBoard[row][col] = { color: 'red', king: false };
+        }
+      }
+    }
+    
+    setBoard(newBoard);
+  };
 
-    <div id="lobby" class="hidden">
-        <h1 class="logo-title">ŞAŞKİ</h1>
-        <div class="lobby-menu">
-            <button id="rankedBtn" class="lobby-btn primary">
-                <span class="icon">🏆</span> Dereceli Oyna
-            </button>
-            <button id="friendlyBtn" class="lobby-btn secondary">
-                <span class="icon">🤝</span> Arkadaşla Oyna
-            </button>
-            <div id="joinArea" class="join-area">
-                <input type="text" id="roomCodeInput" placeholder="Oda Kodu (4 Hane)" maxlength="4">
-                <button id="joinRoomBtn" class="lobby-btn tertiary">
-                    <span class="icon">🚪</span> Odaya Katıl
-                </button>
+  const updateBoard = (newBoard) => {
+    setBoard(newBoard);
+  };
+
+  const startRanked = () => {
+    setGameMode('ranked');
+    setSearching(true);
+    setScreen('searching');
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'findMatch' }));
+    }
+  };
+
+  const cancelSearch = () => {
+    setSearching(false);
+    setScreen('lobby');
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'cancelSearch' }));
+    }
+  };
+
+  const createRoom = () => {
+    setGameMode('friend');
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    setRoomCode(code);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'createRoom', roomCode: code }));
+    }
+  };
+
+  const joinRoom = () => {
+    if (inputCode.length === 4) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'joinRoom', roomCode: inputCode }));
+      }
+    }
+  };
+
+  const copyRoomCode = () => {
+    navigator.clipboard.writeText(roomCode);
+  };
+
+  const calculateValidMoves = (row, col, piece) => {
+    const moves = [];
+    const direction = piece.color === 'red' ? -1 : 1;
+    
+    // Normal hareket
+    const checkMove = (newRow, newCol) => {
+      if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+        if (!board[newRow][newCol]) {
+          moves.push({ row: newRow, col: newCol, capture: false });
+        }
+      }
+    };
+
+    // Atlama hareketi
+    const checkJump = (newRow, newCol, jumpRow, jumpCol) => {
+      if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 &&
+          jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
+        const jumpedPiece = board[jumpRow][jumpCol];
+        if (jumpedPiece && jumpedPiece.color !== piece.color && !board[newRow][newCol]) {
+          moves.push({ row: newRow, col: newCol, capture: true, capturePos: { row: jumpRow, col: jumpCol } });
+        }
+      }
+    };
+
+    if (piece.king) {
+      // Dama tüm yönlere gidebilir
+      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([dr, dc]) => {
+        checkMove(row + dr, col + dc);
+        checkJump(row + 2*dr, col + 2*dc, row + dr, col + dc);
+      });
+    } else {
+      // Normal taş
+      checkMove(row + direction, col - 1);
+      checkMove(row + direction, col + 1);
+      checkJump(row + 2*direction, col - 2, row + direction, col - 1);
+      checkJump(row + 2*direction, col + 2, row + direction, col + 1);
+    }
+
+    return moves;
+  };
+
+  const handleSquareClick = (row, col) => {
+    if (currentPlayer !== myColor) return;
+
+    const piece = board[row][col];
+
+    if (selectedPiece) {
+      const move = validMoves.find(m => m.row === row && m.col === col);
+      if (move) {
+        makeMove(selectedPiece, move);
+        setSelectedPiece(null);
+        setValidMoves([]);
+      } else if (piece && piece.color === myColor) {
+        setSelectedPiece({ row, col });
+        setValidMoves(calculateValidMoves(row, col, piece));
+      } else {
+        setSelectedPiece(null);
+        setValidMoves([]);
+      }
+    } else if (piece && piece.color === myColor) {
+      setSelectedPiece({ row, col });
+      setValidMoves(calculateValidMoves(row, col, piece));
+    }
+  };
+
+  const makeMove = (from, to) => {
+    const newBoard = board.map(row => [...row]);
+    const piece = newBoard[from.row][from.col];
+    
+    newBoard[to.row][to.col] = piece;
+    newBoard[from.row][from.col] = null;
+
+    if (to.capture) {
+      newBoard[to.capturePos.row][to.capturePos.col] = null;
+    }
+
+    // Dama olma kontrolü
+    if ((piece.color === 'red' && to.row === 0) || (piece.color === 'black' && to.row === 7)) {
+      newBoard[to.row][to.col].king = true;
+    }
+
+    const newCurrentPlayer = currentPlayer === 'red' ? 'black' : 'red';
+    
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'move',
+        board: newBoard,
+        currentPlayer: newCurrentPlayer
+      }));
+    }
+
+    setBoard(newBoard);
+    setCurrentPlayer(newCurrentPlayer);
+  };
+
+  if (screen === 'lobby') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse top-0 left-0"></div>
+          <div className="absolute w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse bottom-0 right-0 animation-delay-2000"></div>
+        </div>
+
+        <div className="relative z-10 max-w-md w-full">
+          <div className="text-center mb-8 animate-fade-in">
+            <h1 className="text-6xl font-bold text-white mb-4 drop-shadow-2xl" style={{
+              textShadow: '0 0 30px rgba(255,255,255,0.5), 0 0 60px rgba(138,43,226,0.3)'
+            }}>
+              DAMA
+            </h1>
+            <div className="flex items-center justify-center gap-2">
+              <div className={`w-3 h-3 rounded-full ${serverConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
+              <p className="text-gray-300">{serverConnected ? 'Sunucuya Bağlı' : 'Bağlanıyor...'}</p>
             </div>
-        </div>
-    </div>
+          </div>
 
-    <div id="searchingModal" class="modal-backdrop hidden">
-        <div class="modal-content">
-            <h2>Rakip Aranıyor...</h2>
-            <div class="spinner"></div>
-            <button id="cancelSearchBtn" class="lobby-btn tertiary">İptal</button>
-        </div>
-    </div>
+          <div className="space-y-4">
+            <button
+              onClick={startRanked}
+              disabled={!serverConnected}
+              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-6 px-8 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
+              style={{
+                boxShadow: '0 0 30px rgba(255,165,0,0.5), 0 10px 40px rgba(0,0,0,0.3)'
+              }}
+            >
+              <Crown className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+              <span className="text-xl">Dereceli Oyun</span>
+            </button>
 
-    <div id="friendlyModal" class="modal-backdrop hidden">
-        <div class="modal-content">
-            <h2>Oda Kuruldu</h2>
-            <p>Arkadaşınız bu kodla odaya katılabilir:</p>
-            <div id="roomCodeDisplay">1234</div>
-            <button id="copyCodeBtn" class="lobby-btn secondary">Kodu Kopyala</button>
-            <p id="copyInfo"></p>
-        </div>
-    </div>
+            <button
+              onClick={createRoom}
+              disabled={!serverConnected}
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-6 px-8 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
+              style={{
+                boxShadow: '0 0 30px rgba(0,191,255,0.5), 0 10px 40px rgba(0,0,0,0.3)'
+              }}
+            >
+              <Users className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+              <span className="text-xl">Arkadaşla Oyna</span>
+            </button>
 
-    <div id="gameArea" class="hidden">
-        <h3 id="roomInfo"></h3>
-        <div id="playerInfo">
-            <div id="playerWhite" class="player-box">Beyaz</div>
-            <div id="playerBlack" class="player-box">Siyah</div>
-        </div>
-        <div id="board"></div>
-        <p id="gameStatus">Oyun başlıyor...</p>
-    </div>
+            {roomCode && (
+              <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl animate-fade-in border border-white/20">
+                <p className="text-white mb-3 text-center font-semibold">Oda Kodu</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={roomCode}
+                    readOnly
+                    className="flex-1 bg-white/20 text-white text-center text-2xl font-bold py-3 px-4 rounded-xl border-2 border-white/30"
+                  />
+                  <button
+                    onClick={copyRoomCode}
+                    className="bg-green-500 hover:bg-green-600 text-white p-3 rounded-xl transition-all duration-300 transform hover:scale-110"
+                  >
+                    <Copy className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+            )}
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="client.js"></script>
-</body>
-</html>
+            <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl border border-white/20">
+              <input
+                type="text"
+                placeholder="Oda Kodunu Girin"
+                value={inputCode}
+                onChange={(e) => setInputCode(e.target.value.slice(0, 4))}
+                maxLength={4}
+                className="w-full bg-white/20 text-white placeholder-white/50 text-center text-xl font-bold py-3 px-4 rounded-xl mb-3 border-2 border-white/30 focus:border-cyan-400 focus:outline-none transition-all"
+              />
+              <button
+                onClick={joinRoom}
+                disabled={!serverConnected || inputCode.length !== 4}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Odaya Katıl
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'searching') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="relative w-32 h-32 mx-auto mb-8">
+            <div className="absolute inset-0 border-8 border-blue-500/30 rounded-full"></div>
+            <div className="absolute inset-0 border-8 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+            <Search className="w-16 h-16 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-4">Rakip Aranıyor...</h2>
+          <p className="text-gray-300 mb-8">Lütfen bekleyin</p>
+          <button
+            onClick={cancelSearch}
+            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center gap-2 mx-auto"
+          >
+            <X className="w-5 h-5" />
+            İptal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+      <div className="max-w-4xl w-full">
+        <div className="flex justify-between items-center mb-6 bg-white/10 backdrop-blur-lg p-4 rounded-2xl border border-white/20">
+          <div className={`flex items-center gap-3 ${currentPlayer === 'black' ? 'opacity-100' : 'opacity-50'}`}>
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-black rounded-full shadow-lg border-4 border-white/50"></div>
+            <div>
+              <p className="text-white font-bold">Siyah</p>
+              <p className="text-gray-300 text-sm">{gameInfo.blackScore} taş</p>
+            </div>
+            {currentPlayer === 'black' && (
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            )}
+          </div>
+
+          <div className="text-white text-center">
+            <p className="text-2xl font-bold">
+              {currentPlayer === myColor ? 'Sizin Sıranız' : 'Rakip Oynuyor'}
+            </p>
+          </div>
+
+          <div className={`flex items-center gap-3 ${currentPlayer === 'red' ? 'opacity-100' : 'opacity-50'}`}>
+            {currentPlayer === 'red' && (
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            )}
+            <div className="text-right">
+              <p className="text-white font-bold">Kırmızı</p>
+              <p className="text-gray-300 text-sm">{gameInfo.redScore} taş</p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-700 rounded-full shadow-lg border-4 border-white/50"></div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 backdrop-blur-lg p-6 rounded-3xl shadow-2xl border border-white/20">
+          <div className="grid grid-cols-8 gap-1 bg-amber-900 p-2 rounded-2xl">
+            {board.map((row, rowIndex) => (
+              row.map((cell, colIndex) => {
+                const isLight = (rowIndex + colIndex) % 2 === 0;
+                const isSelected = selectedPiece?.row === rowIndex && selectedPiece?.col === colIndex;
+                const isValidMove = validMoves.some(m => m.row === rowIndex && m.col === colIndex);
+                
+                return (
+                  <div
+                    key={`${rowIndex}-${colIndex}`}
+                    onClick={() => handleSquareClick(rowIndex, colIndex)}
+                    className={`aspect-square flex items-center justify-center rounded-lg cursor-pointer transition-all duration-300 ${
+                      isLight ? 'bg-amber-100' : 'bg-amber-800'
+                    } ${isSelected ? 'ring-4 ring-yellow-400 scale-95' : ''} ${
+                      isValidMove ? 'ring-4 ring-green-400 animate-pulse' : ''
+                    } hover:scale-95`}
+                  >
+                    {cell && (
+                      <div className={`w-4/5 h-4/5 rounded-full shadow-2xl transform transition-all duration-300 hover:scale-110 ${
+                        cell.color === 'red'
+                          ? 'bg-gradient-to-br from-red-400 to-red-700 border-4 border-red-900'
+                          : 'bg-gradient-to-br from-gray-700 to-black border-4 border-gray-900'
+                      } ${currentPlayer === cell.color ? 'animate-pulse' : ''} flex items-center justify-center`}>
+                        {cell.king && (
+                          <Crown className="w-1/2 h-1/2 text-yellow-300 animate-bounce" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CheckersGame;
