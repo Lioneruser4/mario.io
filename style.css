@@ -1,272 +1,91 @@
-/* --- Global ve Temel Yapı --- */
 body {
-    font-family: 'Poppins', sans-serif;
-    background: linear-gradient(135deg, #1f1f1f 0%, #3a3a3a 100%);
-    color: #fff;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    overflow: hidden; 
-}
-
-#app-container {
-    width: 100%;
-    max-width: 1000px;
-    height: 100vh;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.screen {
-    position: absolute;
-    width: 100%;
-    height: 100%;
+    font-family: Arial, sans-serif;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
-    padding: 20px;
-    box-sizing: border-box;
-    transition: transform 0.6s cubic-bezier(0.5, 0, 0.5, 1);
-    transform: translateX(100%); /* Başlangıçta sağa kaydır */
-    opacity: 0;
-}
-.screen.active {
-    transform: translateX(0);
-    opacity: 1;
-    position: relative;
+    background-color: #f0f0f0;
 }
 
-/* --- Lobi Stilleri --- */
+.hidden {
+    display: none;
+}
+
 #lobby {
-    background: #2b2b2b;
-    border-radius: 15px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    max-width: 450px;
-    height: auto;
-    padding: 40px;
-    gap: 20px;
-}
-
-.logo-text {
-    font-size: 3em;
-    font-weight: 800;
-    color: #4CAF50; 
-    margin-bottom: 10px;
-    letter-spacing: 2px;
-}
-.logo-span { color: #fff; }
-
-#player-name {
-    font-weight: 600;
-    color: #FFD700; /* Altın sarısı */
-    margin-bottom: 20px;
-}
-.info-text { margin-top: 10px; font-style: italic; color: #aaa; }
-
-.lobby-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    width: 100%;
-}
-
-.main-btn, .secondary-btn {
-    padding: 15px 30px;
-    border: none;
+    background: white;
+    padding: 20px;
     border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-weight: 600;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-.main-btn {
-    background-color: #4CAF50;
-    color: white;
-}
-.main-btn:hover:not(:disabled) {
-    background-color: #45a049;
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-}
-.main-btn:disabled {
-    background-color: #555;
-    cursor: not-allowed;
-}
-
-.join-group {
-    display: flex;
-    gap: 10px;
-}
-
-#roomIdInput {
-    flex-grow: 1;
-    padding: 15px;
-    border-radius: 8px;
-    border: 2px solid #555;
-    background: #333;
-    color: #fff;
+#gameArea {
+    margin-top: 20px;
     text-align: center;
-    font-size: 1.1em;
-}
-
-/* --- Oyun Ekranı ve Tahta --- */
-#game {
-    justify-content: flex-start;
-    padding-top: 5vh;
-}
-
-.game-header {
-    width: 100%;
-    max-width: 600px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-.secondary-btn {
-    background: #f44336;
-    color: white;
-    padding: 8px 15px;
-}
-.secondary-btn:hover { background-color: #d32f2f; }
-.role-text { font-size: 1em; color: #ccc; }
-
-.board-wrapper {
-    width: 90vw; 
-    max-width: 600px; 
-    aspect-ratio: 1 / 1; 
-    padding: 10px;
-    background: #222;
-    border-radius: 10px;
-    box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
 }
 
 #board {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(8, 1fr);
-    width: 100%;
-    height: 100%;
+    grid-template-columns: repeat(8, 60px);
+    grid-template-rows: repeat(8, 60px);
+    border: 3px solid #333;
+    width: 480px;
+    height: 480px;
 }
 
-.square {
-    width: 100%;
-    height: 100%;
+.cell {
+    width: 60px;
+    height: 60px;
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative;
+    box-sizing: border-box; /* Önemli */
 }
-.dark { background-color: #8B4513; } /* Koyu (Oynanabilir) */
-.light { background-color: #D2B48C; } /* Açık */
 
-/* --- Animasyonlu Taşlar --- */
+.cell.light { background-color: #eee; }
+.cell.dark { background-color: #8B4513; }
+
 .piece {
-    width: 85%;
-    height: 85%;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+    border: 2px solid #555;
     cursor: pointer;
-    transition: transform 0.3s ease-out; 
-    position: absolute; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
-.black {
-    background: radial-gradient(circle at top left, #1a1a1a, #000000);
-    border: 3px solid #333;
-}
-.white {
-    background: radial-gradient(circle at top left, #ffffff, #cccccc);
-    border: 3px solid #999;
+.piece.w { background-color: #fff; }
+.piece.b { background-color: #111; }
+.piece.wk { background-color: #fff; border: 4px solid gold; }
+.piece.bk { background-color: #111; border: 4px solid gold; }
+
+/* İstediğiniz vurgulamalar */
+.selected-piece {
+    outline: 3px solid #00FFFF; /* Seçili taşı mavi yap */
+    box-shadow: 0 0 15px #00FFFF;
 }
 
-/* Kral Taşı Vurgusu */
-.king {
-    border: 5px solid gold !important;
-    box-shadow: 0 0 10px gold, 0 4px 8px rgba(0, 0, 0, 0.5);
+.valid-move {
+    background-color: rgba(4, 255, 0, 0.4) !important; /* Geçerli hamleleri yeşil yap */
+    border: 2px dashed green;
 }
 
-/* Seçili ve Hamle Vurguları */
-.piece.selected {
-    transform: scale(1.15) translateY(-5px);
-    box-shadow: 0 0 0 4px #4CAF50, 0 8px 15px rgba(0, 0, 0, 0.7);
-    z-index: 10;
+#playerInfo {
+    display: flex;
+    justify-content: space-between;
+    width: 480px;
+    margin-bottom: 10px;
 }
 
-.square.possible-move {
-    box-shadow: inset 0 0 0 5px #4CAF50;
-    cursor: pointer;
-    transition: box-shadow 0.2s ease;
-}
-.square.possible-move:hover {
-    background-color: rgba(76, 175, 80, 0.3);
-}
-
-/* Sıra Göstergesi Animasyonu */
-#turnIndicator {
-    font-size: 1.2em;
-    padding: 10px 15px;
+.player-box {
+    padding: 10px 20px;
     border-radius: 5px;
-    font-weight: 600;
-}
-.turn-mine {
-    background-color: #4CAF50;
-    animation: pulse 1.5s infinite;
-}
-.turn-opponent {
-    background-color: #f44336;
+    font-weight: bold;
+    border: 2px solid transparent;
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.03); opacity: 0.95; }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-/* --- Mobil Uyum (Küçük Ekranlar) --- */
-@media (max-width: 650px) {
-    #app-container {
-        padding: 0;
-        height: 100vh;
-        align-items: flex-start;
-    }
-    
-    #lobby {
-        max-width: 95%;
-        padding: 20px;
-        margin-top: 10vh;
-    }
-    
-    .logo-text { font-size: 2em; }
-    
-    #game {
-        padding-top: 5vh;
-    }
-    
-    .board-wrapper {
-        width: 95vw;
-        max-width: 95vw;
-        padding: 5px;
-    }
-    
-    .game-header {
-        max-width: 95vw;
-        padding: 0 5px;
-    }
-    
-    .main-btn, .secondary-btn {
-        padding: 10px 15px;
-        font-size: 0.9em;
-    }
-    
-    #roomIdInput {
-        padding: 10px;
-    }
+/* Sıra kimdeyse onu "ışıklı" yapma */
+.player-turn {
+    border: 2px solid #00FF00 !important;
+    box-shadow: 0 0 10px #00FF00;
+    transform: scale(1.05);
+    transition: all 0.3s ease;
 }
