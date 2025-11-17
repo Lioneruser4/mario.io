@@ -138,12 +138,29 @@ dom.btnCopyCode.addEventListener('click', () => {
 function startGame(gameId, color, boardState, turn) {
     gameState.gameId = gameId;
     gameState.myColor = color;
+    
+    // Oyun alanını oluşturmadan önce tahtayı temizle
+    dom.gameBoard.innerHTML = '';
     drawBoard();
     updateBoard(boardState);
     updateTurn(turn);
     
+    // Lobi ekranını kapat, oyun ekranını göster
     dom.lobbyContainer.classList.add('hidden');
     dom.gameContainer.classList.remove('hidden');
+    
+    // Oyun tahtasını oyuncunun rengine göre döndür
+    updateBoardRotation();
+}
+
+// Oyun tahtasını oyuncunun rengine göre döndür
+function updateBoardRotation() {
+    dom.gameBoard.style.transform = gameState.myColor === 'red' ? 'rotate(180deg)' : 'rotate(0deg)';
+    
+    // Tüm hücrelerin içeriğini de döndür (metin ve taşlar için)
+    document.querySelectorAll('.cell').forEach(cell => {
+        cell.style.transform = gameState.myColor === 'red' ? 'rotate(180deg)' : 'rotate(0deg)';
+    });
 }
 
 function drawBoard() {
@@ -155,17 +172,30 @@ function drawBoard() {
             const pos = String.fromCharCode(65 + c) + (8 - r);
             cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
             cell.dataset.pos = pos;
+            
+            // Hücreye tıklama ve dokunma olaylarını ekle
             cell.addEventListener('click', handleCellClick);
+            cell.addEventListener('touchend', handleCellClick, { passive: true });
+            
+            // Sürükleme olaylarını ekle
+            cell.addEventListener('dragover', handleDragOver);
+            cell.addEventListener('drop', handleDrop);
+            cell.addEventListener('dragenter', handleDragEnter);
+            cell.addEventListener('dragleave', handleDragLeave);
+            
             dom.gameBoard.appendChild(cell);
         }
     }
-    // Kırmızı oyuncu altta olacak şekilde tahtayı döndür (Mobil uyumluluk için önemli)
-    dom.gameBoard.style.transform = gameState.myColor === 'red' ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 
 function updateBoard(boardState) {
     // Mevcut taşları kaldır
     document.querySelectorAll('.piece').forEach(p => p.remove());
+    
+    // Tüm hücrelerden seçili ve geçerli hamle işaretlerini kaldır
+    document.querySelectorAll('.cell').forEach(cell => {
+        cell.classList.remove('selected', 'valid-move', 'invalid-move');
+    });
     
     // Yeni taşları ekle
     for (const pos in boardState) {
@@ -179,15 +209,13 @@ function updateBoard(boardState) {
             // Taş sürükleme özelliği ekle
             piece.draggable = true;
             piece.addEventListener('dragstart', handleDragStart);
+            piece.addEventListener('touchstart', handleTouchStart, { passive: true });
             
             // Animasyon ekle
             piece.style.animation = 'piece-drop 0.3s ease-out';
             cell.appendChild(piece);
         }
     }
-    
-    // Hücrelere tıklama olaylarını ayarla
-    setupCellClickHandlers();
 }
 
 function updateTurn(turnColor) {
@@ -199,6 +227,24 @@ function updateTurn(turnColor) {
     // Işıklı sıra gösterimi
     dom.playerTurnStatus.classList.remove('my-turn-light', 'opponent-turn-light');
     dom.playerTurnStatus.classList.add(gameState.isMyTurn ? 'my-turn-light' : 'opponent-turn-light');
+}
+
+// Dokunma olayı başladığında
+function handleTouchStart(e) {
+    if (!gameState.isMyTurn) return;
+    
+    const piece = e.target;
+    const cell = piece.parentElement;
+    const pos = cell.dataset.pos;
+    
+    // Seçili taşı işaretle
+    gameState.selectedPiecePos = pos;
+    
+    // Yasal hamleleri iste
+    sendMessage('GET_LEGAL_MOVES', { 
+        gameId: gameState.gameId, 
+        pos: pos 
+    });
 }
 
 // Sürükleme işlemi başladığında
@@ -221,25 +267,72 @@ function handleDragStart(e) {
         pos: pos 
     });
     
-    // Sürüklenen taşın şeffaflığını azalt
-    piece.style.opacity = '0.5';
+    // Sürüklenen taşın stilini güncelle
+    piece.style.opacity = '0.7';
+    piece.style.transform = 'scale(1.1)';
+    piece.style.transition = 'all 0.2s';
     
     // Sürükleme verisini ayarla
     e.dataTransfer.setData('text/plain', '');
+    e.dataTransfer.effectAllowed = 'move';
 }
 
-// Hücre tıklama işleyicilerini ayarla
-function setupCellClickHandlers() {
-    const cells = document.querySelectorAll('.cell');
-    cells.forEach(cell => {
-        // Eski olay dinleyicilerini kaldır
-        cell.removeEventListener('dragover', handleDragOver);
-        cell.removeEventListener('drop', handleDrop);
-        
-        // Yeni olay dinleyicilerini ekle
-        cell.addEventListener('dragover', handleDragOver);
-        cell.addEventListener('drop', handleDrop);
+// Sürükleme sırasında üzerine gelindiğinde
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const cell = e.currentTarget;
+    const pos = cell.dataset.pos;
+    const fromPos = gameState.selectedPiecePos;
+    
+    if (fromPos && fromPos !== pos) {
+        // Eğer bu hücreye gitmek yasal bir hamle ise
+        const isLegalMove = gameState.legalMoves && gameState.legalMoves.includes(pos);
+        cell.classList.toggle('valid-move', isLegalMove);
+        cell.classList.toggle('invalid-move', !isLegalMove);
+    }
+}
+
+// Sürükleme bırakıldığında
+function handleDrop(e) {
+    e.preventDefault();
+    
+    const toCell = e.currentTarget;
+    const toPos = toCell.dataset.pos;
+    const fromPos = gameState.selectedPiecePos;
+    
+    if (!fromPos || fromPos === toPos) return;
+    
+    // Hamleyi sunucuya gönder
+    sendMessage('MAKE_MOVE', {
+        gameId: gameState.gameId,
+        from: fromPos,
+        to: toPos
     });
+    
+    // Temizlik yap
+    clearHighlights();
+}
+
+// Sürükleme hücreye girdiğinde
+function handleDragEnter(e) {
+    e.preventDefault();
+    const cell = e.currentTarget;
+    const pos = cell.dataset.pos;
+    const fromPos = gameState.selectedPiecePos;
+    
+    if (fromPos && fromPos !== pos) {
+        const isLegalMove = gameState.legalMoves && gameState.legalMoves.includes(pos);
+        cell.classList.toggle('valid-move', isLegalMove);
+        cell.classList.toggle('invalid-move', !isLegalMove);
+    }
+}
+
+// Sürükleme hücreden çıktığında
+function handleDragLeave(e) {
+    const cell = e.currentTarget;
+    cell.classList.remove('valid-move', 'invalid-move');
 }
 
 // Sürükleme sırasında üzerine gelindiğinde
@@ -273,25 +366,44 @@ function handleDrop(e) {
 
 function handleCellClick(event) {
     if (!gameState.isMyTurn || !gameState.gameId) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
 
-    const cell = event.currentTarget;
+    const cell = event.currentTarget || event.target.closest('.cell');
+    if (!cell) return;
+    
     const pos = cell.dataset.pos;
-    const hasMyPiece = cell.querySelector(`.piece.${gameState.myColor}`);
+    const piece = cell.querySelector('.piece');
+    const isMyPiece = piece && piece.classList.contains(gameState.myColor);
 
-    if (hasMyPiece) {
-        // Taşa tıklandı: Legal hamleleri iste
+    // Eğer kendi taşıma tıkladıysam
+    if (isMyPiece) {
+        // Önceki seçimleri temizle
         clearHighlights();
+        
+        // Yeni taşı seç
         gameState.selectedPiecePos = pos;
         cell.classList.add('selected');
-        sendMessage('GET_LEGAL_MOVES', { gameId: gameState.gameId, pos: pos });
-
-    } else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
-        // Vurgulanmış hedefe tıklandı: Hamleyi yap
-        sendMessage('MAKE_MOVE', { 
+        
+        // Yasal hamleleri iste
+        sendMessage('GET_LEGAL_MOVES', { 
             gameId: gameState.gameId, 
-            from: gameState.selectedPiecePos, 
-            to: pos 
+            pos: pos 
         });
+    } 
+    // Eğer seçili bir taş varsa ve boş veya rakibin taşına tıklandıysa
+    else if (gameState.selectedPiecePos) {
+        const fromPos = gameState.selectedPiecePos;
+        
+        // Hamleyi sunucuya gönder
+        sendMessage('MAKE_MOVE', {
+            gameId: gameState.gameId,
+            from: fromPos,
+            to: pos
+        });
+        
+        // Seçimi temizle
         clearHighlights();
     } else {
         // Geçersiz tıklama: Seçimi kaldır
@@ -300,20 +412,32 @@ function handleCellClick(event) {
 }
 
 function highlightLegalMoves(moves) {
-    clearHighlights(); 
-    // Seçili taşı tekrar vurgula
-    if(gameState.selectedPiecePos) document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`).classList.add('selected');
+    // Yasal hamleleri sakla (sonradan kullanmak için)
+    gameState.legalMoves = moves || [];
     
-    // Yasal hamleleri renklendir (CSS: .legal-move)
-    moves.forEach(pos => {
+    // Yasal hamleleri vurgula
+    gameState.legalMoves.forEach(pos => {
         const cell = document.querySelector(`[data-pos="${pos}"]`);
-        if (cell) cell.classList.add('legal-move');
+        if (cell) {
+            cell.classList.add('valid-move');
+        }
+    });
+    
+    // Geçersiz hamleleri de işaretle (opsiyonel)
+    document.querySelectorAll('.cell').forEach(cell => {
+        if (!gameState.legalMoves.includes(cell.dataset.pos) && 
+            !cell.classList.contains('selected')) {
+            cell.classList.add('invalid-move');
+        }
     });
 }
 
 function clearHighlights() {
-    document.querySelectorAll('.selected, .legal-move').forEach(c => c.classList.remove('selected', 'legal-move'));
+    document.querySelectorAll('.valid-move, .invalid-move, .selected').forEach(el => {
+        el.classList.remove('valid-move', 'invalid-move', 'selected');
+    });
     gameState.selectedPiecePos = null;
+    gameState.legalMoves = [];
 }
 
 // 🚀 Uygulama Başlangıcı
