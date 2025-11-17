@@ -1,628 +1,246 @@
-Harika! Anlıyorum, son revizyonlarda parça parça verdiğim index.html dosyasının tamamlanmış, eksiksiz halini istiyorsunuz.
-İşte size, mobil uyumlu, animasyonlu, pop-up'sız giriş ekranına sahip ve sunucuyla (Render/Socket.IO) etkileşim kuran tamamlanmış index.html (Frontend) kodu.
-📱 Tamamlanmış Frontend Kodu: index.html
-Bu tek dosya, tüm HTML yapısını, CSS stilini ve JavaScript oyun mantığını içerir. Lütfen bu kodu direkt olarak kullanın.
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Professional Online Dama (Checkers)</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <title>Profesyonel Eşleştirme Sistemi</title>
     <style>
+        /* CSS Başlangıcı */
         :root {
-            --board-size: 8;
-            --cell-size: 12.5vw; 
-            --max-cell-size: 65px; 
-            --black-cell: #4e342e;
-            --white-cell: #ffecb3;
-            --highlight-color: #4caf50; /* Yeşil */
-            --turn-light-color: #ffeb3b; /* Sarı */
-            --player-1-color: #e53935; /* Kırmızı/Siyah (P1) */
-            --player-2-color: #455a64; /* Gri/Beyaz (P2) */
-            --main-bg: #1c1c1c;
-            --primary-color: #4CAF50; 
-            --ranked-color: #FFC107; 
+            /* Renk Paleti */
+            --primary-color: #007bff; /* Mavi */
+            --secondary-color: #6c757d; /* Gri */
+            --success-color: #28a745; /* Yeşil */
+            --danger-color: #dc3545; /* Kırmızı */
+            --bg-start: #1a1a2e; /* Koyu Mavi/Mor */
+            --bg-end: #16213e; /* Daha Koyu Mavi */
+            --text-color: #e9e4ff; /* Açık Lavanta */
         }
 
         body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: var(--main-bg);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-            padding: 20px 5px;
-            box-sizing: border-box;
-            transition: background-color 0.5s;
-        }
-
-        /* Başlık ve Bağlantı Durumu */
-        h1 { margin-bottom: 5px; font-size: 2.2em; color: var(--ranked-color); text-shadow: 0 0 5px rgba(0, 0, 0, 0.5); }
-        #connection-status { font-weight: bold; font-size: 0.9em; margin-bottom: 20px; }
-        
-        /* Buton ve Giriş Alanı Konteyneri */
-        #main-menu { display: flex; flex-direction: column; align-items: center; width: 95%; max-width: 400px; padding-top: 5vh;}
-
-        #username-input-group, #join-lobby-group {
-            width: 100%;
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #2c2c2c;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s;
-        }
-
-        label { display: block; margin-bottom: 8px; font-weight: bold; color: #ccc; }
-        input[type="text"], input[type="number"] {
-            width: calc(100% - 20px);
-            padding: 10px;
-            border: 2px solid #555;
-            border-radius: 8px;
-            background-color: #383838;
-            color: white;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
-        input[type="text"]:focus, input[type="number"]:focus {
-            border-color: var(--primary-color);
-            outline: none;
-        }
-        
-        /* Buton Stilleri */
-        .menu-buttons button {
-            width: 100%;
-            padding: 15px;
-            margin: 8px 0;
-            font-size: 1.1em;
-            cursor: pointer;
-            border: none;
-            border-radius: 10px;
-            color: white;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-            font-weight: bold;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        /* Buton Animasyonları */
-        .menu-buttons button:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6);
-        }
-        .menu-buttons button:active {
-            transform: translateY(-1px) scale(0.98);
-        }
-        
-        #rank-match-button { background-color: var(--ranked-color); color: var(--main-bg); }
-        #create-lobby-button { background-color: var(--primary-color); }
-        #join-lobby-button { background-color: #03A9F4; }
-
-        .menu-buttons button::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 5px;
-            height: 5px;
-            background: rgba(255, 255, 255, 0.3);
-            opacity: 0;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            transition: all 0.5s ease-out;
-        }
-        .menu-buttons button:active::after {
-            width: 200%;
-            height: 200%;
-            opacity: 1;
-            transition: 0s;
-        }
-
-        /* Oyun Ekranı */
-        #game-screen { display: none; width: 100%; align-items: center; flex-direction: column; padding-top: 10px;}
-        #game-info {
-            color: #ccc;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-            text-align: center;
-        }
-        #current-player-text { font-weight: bold; color: var(--turn-light-color); }
-        #player-names { margin-bottom: 10px; font-size: 1.2em; font-weight: 500;}
-        
-        /* Tahta */
-        #board-container {
-            max-width: 100vw;
-            width: calc(var(--cell-size) * 8);
-            margin: 10px auto;
-            border: 6px solid #8d6e63;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.7);
-            max-width: calc(var(--max-cell-size) * 8 + 12px); 
-        }
-
-        #board {
-            display: grid;
-            grid-template-columns: repeat(var(--board-size), min(var(--cell-size), var(--max-cell-size)));
-            grid-template-rows: repeat(var(--board-size), min(var(--cell-size), var(--max-cell-size)));
-        }
-
-        .cell {
-            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative;
-        }
-        .light { background-color: var(--white-cell); }
-        .dark { background-color: var(--black-cell); }
-        
-        .piece {
-            width: 80%; height: 80%; border-radius: 50%; box-shadow: 0 3px 6px rgba(0, 0, 0, 0.6); border: 2px solid rgba(255, 255, 255, 0.4); z-index: 5; transition: transform 0.2s ease-out; display: flex; align-items: center; justify-content: center; font-size: 20px;
-        }
-        .player-1 { background-color: var(--player-1-color); }
-        .player-2 { background-color: var(--player-2-color); }
-        .king { color: var(--turn-light-color); font-weight: bold; border: 3px solid var(--turn-light-color);}
-
-        .selected-piece {
-            transform: scale(1.15) translateY(-5px); 
-            box-shadow: 0 0 15px 3px var(--highlight-color);
-        }
-        .valid-move::after {
-            content: '';
-            position: absolute;
-            width: 35%; height: 35%; border-radius: 50%; background-color: var(--highlight-color); opacity: 0.9; z-index: 10;
-        }
-
-        .is-turn { box-shadow: inset 0 0 8px 1px var(--turn-light-color); }
-        .player-turn-light { box-shadow: 0 0 15px var(--turn-light-color); border: 1px solid var(--turn-light-color); }
-
-        /* Bekleme Ekranı (Derece Kuyruğu) */
-        #waiting-screen {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
-            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
-            font-size: 1.5em;
+            min-height: 100vh;
+            color: var(--text-color);
+            /* Animasyonlu Arkaplan */
+            background: linear-gradient(-45deg, var(--bg-start), var(--bg-end), #0f3460, #1b3a5e);
+            background-size: 400% 400%;
+            animation: GradientBG 15s ease infinite;
+        }
+        
+        @keyframes GradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            background-color: rgba(30, 40, 60, 0.9); /* Yarı saydam koyu kutu */
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             text-align: center;
-            z-index: 100;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
         }
-        .spinner {
-            border: 8px solid #333;
-            border-top: 8px solid var(--ranked-color);
+
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            font-size: 1.8em;
+        }
+
+        .timer-display {
+            font-size: 3em;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #4CAF50; /* Sayaç rengi */
+            min-height: 1.5em; /* Metin olmadığında kaymayı önlemek için */
+            display: block;
+        }
+
+        .status-message {
+            margin-bottom: 30px;
+            font-size: 1.2em;
+            height: 20px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Eşleştirme Başlatma Butonu */
+        #joinBtn {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        #joinBtn:hover {
+            background-color: #0056b3;
+        }
+
+        /* İptal Butonu */
+        #cancelBtn {
+            background-color: var(--danger-color);
+            color: white;
+            display: none; /* Başlangıçta gizli */
+        }
+
+        #cancelBtn:hover {
+            background-color: #bd2130;
+        }
+        
+        /* Loading Animasyonu (Dönen Halka) */
+        .loading-ring {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin-top: 20px;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
         }
+        
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
+        /* CSS Sonu */
     </style>
 </head>
 <body>
-    <div id="app-container">
-        <h1>Online Dama 👑</h1>
-        <div id="connection-indicator">
-            <span id="connection-status">Bağlanıyor...</span>
-        </div>
 
-        <div id="main-menu">
-            
-            <div id="username-input-group">
-                <label for="username">Kullanıcı Adı:</label>
-                <input type="text" id="username" placeholder="Adınızı girin" maxlength="15">
-            </div>
+    <div class="container">
+        <h1>🎮 Eşleştirme Sistemi</h1>
+        
+        <p class="status-message" id="statusMessage">
+            Hazır Ol.
+        </p>
 
-            <div class="menu-buttons">
-                <button id="rank-match-button">👑 Dereceli Oyna (Eşleştirme)</button>
-                <button id="create-lobby-button">🤝 Arkadaşla Oyna (Oda Kur)</button>
-            </div>
-
-            <div id="join-lobby-group">
-                <label for="lobby-code">Oda Kodu (4 Rakam):</label>
-                <input type="number" id="lobby-code" placeholder="Örn: 1234" maxlength="4">
-                <button id="join-lobby-button" style="margin-top: 10px;">🚪 Odaya Katıl</button>
-            </div>
-        </div>
-
-        <div id="game-screen">
-            <div id="player-names"></div>
-            <div id="game-info">
-                Oda: <span id="lobby-id-text">---</span> | Sıra: <span id="current-player-text">Bekleniyor...</span>
-            </div>
-            
-            <div id="board-container">
-                <div id="board">
-                    </div>
-            </div>
-        </div>
-    </div>
-    
-    <div id="waiting-screen">
-        <p>Rakip aranıyor...</p>
-        <div class="spinner"></div>
-        <p>Lütfen bekleyiniz, diğer oyuncular eşleşme lobisinden bağlanacak.</p>
+        <span class="timer-display" id="timerDisplay">
+            00:00
+        </span>
+        
+        <button id="joinBtn" class="btn">
+            Eşleştirme Başlat
+        </button>
+        
+        <button id="cancelBtn" class="btn">
+            Eşleştirmeyi İptal Et
+        </button>
     </div>
 
     <script>
-        // *** CONFIGURATION ***
-        // Render sunucunuzun doğru adresi
-        const SERVER_URL = 'https://mario-io-1.onrender.com'; 
-        const socket = io(SERVER_URL);
-        const boardSize = 8;
-        
-        // *** DOM ELEMENTS ***
-        const mainMenu = document.getElementById('main-menu');
-        const gameScreen = document.getElementById('game-screen');
-        const board = document.getElementById('board');
-        const currentPlayerText = document.getElementById('current-player-text');
-        const connectionStatus = document.getElementById('connection-status');
-        const lobbyIdText = document.getElementById('lobby-id-text');
-        const usernameInput = document.getElementById('username');
-        const lobbyCodeInput = document.getElementById('lobby-code');
-        const waitingScreen = document.getElementById('waiting-screen');
-        const playerNamesDiv = document.getElementById('player-names');
+        // JavaScript Başlangıcı
+        const timerDisplay = document.getElementById('timerDisplay');
+        const statusMessage = document.getElementById('statusMessage');
+        const joinBtn = document.getElementById('joinBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
 
-        // *** GAME STATE ***
-        let selectedPiece = null;
-        let currentPlayer = 1; 
-        let playerRole = 0; // 1 veya 2 (Bu istemcide oynayan oyuncu)
-        let lobbyId = null;
-        let isMyTurn = false;
-        let player1Name = 'Oyuncu 1 (Siyah)';
-        let player2Name = 'Oyuncu 2 (Beyaz)';
-        let mustJump = false; // Çoklu atlama zorunluluğu
+        let isInQueue = false;
+        let startTime = 0;
+        let intervalId;
 
-        let gameState = []; // Tahta durumu sunucudan gelecek
-        
-        // **********************************
-        // *** GÖRSEL VE AKIŞ YÖNETİMİ ***
-        // **********************************
-        
-        function showGameScreen() {
-            mainMenu.style.display = 'none';
-            waitingScreen.style.display = 'none';
-            gameScreen.style.display = 'flex';
-        }
-        
-        function showWaitingScreen(message) {
-            mainMenu.style.display = 'none';
-            gameScreen.style.display = 'none';
-            waitingScreen.style.display = 'flex';
-            waitingScreen.querySelector('p').textContent = message;
-        }
-        
-        function updatePlayerNamesDisplay() {
-            playerNamesDiv.innerHTML = `
-                <span style="color:var(--player-1-color);">${player1Name}</span> 
-                vs 
-                <span style="color:var(--player-2-color);">${player2Name}</span>
-            `;
+        // Zamanı MM:SS formatında biçimlendiren fonksiyon
+        function formatTime(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
 
-        function placePiece(cell, pieceValue) {
-            cell.innerHTML = ''; 
-            if (pieceValue !== 0) {
-                const piece = document.createElement('div');
-                // pieceValue: 1(P1), 2(P2), 3(P1 King), 4(P2 King)
-                const owner = (pieceValue === 1 || pieceValue === 3) ? 1 : 2;
-                const isKing = pieceValue === 3 || pieceValue === 4;
+        // Süreyi güncelleyen fonksiyon
+        function updateTimer() {
+            if (!isInQueue) return;
 
-                piece.className = `piece player-${owner}`;
-                piece.dataset.owner = owner;
-                piece.dataset.value = pieceValue;
+            const currentTime = Date.now();
+            const elapsedMilliseconds = currentTime - startTime;
+            const elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
 
-                if (isKing) {
-                    piece.classList.add('king');
-                    piece.textContent = '♔';
-                } else {
-                    piece.textContent = '';
+            timerDisplay.textContent = formatTime(elapsedSeconds);
+            
+            // Profesyonel detay: Her 15 saniyede bir durumu güncelle
+            if (elapsedSeconds > 0 && elapsedSeconds % 15 === 0) {
+                 statusMessage.innerHTML = `<span class="loading-ring"></span> Yüksek seviyeli rakipler aranıyor...`;
+            }
+        }
+
+        // Eşleştirme Başlatma
+        joinBtn.addEventListener('click', () => {
+            if (isInQueue) return;
+
+            isInQueue = true;
+            startTime = Date.now();
+            
+            // UI Güncellemeleri
+            joinBtn.style.display = 'none';
+            cancelBtn.style.display = 'block';
+            statusMessage.innerHTML = `<span class="loading-ring"></span> Rakip aranıyor...`;
+            timerDisplay.textContent = "00:00";
+            
+            // Sayacı başlat
+            intervalId = setInterval(updateTimer, 1000); // Her saniye güncelle
+            
+            console.log("Eşleştirme Başlatıldı.");
+
+            // **Gerçek Oyunda:** Sunucuya eşleştirme isteği gönderilir.
+            // SimulateMatchFound(); // Rakip Bulma simülasyonu eklenebilir
+        });
+
+        // Eşleştirmeyi İptal Etme
+        cancelBtn.addEventListener('click', () => {
+            if (!isInQueue) return;
+
+            // Sayacı durdur
+            clearInterval(intervalId);
+            isInQueue = false;
+
+            // UI Güncellemeleri
+            joinBtn.style.display = 'block';
+            cancelBtn.style.display = 'none';
+            statusMessage.textContent = "❌ Eşleştirme İptal Edildi.";
+            timerDisplay.textContent = "00:00"; 
+
+            // **Gerçek Oyunda:** Sunucuya iptal isteği gönderilir.
+
+            console.log("Eşleştirme İptal Edildi.");
+        });
+
+        // Rakip Bulma Simülasyonu (Opsiyonel)
+        function SimulateMatchFound() {
+            setTimeout(() => {
+                if (isInQueue) {
+                    clearInterval(intervalId);
+                    isInQueue = false;
+                    statusMessage.textContent = "✅ Rakip Bulundu! Maç Başlıyor...";
+                    joinBtn.style.display = 'block';
+                    cancelBtn.style.display = 'none';
+                    // (Gerçek oyunda burası maç ekranına yönlendirir)
                 }
-                cell.appendChild(piece);
-            }
+            }, Math.random() * 10000 + 5000); // 5-15 saniye arasında bulur
         }
-        
-        function createBoard() {
-            board.innerHTML = '';
-            for (let r = 0; r < boardSize; r++) {
-                for (let c = 0; c < boardSize; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell ' + (((r + c) % 2 === 0) ? 'light' : 'dark');
-                    cell.dataset.row = r;
-                    cell.dataset.col = c;
-                    cell.addEventListener('click', handleCellClick);
-                    
-                    placePiece(cell, gameState[r][c]);
-                    board.appendChild(cell);
-                }
-            }
-            updateTurnLight();
-        }
-
-        function updateBoardVisuals(newBoardState) {
-            gameState = newBoardState;
-            for (let r = 0; r < boardSize; r++) {
-                for (let c = 0; c < boardSize; c++) {
-                    const cell = board.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                    placePiece(cell, gameState[r][c]);
-                }
-            }
-        }
-
-        function updateTurnLight() {
-            document.querySelectorAll('.cell').forEach(cell => {
-                cell.classList.remove('is-turn', 'player-turn-light');
-            });
-            
-            // Sıra ışıklandırması (Koyu kareler)
-            const targetCells = (currentPlayer === 1) 
-                ? Array.from(document.querySelectorAll('.cell[data-row="5"], .cell[data-row="6"], .cell[data-row="7"]'))
-                : Array.from(document.querySelectorAll('.cell[data-row="0"], .cell[data-row="1"], .cell[data-row="2"]'));
-            
-            targetCells.forEach(cell => {
-                if (cell.classList.contains('dark')) {
-                    cell.classList.add('is-turn', 'player-turn-light');
-                }
-            });
-            
-            const currentName = (currentPlayer === 1) ? player1Name : player2Name;
-            currentPlayerText.textContent = `${currentName} (${currentPlayer === playerRole ? 'Sıra Sizde' : 'Rakip Oynuyor'})`;
-        }
-
-        function clearHighlights() {
-            document.querySelectorAll('.selected-piece').forEach(p => p.classList.remove('selected-piece'));
-            document.querySelectorAll('.valid-move').forEach(cell => cell.classList.remove('valid-move'));
-        }
-        
-        // **********************************
-        // *** SOCKET.IO İLETİŞİM KISMI ***
-        // **********************************
-
-        socket.on('connect', () => {
-            connectionStatus.textContent = `Online (${socket.id.substring(0, 4)}...)`;
-            connectionStatus.style.color = '#76ff03';
-        });
-
-        socket.on('disconnect', () => {
-            connectionStatus.textContent = 'Bağlantı Kesildi!';
-            connectionStatus.style.color = '#ff1744';
-            mainMenu.style.display = 'flex';
-            gameScreen.style.display = 'none';
-            waitingScreen.style.display = 'none';
-            lobbyId = null;
-        });
-        
-        socket.on('lobby_created', (data) => {
-            lobbyId = data.lobbyId;
-            playerRole = data.playerRole;
-            player1Name = data.username;
-            lobbyIdText.textContent = lobbyId;
-            alert(`Lobi Kuruldu! Kod: ${lobbyId}. Rakibinizi bekliyor.`);
-            showGameScreen();
-            updatePlayerNamesDisplay();
-        });
-
-        socket.on('lobby_joined', (data) => {
-            lobbyId = data.lobbyId;
-            playerRole = data.playerRole;
-            // P2 olarak katıldık, P1 adını game_start'ta alacağız
-            lobbyIdText.textContent = lobbyId;
-            showGameScreen();
-        });
-        
-        socket.on('rank_match_start', (data) => {
-            lobbyId = data.lobbyId;
-            showGameScreen();
-        });
-
-        // Oyun Başladı
-        socket.on('game_start', (data) => {
-            gameState = data.initialState; 
-            currentPlayer = data.turn;
-            
-            // Player Role, sunucu tarafından belirlenen P1 (Siyah) veya P2 (Beyaz) rolü
-            const mySocketId = socket.id;
-            
-            if(data.player1.socketId === mySocketId) {
-                playerRole = 1;
-                player1Name = data.player1.username;
-                player2Name = data.player2.username;
-            } else {
-                playerRole = 2;
-                player1Name = data.player1.username;
-                player2Name = data.player2.username;
-            }
-            
-            isMyTurn = (playerRole === currentPlayer);
-
-            updateBoardVisuals(data.initialState);
-            createBoard(); // Tahta hücrelerini ve dinleyicileri oluşturur
-            updateTurnLight();
-            updatePlayerNamesDisplay();
-            showGameScreen();
-        });
-        
-        // Sunucu sırayı değiştirdiğinde
-        socket.on('turn_changed', (data) => {
-             currentPlayer = data.newTurn;
-             isMyTurn = (playerRole === currentPlayer);
-             mustJump = false; 
-             updateTurnLight();
-             clearHighlights();
-             if(isMyTurn) console.log("Sıra size geçti!");
-        });
-        
-        // Sunucu çoklu atlama zorunluluğu gönderdiğinde
-        socket.on('must_jump_again', (data) => {
-            mustJump = true;
-            clearHighlights();
-            // Yeni atlama noktalarını işaretle
-            data.mandatoryJumps.forEach(jump => {
-                const targetCell = board.querySelector(`[data-row="${jump.toR}"][data-col="${jump.toC}"]`);
-                targetCell.classList.add('valid-move');
-            });
-            console.log("Çoklu atlama zorunludur! Aynı taşla devam edin.");
-        });
-
-        // Rakip Hamle Yaptı (veya çoklu atlamadan sonra tahta güncellendi)
-        socket.on('opponent_moved', (data) => {
-            // Sunucudan gelen kesin tahta durumuyla günceller
-            updateBoardVisuals(data.newBoardState);
-            clearHighlights();
-        });
-
-        // Sunucu, seçilen taşın geçerli hamlelerini gönderdiğinde
-        socket.on('valid_moves_response', (data) => {
-            // Seçili taşın hala aynı taş olduğunu doğrula
-            if (!selectedPiece || selectedPiece.r !== data.r || selectedPiece.c !== data.c) return; 
-
-            clearHighlights();
-            selectedPiece.piece.classList.add('selected-piece');
-
-            if (data.isJumpMandatory) {
-                // Zorunlu atlama noktalarını işaretle
-                data.jumps.forEach(move => {
-                    const targetCell = board.querySelector(`[data-row="${move.toR}"][data-col="${move.toC}"]`);
-                    targetCell.classList.add('valid-move');
-                });
-                mustJump = true;
-            } else {
-                // Zorunlu atlama yoksa, normal kayma hamlelerini işaretle
-                data.slides.forEach(move => {
-                    const targetCell = board.querySelector(`[data-row="${move.toR}"][data-col="${move.toC}"]`);
-                    targetCell.classList.add('valid-move');
-                });
-                mustJump = false;
-            }
-        });
-        
-        socket.on('opponent_disconnected', (message) => {
-            alert(message);
-            // Ana menüye dön
-            mainMenu.style.display = 'flex';
-            gameScreen.style.display = 'none';
-            lobbyId = null;
-        });
-        
-        socket.on('error', (message) => {
-            alert("Hata: " + message);
-            clearHighlights();
-            selectedPiece = null;
-        });
-
-        // **********************************
-        // *** OYUN İÇİ ETKİLEŞİM ***
-        // **********************************
-
-        function handleCellClick(event) {
-            if (!isMyTurn || !lobbyId) return;
-
-            const cell = event.currentTarget;
-            const r = parseInt(cell.dataset.row);
-            const c = parseInt(cell.dataset.col);
-            const piece = cell.querySelector('.piece');
-
-            // 1. Taş Seçme
-            if (piece && parseInt(piece.dataset.owner) === playerRole) {
-                
-                // Çoklu atlama zorunluysa, sadece önceki taşı seçebilir
-                if (mustJump && selectedPiece && (selectedPiece.r !== r || selectedPiece.c !== c)) {
-                    // Aynı taşı tekrar seçiyorsa: izin ver, diğerini seçiyorsa: engelle
-                    if(selectedPiece.r === r && selectedPiece.c === c) {
-                        clearHighlights();
-                        selectedPiece = null;
-                        return;
-                    }
-                    return alert("Çoklu atlama zorunludur. Aynı taşla devam etmelisiniz.");
-                }
-
-                clearHighlights();
-                selectedPiece = { r, c, piece: piece };
-                piece.classList.add('selected-piece'); 
-
-                // Taşa tıklandığında Sunucuya sorulan geçerli hamleleri işaretle
-                socket.emit('get_valid_moves', { lobbyId: lobbyId, r, c });
-
-            }
-            // 2. Hamle Yapma ve Sunucuya Gönderme
-            else if (selectedPiece && cell.classList.contains('valid-move')) {
-                const fromR = selectedPiece.r;
-                const fromC = selectedPiece.c;
-                const toR = r;
-                const toC = c;
-                
-                // Hamleyi sunucuya gönder
-                socket.emit('make_move', { 
-                    lobbyId: lobbyId, 
-                    move: { from: {r: fromR, c: fromC}, to: {r: toR, c: toC} }
-                });
-
-                // Görsel temizleme
-                clearHighlights();
-                selectedPiece = null;
-
-                // **Not:** Tahtanın durumu ve sıra değişimi sunucudan gelen 'opponent_moved' ve 'turn_changed' sinyalleriyle güncellenecektir.
-            }
-            // 3. Seçili Taşı Bırakma
-            else {
-                clearHighlights();
-                selectedPiece = null;
-            }
-        }
-        
-        // **********************************
-        // *** LOBİ BUTONLARI İŞLEVİ ***
-        // **********************************
-        
-        function getUsername() {
-            const name = usernameInput.value.trim();
-            if (name.length < 3) {
-                alert("Lütfen en az 3 karakterli bir kullanıcı adı giriniz.");
-                return null;
-            }
-            return name;
-        }
-
-        document.getElementById('create-lobby-button').addEventListener('click', () => {
-            const username = getUsername();
-            if (username && socket.connected) {
-                socket.emit('create_lobby', username);
-            } else if (!socket.connected) {
-                 alert("Sunucuya bağlantı kurulamadı. Lütfen bekleyin ve tekrar deneyin.");
-            }
-        });
-
-        document.getElementById('join-lobby-button').addEventListener('click', () => {
-            const username = getUsername();
-            const lobbyCode = lobbyCodeInput.value.trim();
-            if (username && lobbyCode.length === 4 && socket.connected) {
-                socket.emit('join_lobby', { lobbyId: lobbyCode, username: username });
-            } else if (lobbyCode.length !== 4) {
-                alert("Lütfen 4 haneli bir oda kodu giriniz.");
-            } else if (!socket.connected) {
-                 alert("Sunucuya bağlantı kurulamadı. Lütfen bekleyin ve tekrar deneyin.");
-            }
-        });
-
-        document.getElementById('rank-match-button').addEventListener('click', () => {
-            const username = getUsername();
-            if (username && socket.connected) {
-                socket.emit('start_rank_match', username);
-            } else if (!socket.connected) {
-                 alert("Sunucuya bağlantı kurulamadı. Lütfen bekleyin ve tekrar deneyin.");
-            }
-        });
-
-
+        // JavaScript Sonu
     </script>
 </body>
 </html>
-
