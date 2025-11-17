@@ -1,18 +1,26 @@
 // client.js
-
-// !!! BURAYI DEĞİŞTİRİN !!!
-// Bu, sizin Render sunucunuzun adresi olmalı.
 const SERVER_URL = "https://mario-io-1.onrender.com"; 
 
-const socket = io(SERVER_URL);
-
 // --- DOM Elementleri ---
+const connectionStatus = document.getElementById('connectionStatus');
 const lobby = document.getElementById('lobby');
 const gameArea = document.getElementById('gameArea');
-const createRoomBtn = document.getElementById('createRoomBtn');
+
+// Lobi Butonları
+const rankedBtn = document.getElementById('rankedBtn');
+const friendlyBtn = document.getElementById('friendlyBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
 const roomCodeInput = document.getElementById('roomCodeInput');
-const lobbyInfo = document.getElementById('lobbyInfo');
+
+// Modallar
+const searchingModal = document.getElementById('searchingModal');
+const cancelSearchBtn = document.getElementById('cancelSearchBtn');
+const friendlyModal = document.getElementById('friendlyModal');
+const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+const copyCodeBtn = document.getElementById('copyCodeBtn');
+const copyInfo = document.getElementById('copyInfo');
+
+// Oyun Alanı Elementleri
 const boardDiv = document.getElementById('board');
 const gameStatus = document.getElementById('gameStatus');
 const roomInfo = document.getElementById('roomInfo');
@@ -21,30 +29,34 @@ const playerBlackDiv = document.getElementById('playerBlack');
 
 // --- Oyun Durumu (Global) ---
 let currentBoard = [];
-let myColor = null; // 'w' veya 'b'
+let myColor = null;
 let currentTurn = null;
-let selectedPiece = null; // { row, col, piece }
-let validMoves = []; // Gösterilecek geçerli hamleler
-
+let selectedPiece = null;
+let validMoves = [];
+let currentRoomCode = null;
 
 // ===================================
-// LOBİ FONKSİYONLARI
+// SUNUCU BAĞLANTISI
 // ===================================
 
-createRoomBtn.addEventListener('click', () => {
-    socket.emit('createRoom');
+const socket = io(SERVER_URL);
+
+socket.on('connect', () => {
+    connectionStatus.textContent = "Bağlandı";
+    connectionStatus.style.backgroundColor = "#28a745";
+    connectionStatus.style.color = "white";
+    lobby.classList.remove('hidden');
 });
 
-joinRoomBtn.addEventListener('click', () => {
-    const roomCode = roomCodeInput.value;
-    if (roomCode) {
-        socket.emit('joinRoom', roomCode);
+socket.on('disconnect', () => {
+    connectionStatus.textContent = "Bağlantı Kesildi";
+    connectionStatus.style.backgroundColor = "#dc3545";
+    connectionStatus.style.color = "white";
+    // Oyundaysa lobbiye at
+    if (!gameArea.classList.contains('hidden')) {
+        alert("Sunucuyla bağlantı koptu.");
+        showLobby();
     }
-});
-
-socket.on('roomCreated', (data) => {
-    lobbyInfo.textContent = `Oda kuruldu: ${data.roomCode}. Rakip bekleniyor...`;
-    myColor = data.playerColor;
 });
 
 socket.on('errorMsg', (msg) => {
@@ -52,13 +64,72 @@ socket.on('errorMsg', (msg) => {
 });
 
 // ===================================
+// LOBİ İŞLEVLERİ
+// ===================================
+
+// 1. Dereceli Oyna
+rankedBtn.addEventListener('click', () => {
+    socket.emit('joinRankedQueue');
+    searchingModal.classList.remove('hidden');
+});
+
+cancelSearchBtn.addEventListener('click', () => {
+    socket.emit('cancelRankedQueue');
+    searchingModal.classList.add('hidden');
+});
+
+// 2. Arkadaşla Oyna (Oda Kur)
+friendlyBtn.addEventListener('click', () => {
+    socket.emit('createFriendlyRoom');
+});
+
+socket.on('friendlyRoomCreated', (data) => {
+    currentRoomCode = data.roomCode;
+    roomCodeDisplay.textContent = data.roomCode;
+    friendlyModal.classList.remove('hidden');
+    copyInfo.textContent = "";
+});
+
+copyCodeBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(currentRoomCode).then(() => {
+        copyInfo.textContent = "Kopyalandı!";
+    }, (err) => {
+        copyInfo.textContent = "Kopyalanamadı.";
+    });
+});
+
+// 3. Odaya Katıl
+joinRoomBtn.addEventListener('click', () => {
+    const roomCode = roomCodeInput.value;
+    if (roomCode && roomCode.length === 4) {
+        socket.emit('joinRoom', roomCode);
+    } else {
+        alert("Lütfen geçerli 4 haneli bir oda kodu girin.");
+    }
+});
+
+// ===================================
 // OYUN BAŞLATMA
 // ===================================
 
+function showLobby() {
+    gameArea.classList.add('hidden');
+    lobby.classList.remove('hidden');
+    searchingModal.classList.add('hidden');
+    friendlyModal.classList.add('hidden');
+    currentRoomCode = null;
+}
+
 socket.on('gameStart', (data) => {
+    // Tüm lobbi pencerelerini gizle
     lobby.classList.add('hidden');
+    searchingModal.classList.add('hidden');
+    friendlyModal.classList.add('hidden');
+    
+    // Oyun alanını göster
     gameArea.classList.remove('hidden');
     
+    currentRoomCode = data.roomCode; // Oda kodunu sakla
     roomInfo.textContent = `Oda: ${data.roomCode}`;
     currentBoard = data.board;
     
@@ -72,8 +143,6 @@ socket.on('gameStart', (data) => {
         playerWhiteDiv.textContent = "Beyaz (Rakip)";
         playerBlackDiv.textContent = "Siyah (Siz)";
     }
-
-    // İlk durumu güncelle
     updateGameState(data.board, data.turn);
 });
 
@@ -82,9 +151,8 @@ socket.on('updateState', (data) => {
 });
 
 socket.on('opponentLeft', () => {
-    alert("Rakibiniz oyundan ayrıldı. Oda kapatıldı.");
-    gameArea.classList.add('hidden');
-    lobby.classList.remove('hidden');
+    alert("Rakibiniz oyundan ayrıldı. Lobiye dönülüyor.");
+    showLobby();
 });
 
 
@@ -97,14 +165,11 @@ function updateGameState(board, turn) {
 
 // ===================================
 // OYUN TAHTASI VE GÖRSELLEŞTİRME
+// (Bu kısım önceki kodla aynı, buraya yapıştırın)
 // ===================================
 
 function renderBoard() {
-    boardDiv.innerHTML = ""; // Tahtayı temizle
-    
-    // Türk Daması tahtası genellikle tersten başlar (Siyahlar üstte)
-    // Biz standart dizilimi koruyup CSS ile düzeltebiliriz.
-    
+    boardDiv.innerHTML = ""; 
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const cell = document.createElement('div');
@@ -116,7 +181,7 @@ function renderBoard() {
             const pieceType = currentBoard[r][c];
             if (pieceType !== 'e') {
                 const piece = document.createElement('div');
-                piece.classList.add('piece', pieceType); // piece w, piece b, piece wk...
+                piece.classList.add('piece', pieceType); 
                 cell.appendChild(piece);
             }
             boardDiv.appendChild(cell);
@@ -124,7 +189,6 @@ function renderBoard() {
     }
 }
 
-// Sıra kimdeyse "ışıklı" yap
 function highlightTurn() {
     if (currentTurn === 'w') {
         playerWhiteDiv.classList.add('player-turn');
@@ -139,14 +203,15 @@ function highlightTurn() {
 
 // ===================================
 // OYUN MANTIĞI VE HAMLE GÖSTERME
+// (Bu kısım önceki kodla aynı, buraya yapıştırın)
 // ===================================
 
 boardDiv.addEventListener('click', (e) => {
     const cell = e.target.closest('.cell');
-    if (!cell) return; // Hücre dışına tıklandı
+    if (!cell) return; 
 
     if (currentTurn !== myColor) {
-        return; // Sıra bende değil
+        return; 
     }
 
     const row = parseInt(cell.dataset.row);
@@ -159,23 +224,24 @@ boardDiv.addEventListener('click', (e) => {
             from: { row: selectedPiece.row, col: selectedPiece.col },
             to: { row, col }
         };
-        socket.emit('makeMove', { roomCode: roomCodeInput.value || lobbyInfo.textContent.split(': ')[1].split('.')[0], ...move });
+        // Oda kodunu sakladığımız global değişkenden al
+        socket.emit('makeMove', { roomCode: currentRoomCode, ...move });
         
-        // Seçimi ve vurguları temizle
         clearHighlights();
         selectedPiece = null;
         return;
     }
 
     // 2. ADIM: Kendi taşına mı tıkladı?
-    clearHighlights(); // Önceki vurguları temizle
+    clearHighlights(); 
 
     if (piece !== 'e' && piece.startsWith(myColor)) {
-        // Evet, kendi taşına tıkladı.
         selectedPiece = { row, col, piece };
-        cell.classList.add('selected-piece'); // Taşı vurgula
         
-        // İstenen özellik: Geçerli hamleleri hesapla ve göster
+        // Vurgu için hücreyi değil, içindeki taşı seç
+        const pieceElement = cell.querySelector('.piece');
+        if (pieceElement) pieceElement.classList.add('selected-piece'); 
+        
         validMoves = getValidMoves(row, col, piece, currentBoard); 
         highlightValidMoves(validMoves);
     } else {
@@ -199,30 +265,32 @@ function highlightValidMoves(moves) {
 
 /**
  * Türk Daması (Şaşki) Hamle Mantığı (Basitleştirilmiş)
- * DİKKAT: Bu fonksiyon Türk Damasının tüm kurallarını (örn: zorunlu taş yeme, en çok taşı yeme zorunluluğu)
- * İÇERMEZ. Bu, profesyonel bir oyun için en çok geliştirilmesi gereken yerdir.
+ * DİKKAT: Bu fonksiyon Türk Damasının tüm kurallarını İÇERMEZ.
  */
 function getValidMoves(r, c, piece, board) {
     const moves = [];
-    const color = piece[0]; // 'w' or 'b'
-    const isKing = piece.length > 1; // 'wk' or 'bk'
+    const color = piece[0]; 
+    const isKing = piece.length > 1; 
 
     if (isKing) {
-        // Dama (King) mantığı: Yatay ve dikeyde boşluk boyunca gider
-        // (Bu kısım çok daha karmaşıktır, taşların üzerinden atlamayı da hesaba katmalı)
-        // Örnek: Basit Dikey İlerleme
-        for (let i = r + 1; i < 8; i++) {
-            if (board[i][c] === 'e') moves.push({ from: {r,c}, to: {row: i, col: c} });
-            else break;
+        // Dama (King) mantığı (Basit)
+        const dirs = [{r:1,c:0}, {r:-1,c:0}, {r:0,c:1}, {r:0,c:-1}];
+        for (const dir of dirs) {
+            for (let i = 1; i < 8; i++) {
+                const newR = r + dir.r * i;
+                const newC = c + dir.c * i;
+                if (!isValidPos(newR, newC)) break;
+                if (board[newR][newC] === 'e') {
+                    moves.push({ from: {r,c}, to: {row: newR, col: newC} });
+                } else {
+                    // Taşa çarptı (Yeme mantığı daha karmaşık)
+                    break; 
+                }
+            }
         }
-        for (let i = r - 1; i >= 0; i--) {
-            if (board[i][c] === 'e') moves.push({ from: {r,c}, to: {row: i, col: c} });
-            else break;
-        }
-        // ... Yatay hamleler de eklenmeli ...
     } else {
         // Normal taş mantığı (Piyon)
-        const forwardDir = (color === 'w') ? -1 : 1; // Beyaz yukarı (-1), Siyah aşağı (+1)
+        const forwardDir = (color === 'w') ? -1 : 1; 
 
         // 1. Düz İlerleme
         const straightMove = { row: r + forwardDir, col: c };
@@ -241,7 +309,6 @@ function getValidMoves(r, c, piece, board) {
         }
         
         // 3. Taş Yeme (Basit)
-        // (Zorunlu yeme ve çoklu yeme mantığı burada eksik)
         const captureDirs = [
             { r: forwardDir, c: 0 }, // İleri
             { r: 0, c: -1 }, // Sol
@@ -262,9 +329,11 @@ function getValidMoves(r, c, piece, board) {
         }
     }
     
-    // BURADA ZORUNLU YEME KURALI UYGULANMALI
-    // Eğer 'moves' içinde isCapture:true olan varsa, diğer hamleler filtrelenmeli.
-
+    // Zorunlu Yeme Kuralı (Basit)
+    const captures = moves.filter(m => m.isCapture);
+    if (captures.length > 0) {
+        return captures; // Sadece yeme hamlelerini göster
+    }
     return moves;
 }
 
