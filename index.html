@@ -5,45 +5,158 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏆 Online Checkers Arena | Amerikan Daması</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
-</head>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 <body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loader animate__animated animate__pulse">
+            <div class="loader-circle"></div>
+            <div class="loader-text">Yükleniyor...</div>
+        </div>
+    </div>
 
-    <div id="app-container">
-        
+    <div id="app-container" class="animate__animated animate__fadeIn">
         <div id="lobby-container">
-            <h1 class="neon-text">⚡ DAMA ARENASI ⚡</h1>
+            <div class="logo-container">
+                <div class="logo">♟️</div>
+                <h1 class="game-title">DAMA ARENASI</h1>
+                <div class="game-subtitle">Stratejini Göster, Rakibini Yen!</div>
+            </div>
             
-            <div id="connection-status" class="status-box connecting">Sunucuya Bağlanılıyor...</div>
+            <div id="connection-status" class="status-box">
+                <div class="status-icon"><i class="fas fa-spinner fa-spin"></i></div>
+                <div class="status-text">Sunucuya Bağlanılıyor...</div>
+            </div>
 
             <div class="button-group">
-                <button id="btn-ranked" class="animated-button pulse-effect">
-                    <span id="ranked-text">Dereceli Oyna (Eşleşme Bul)</span>
+                <button id="btn-ranked" class="btn btn-primary btn-large">
+                    <span class="btn-icon"><i class="fas fa-trophy"></i></span>
+                    <span id="ranked-text" class="btn-text">Dereceli Oyna</span>
+                    <span class="btn-badge">YENİ</span>
                 </button>
 
-                <button id="btn-create-room" class="animated-button small glow-effect">
-                    Oda Kur / Arkadaşla Oyna
+                <div class="divider">
+                    <span>veya</span>
+                </div>
+
+                <button id="btn-create-room" class="btn btn-secondary">
+                    <span class="btn-icon"><i class="fas fa-plus-circle"></i></span>
+                    <span class="btn-text">Oda Kur</span>
                 </button>
             </div>
             
             <div class="room-connect-form">
-                <input type="text" id="room-code-input" maxlength="4" placeholder="4 Rakamlı Oda Kodu" pattern="\d*">
-                <button id="btn-connect-room" class="animated-button small connect-effect">Odaya Bağlan</button>
-                <button id="btn-copy-code" class="animated-button small copy-effect hidden">Kodu Kopyala</button>
+                <div class="form-group">
+                    <input type="text" id="room-code-input" maxlength="4" placeholder="Oda Kodu (4 Haneli)" pattern="\d*">
+                    <label for="room-code-input">Oda Kodunu Gir</label>
+                </div>
+                <button id="btn-connect-room" class="btn btn-outline">
+                    <span class="btn-icon"><i class="fas fa-sign-in-alt"></i></span>
+                    <span>Odaya Bağlan</span>
+                </button>
+                <button id="btn-copy-code" class="btn btn-outline hidden">
+                    <span class="btn-icon"><i class="far fa-copy"></i></span>
+                    <span>Kodu Kopyala</span>
+                </button>
             </div>
         </div>
 
         <div id="game-container" class="hidden">
-            <div id="game-info">
-                <h2 id="player-turn-status" class="turn-status"></h2>
-            </div>
-            <div id="game-board">
+            <div class="game-header">
+                <button id="btn-back-to-lobby" class="btn btn-icon" title="Lobiye Dön">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div id="game-info">
+                    <div id="player-turn-status" class="turn-status"></div>
+                    <div id="game-timer" class="game-timer">00:00</div>
                 </div>
-            <div id="game-messages"></div>
+                <div class="player-avatars">
+                    <div class="player-avatar player-red">
+                        <div class="avatar-icon">👤</div>
+                        <div class="player-name">Sen</div>
+                    </div>
+                    <div class="vs-text">VS</div>
+                    <div class="player-avatar player-black">
+                        <div class="avatar-icon">👤</div>
+                        <div class="player-name">Rakip</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="game-board" class="game-board-container">
+                <div class="board-background"></div>
+                <div id="board-cells" class="board-cells"></div>
+            </div>
+            
+            <div id="game-messages" class="game-messages"></div>
+            
+            <div class="game-controls">
+                <button id="btn-surrender" class="btn btn-danger">
+                    <i class="fas fa-flag"></i> Pes Et
+                </button>
+                <button id="btn-offer-draw" class="btn btn-warning">
+                    <i class="fas fa-handshake"></i> Beraberlik Teklifi
+                </button>
+            </div>
         </div>
-
+    </div>
+    
+    <!-- Game Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content animate__animated animate__zoomIn">
+            <div class="modal-header">
+                <h3 class="modal-title">Oyun Bitti</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="result-message">Oyun Sona Erdi!</div>
+                <div class="result-details">
+                    <div class="result-icon">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div class="result-text">
+                        <h4>Kazanan: <span id="winner-name">-</span></h4>
+                        <p>Oyun süresi: <span id="game-duration">00:00</span></p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-rematch" class="btn btn-primary">
+                    <i class="fas fa-redo"></i> Tekrar Oyna
+                </button>
+                <button id="btn-go-lobby" class="btn btn-outline">
+                    <i class="fas fa-home"></i> Lobiye Dön
+                </button>
+            </div>
+        </div>
     </div>
 
+    <!-- Audio Elements -->
+    <audio id="move-sound" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/1713/1713-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="capture-sound" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/599/599-preview.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="win-sound" preload="auto">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2011/2011-preview.mp3" type="audio/mpeg">
+    </audio>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
     <script src="main.js" type="module"></script>
+    
+    <script>
+        // Hide loading overlay when everything is loaded
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.getElementById('loading-overlay').classList.add('fade-out');
+                setTimeout(() => {
+                    document.getElementById('loading-overlay').style.display = 'none';
+                }, 500);
+            }, 1000);
+        });
+    </script>
 </body>
 </html>
