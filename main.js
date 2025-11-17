@@ -6,11 +6,17 @@ let gameState = {
     gameId: null,
     myColor: null, // "red" veya "black"
     isMyTurn: false,
-    selectedPiecePos: null // Tıklanan taşın pozisyonu
+    selectedPiecePos: null, // Tıklanan taşın pozisyonu
+    stats: {
+        onlinePlayers: 0,
+        activeGames: 0,
+        totalMatches: 0
+    }
 };
 
 // DOM Elementleri
 const dom = {
+    // Lobby Elements
     connStatusEl: document.getElementById('connection-status'),
     lobbyContainer: document.getElementById('lobby-container'),
     gameContainer: document.getElementById('game-container'),
@@ -20,35 +26,146 @@ const dom = {
     roomCodeInput: document.getElementById('room-code-input'),
     btnConnectRoom: document.getElementById('btn-connect-room'),
     btnCopyCode: document.getElementById('btn-copy-code'),
+    
+    // Game Elements
     playerTurnStatus: document.getElementById('player-turn-status'),
-    gameBoard: document.getElementById('game-board')
+    gameBoard: document.getElementById('game-board'),
+    
+    // Stats Elements
+    onlinePlayersEl: document.getElementById('online-players'),
+    activeGamesEl: document.getElementById('active-games'),
+    totalMatchesEl: document.getElementById('total-matches')
 };
+
+// Lobby Functions
+function updateConnectionStatus(status, message) {
+    dom.connStatusEl.className = `status-box ${status}`;
+    dom.connStatusEl.innerHTML = status === 'connecting' 
+        ? '<div class="spinner"></div><span>Sunucuya Bağlanılıyor...</span>'
+        : status === 'connected'
+            ? '✅ <span>Sunucuya Bağlandı</span>'
+            : '❌ <span>Bağlantı Kesildi</span>';
+
+    if (message) {
+        dom.connStatusEl.innerHTML += `<div class="status-message">${message}</div>`;
+    }
+}
+
+function updateStats(stats) {
+    if (stats.onlinePlayers !== undefined) {
+        gameState.stats.onlinePlayers = stats.onlinePlayers;
+        if (dom.onlinePlayersEl) {
+            dom.onlinePlayersEl.textContent = stats.onlinePlayers.toLocaleString();
+        }
+    }
+    if (stats.activeGames !== undefined) {
+        gameState.stats.activeGames = stats.activeGames;
+        if (dom.activeGamesEl) {
+            dom.activeGamesEl.textContent = stats.activeGames.toLocaleString();
+        }
+    }
+    if (stats.totalMatches !== undefined) {
+        gameState.stats.totalMatches = stats.totalMatches;
+        if (dom.totalMatchesEl) {
+            dom.totalMatchesEl.textContent = stats.totalMatches.toLocaleString();
+        }
+    }
+}
+
+function animateStatCounters() {
+    // Initial random stats for demo
+    const initialStats = {
+        onlinePlayers: Math.floor(Math.random() * 1000) + 500,
+        activeGames: Math.floor(Math.random() * 200) + 100,
+        totalMatches: Math.floor(Math.random() * 10000) + 5000
+    };
+    
+    updateStats(initialStats);
+    
+    // Simulate stats updates
+    setInterval(() => {
+        const newStats = {
+            onlinePlayers: Math.max(100, gameState.stats.onlinePlayers + Math.floor(Math.random() * 10) - 5),
+            activeGames: Math.max(10, gameState.stats.activeGames + Math.floor(Math.random() * 3) - 1),
+            totalMatches: gameState.stats.totalMatches + Math.floor(Math.random() * 10)
+        };
+        updateStats(newStats);
+    }, 5000);
+}
+
+function initLobby() {
+    // Copy room code button
+    if (dom.btnCopyCode) {
+        dom.btnCopyCode.addEventListener('click', function() {
+            const roomCode = dom.roomCodeInput.value;
+            if (roomCode) {
+                navigator.clipboard.writeText(roomCode);
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span>Kopyalandı!</span>';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
+        });
+    }
+
+    // Add hover effect to mode cards
+    const modeCards = document.querySelectorAll('.mode-card');
+    modeCards.forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
+
+    // Initialize stats animation
+    animateStatCounters();
+}
 
 // ==========================================================
 // 1. SUNUCU İLETİŞİMİ
 // ==========================================================
 
 function connect() {
-    dom.connStatusEl.className = 'status-box connecting';
-    dom.connStatusEl.textContent = 'Sunucuya Bağlanılıyor...';
+    updateConnectionStatus('connecting');
     
     socket = new WebSocket(SERVER_URL);
 
     socket.onopen = () => {
-        dom.connStatusEl.className = 'status-box connected';
-        dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
+        updateConnectionStatus('connected');
+        // Initialize lobby after connection
+        initLobby();
     };
+    
     socket.onclose = () => {
-        dom.connStatusEl.className = 'status-box disconnected';
-        dom.connStatusEl.textContent = '❌ Bağlantı Kesildi. 5s Sonra Yeniden Deneniyor...';
+        updateConnectionStatus('disconnected', '5s sonra yeniden deneniyor...');
         setTimeout(connect, 5000);
     };
-    socket.onerror = (e) => console.error("WebSocket Hatası:", e);
+    
+    socket.onerror = (e) => {
+        console.error("WebSocket Hatası:", e);
+        updateConnectionStatus('disconnected', 'Bağlantı hatası. Tekrar deneniyor...');
+    };
     
     socket.onmessage = (event) => {
         try {
-            handleServerMessage(JSON.parse(event.data));
-        } catch (e) { console.error("Geçersiz Sunucu Verisi:", event.data); }
+            const data = JSON.parse(event.data);
+            handleServerMessage(data);
+            
+            // Update stats if received from server
+            if (data.onlinePlayers !== undefined || data.activeGames !== undefined || data.totalMatches !== undefined) {
+                updateStats(data);
+            }
+        } catch (e) { 
+            console.error("Geçersiz Sunucu Verisi:", event.data); 
+        }
     };
 }
 
@@ -62,28 +179,101 @@ function sendMessage(type, payload = {}) {
 }
 
 function handleServerMessage(data) {
+    console.log('Server Message:', data);
+    
     switch (data.type) {
         case 'MATCH_FOUND':
-        case 'ROOM_JOINED':
+            updateConnectionStatus('connected', 'Rakip bulundu! Oyun başlıyor...');
             startGame(data.gameId, data.color, data.boardState, data.turn);
             break;
+            
+        case 'ROOM_JOINED':
+            updateConnectionStatus('connected', 'Odaya bağlanıldı! Oyun başlıyor...');
+            startGame(data.gameId, data.color, data.boardState, data.turn);
+            break;
+            
         case 'ROOM_CREATED':
             dom.roomCodeInput.value = data.roomCode;
             dom.btnCopyCode.classList.remove('hidden');
-            alert(`Oda Kodu: ${data.roomCode}. Arkadaşına gönder.`);
+            updateConnectionStatus('connected', `Oda oluşturuldu! Kod: ${data.roomCode}`);
+            
+            // Show a nice notification instead of alert
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <h4>Oda Oluşturuldu!</h4>
+                    <p>Oda kodunuz: <strong>${data.roomCode}</strong></p>
+                    <p>Bu kodu arkadaşlarınızla paylaşın.</p>
+                </div>
+                <button class="close-notification">×</button>
+            `;
+            document.body.appendChild(notification);
+            
+            // Auto-hide notification after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('show');
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => notification.remove(), 300);
+                }, 5000);
+            }, 100);
+            
+            // Close button handler
+            notification.querySelector('.close-notification').addEventListener('click', () => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            });
             break;
+            
         case 'GAME_UPDATE':
-            // Tahta ve sıra güncellendi
             updateBoard(data.boardState);
             updateTurn(data.turn);
             break;
+            
         case 'LEGAL_MOVES':
-            // Sunucudan gelen yasal hamleleri renklendir
-            highlightLegalMoves(data.moves); 
+            highlightLegalMoves(data.moves);
             break;
+            
+        case 'PLAYER_JOINED':
+            if (data.roomCode) {
+                updateConnectionStatus('connected', `Oyuncu odaya katıldı! Oyun başlıyor...`);
+            }
+            break;
+            
         case 'ERROR':
-            alert(`Sunucu Hatası: ${data.message}`);
+            console.error('Sunucu Hatası:', data.message);
+            updateConnectionStatus('error', data.message || 'Bir hata oluştu');
             stopSearching();
+            
+            // Show error notification
+            const errorNotif = document.createElement('div');
+            errorNotif.className = 'notification error';
+            errorNotif.innerHTML = `
+                <div class="notification-content">
+                    <h4>Hata!</h4>
+                    <p>${data.message || 'Bir hata oluştu'}</p>
+                </div>
+                <button class="close-notification">×</button>
+            `;
+            document.body.appendChild(errorNotif);
+            
+            setTimeout(() => {
+                errorNotif.classList.add('show');
+                setTimeout(() => {
+                    errorNotif.classList.remove('show');
+                    setTimeout(() => errorNotif.remove(), 300);
+                }, 5000);
+            }, 100);
+            
+            errorNotif.querySelector('.close-notification').addEventListener('click', () => {
+                errorNotif.classList.remove('show');
+                setTimeout(() => errorNotif.remove(), 300);
+            });
+            break;
+            
+        case 'STATS_UPDATE':
+            updateStats(data);
             break;
     }
 }
@@ -174,30 +364,16 @@ function updateBoard(boardState) {
     // Update each cell based on the board state
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
-            const pos = String.fromCharCode(65 + col) + (8 - row);
-            const piece = boardState[pos];
-            const cell = document.querySelector(`[data-pos="${pos}"]`);
             
-            if (cell) {
-                // Clear any existing piece classes
-                cell.className = 'cell';
-                cell.classList.add((row + col) % 2 === 0 ? 'light' : 'dark');
-                
-                // Add piece if exists
-                if (piece) {
-                    const pieceEl = document.createElement('div');
-                    pieceEl.className = `piece ${piece.color}`;
-                    if (piece.isKing) pieceEl.classList.add('king');
-                    
-                    // Add animation
-                    pieceEl.style.animation = 'piece-drop 0.3s ease-out';
-                    cell.appendChild(pieceEl);
-                }
-            }
+            // Add smooth animation
+            piece.style.animation = 'piece-drop 0.3s ease-out';
         }
     }
     
-    // Rotate the board based on player color
+    // Update turn indicator
+    if (gameState.turn) {
+        const turnColor = gameState.turn === 'red' ? 'beyaz' : 'siyah';
+        dom.playerTurnStatus.textContent = `Sıra: ${turnColor} taşlarda`;
     const pieces = document.querySelectorAll('.piece');
     if (gameState.myColor === 'black') {
         dom.gameBoard.style.transform = 'rotate(180deg)';
