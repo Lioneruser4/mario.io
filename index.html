@@ -3,92 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Checkers Game</title>
+    <title>Professional Online Checkers</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
         body {
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Roboto', sans-serif;
+            color: #fff;
         }
         #game-container {
             text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
         }
         #board {
             display: grid;
-            grid-template-columns: repeat(8, 50px);
-            grid-template-rows: repeat(8, 50px);
-            border: 2px solid #000;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            border: 4px solid #fff;
             margin: 20px auto;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
         }
         .cell {
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             display: flex;
             justify-content: center;
             align-items: center;
             position: relative;
+            transition: background-color 0.3s ease;
         }
         .black {
-            background-color: #333;
+            background-color: #4a4a4a;
         }
         .white {
-            background-color: #fff;
+            background-color: #e0e0e0;
         }
         .piece {
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             cursor: pointer;
             position: absolute;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+        }
+        .piece:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
         }
         .red {
-            background-color: red;
-            border: 2px solid darkred;
+            background: radial-gradient(circle, #ff416c, #ff4b2b);
+            border: 2px solid #d32f2f;
         }
         .black-piece {
-            background-color: black;
-            border: 2px solid gray;
+            background: radial-gradient(circle, #434343, #000000);
+            border: 2px solid #212121;
         }
         .king {
             border: 4px solid gold;
-        }
-        .highlight {
-            background-color: yellow !important;
-            opacity: 0.5;
+            box-shadow: 0 0 10px gold;
         }
         .possible-move {
-            background-color: green !important;
-            opacity: 0.5;
+            background-color: rgba(0, 255, 0, 0.4) !important;
+            transform: scale(1.05);
+            transition: transform 0.2s ease;
         }
         .turn-highlight {
-            box-shadow: 0 0 10px 5px yellow;
+            box-shadow: inset 0 0 15px 5px rgba(255, 255, 0, 0.5);
         }
         #status {
-            margin: 10px;
-            font-size: 18px;
+            margin: 15px 0;
+            font-size: 1.2em;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
         }
         button {
-            padding: 10px 20px;
-            font-size: 16px;
+            padding: 12px 24px;
+            font-size: 1.1em;
             margin: 10px;
             cursor: pointer;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
+        }
+        button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
         #lobby {
             display: none;
+            font-size: 1.2em;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+        /* Animasyonlu Hareket için */
+        .moving {
+            transition: top 0.5s ease, left 0.5s ease;
         }
     </style>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
     <div id="game-container">
-        <h1>Online Checkers</h1>
+        <h1>Professional Online Checkers</h1>
         <button id="ranked-play">Dereceli Oyna</button>
         <div id="lobby">Eşleşme Aranıyor...</div>
-        <div id="board"></div>
+        <div id="board" style="display: none;"></div>
         <div id="status"></div>
     </div>
 
@@ -100,7 +146,7 @@
         let board = [];
         let currentPlayer = 'red'; // Kırmızı başlar
         let selectedPiece = null;
-        let playerColor = null; // Oyuncunun rengi (red veya black)
+        let playerColor = null;
         let gameId = null;
         let isMyTurn = false;
 
@@ -119,7 +165,6 @@
                     cell.addEventListener('click', handleCellClick);
                     boardElement.appendChild(cell);
 
-                    // Taşları Yerleştir
                     if (row < 3 && (row + col) % 2 !== 0) {
                         placePiece(row, col, 'black');
                     } else if (row > 4 && (row + col) % 2 !== 0) {
@@ -127,6 +172,7 @@
                     }
                 }
             }
+            boardElement.style.display = 'grid';
         }
 
         function placePiece(row, col, color) {
@@ -162,13 +208,41 @@
             const toCol = parseInt(e.currentTarget.dataset.col);
 
             if (isValidMove(fromRow, fromCol, toRow, toCol)) {
-                movePiece(fromRow, fromCol, toRow, toCol);
-                clearHighlights();
-                selectedPiece = null;
-                switchTurn();
-                updateGameState();
-                checkWin();
+                animateMove(fromRow, fromCol, toRow, toCol, () => {
+                    movePiece(fromRow, fromCol, toRow, toCol);
+                    clearHighlights();
+                    selectedPiece = null;
+                    switchTurn();
+                    updateGameState();
+                    checkWin();
+                });
             }
+        }
+
+        // Animasyonlu Hareket
+        function animateMove(fromRow, fromCol, toRow, toCol, callback) {
+            const piece = selectedPiece;
+            piece.classList.add('moving');
+            const fromCell = piece.parentElement;
+            const toCell = document.querySelector(`[data-row="${toRow}"][data-col="${toCol}"]`);
+
+            // Pozisyon hesapla
+            const fromRect = fromCell.getBoundingClientRect();
+            const toRect = toCell.getBoundingClientRect();
+            const dx = toRect.left - fromRect.left;
+            const dy = toRect.top - fromRect.top;
+
+            piece.style.position = 'absolute';
+            piece.style.left = '0';
+            piece.style.top = '0';
+            piece.style.transform = `translate(${dx}px, ${dy}px)`;
+
+            setTimeout(() => {
+                piece.style.transform = '';
+                piece.style.position = '';
+                piece.classList.remove('moving');
+                callback();
+            }, 500);
         }
 
         // Mümkün Hareketleri Göster
@@ -191,16 +265,15 @@
             dirs.forEach(([dr, dc]) => {
                 let r = row + dr, c = col + dc;
                 if (r >= 0 && r < 8 && c >= 0 && c < 8 && !board[r][c]) {
-                    moves.push([r, c]); // Normal hareket
-                } else if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] && board[r][c].color !== currentPlayer) {
+                    moves.push([r, c]);
+                } else if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] && board[r][c].color !== piece.color) {
                     r += dr; c += dc;
                     if (r >= 0 && r < 8 && c >= 0 && c < 8 && !board[r][c]) {
-                        moves.push([r, c]); // Yeme
+                        moves.push([r, c]);
                     }
                 }
             });
 
-            // Zorunlu yeme kontrolü
             const captures = moves.filter(m => Math.abs(m[0] - row) === 2);
             return captures.length > 0 ? captures : moves;
         }
@@ -212,7 +285,7 @@
             return moves.some(([r, c]) => r === toRow && c === toCol);
         }
 
-        // Taş Hareket Ettir
+        // Taş Hareket Ettir (Animasyondan sonra)
         function movePiece(fromRow, fromCol, toRow, toCol) {
             const piece = board[fromRow][fromCol];
             board[toRow][toCol] = piece;
@@ -253,19 +326,12 @@
 
         function updateTurnHighlight() {
             document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('turn-highlight'));
-            if (currentPlayer === 'red') {
-                for (let row = 5; row < 8; row++) {
-                    for (let col = 0; col < 8; col++) {
-                        const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                        cell.classList.add('turn-highlight');
-                    }
-                }
-            } else {
-                for (let row = 0; row < 3; row++) {
-                    for (let col = 0; col < 8; col++) {
-                        const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-                        cell.classList.add('turn-highlight');
-                    }
+            const startRow = currentPlayer === 'red' ? 5 : 0;
+            const endRow = currentPlayer === 'red' ? 8 : 3;
+            for (let row = startRow; row < endRow; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (cell) cell.classList.add('turn-highlight');
                 }
             }
         }
@@ -284,11 +350,13 @@
         }
 
         function endGame() {
-            // Oyun bitiş işlemleri
             socket.emit('endGame', gameId);
+            document.getElementById('board').style.display = 'none';
+            document.getElementById('status').textContent = 'Oyun Bitti!';
+            document.getElementById('ranked-play').disabled = false;
         }
 
-        // Multiplayer İşlemleri (Socket.io)
+        // Multiplayer İşlemleri
         document.getElementById('ranked-play').addEventListener('click', startMatchmaking);
 
         function startMatchmaking() {
@@ -302,7 +370,6 @@
             playerColor = data.color;
             initBoard();
             document.getElementById('lobby').style.display = 'none';
-            document.getElementById('board').style.display = 'grid';
             isMyTurn = playerColor === 'red';
             updateTurnHighlight();
             document.getElementById('status').textContent = isMyTurn ? 'Sıra Sende!' : 'Rakibin Sırası...';
@@ -337,13 +404,8 @@
             });
         }
 
-        socket.on('connect', () => {
-            console.log('Sunucuya bağlandı!');
-        });
-
-        socket.on('disconnect', () => {
-            console.log('Sunucudan ayrıldı.');
-        });
+        socket.on('connect', () => console.log('Sunucuya bağlandı!'));
+        socket.on('disconnect', () => console.log('Sunucudan ayrıldı.'));
     </script>
 </body>
 </html>
