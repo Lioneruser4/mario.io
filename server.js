@@ -49,17 +49,54 @@ function initializeBoard() {
     return board;
 }
 
-// Amerikan Daması Basit Kural Kontrolü Simülasyonu
-// **GERÇEK OYUN İÇİN BU FONKSİYONUN TAMAMLANMASI GEREKİR**
+// Amerikan Daması Kurallarına Göre Yasal Hamleleri Hesaplar
 function getLegalMoves(gameId, pos, color) {
-    // Gerçek Amerikan Daması mantığı burada çalışır (çapraz hareket, yeme zorunluluğu)
+    const game = games[gameId];
+    if (!game) return [];
     
-    // Şimdilik sadece simülasyon amaçlı rastgele hareket döndürülür:
-    if (pos === 'A3') return ['B4'];
-    if (pos === 'F6') return ['E5', 'G5']; 
-    if (pos === 'C1') return ['D2'];
-
-    return [];
+    const board = game.boardState;
+    const piece = board[pos];
+    if (!piece || piece.color !== color) return [];
+    
+    const legalMoves = [];
+    const [col, row] = [pos[0], parseInt(pos.slice(1))];
+    
+    // Normal taşlar için ileri çapraz hareketler
+    const directions = [];
+    
+    if (piece.isKing) {
+        // Kral tüm yönlerde gidebilir
+        directions.push([1,1], [1,-1], [-1,1], [-1,-1]);
+    } else if (piece.color === 'red') {
+        // Kırmızı aşağı gider
+        directions.push([1,1], [1,-1]);
+    } else {
+        // Siyah yukarı gider
+        directions.push([-1,1], [-1,-1]);
+    }
+    
+    for (const [dr, dc] of directions) {
+        const newRow = row + dr;
+        const newCol = String.fromCharCode(col.charCodeAt(0) + dc);
+        const newPos = newCol + newRow;
+        
+        // Boş kareye hareket
+        if (!board[newPos] && newRow >= 1 && newRow <= 8 && newCol >= 'A' && newCol <= 'H') {
+            legalMoves.push(newPos);
+        } 
+        // Rakip taşı atlama
+        else if (board[newPos] && board[newPos].color !== color) {
+            const jumpRow = newRow + dr;
+            const jumpCol = String.fromCharCode(newCol.charCodeAt(0) + dc);
+            const jumpPos = jumpCol + jumpRow;
+            
+            if (!board[jumpPos] && jumpRow >= 1 && jumpRow <= 8 && jumpCol >= 'A' && jumpCol <= 'H') {
+                legalMoves.push(jumpPos);
+            }
+        }
+    }
+    
+    return legalMoves;
 }
 
 
@@ -118,27 +155,78 @@ function handleClientAction(ws, data) {
             break;
 
         case 'GET_LEGAL_MOVES':
-            const game = games[data.gameId];
-            if (!game || ws !== game.playerData[game.turn]) return; // Sıra kontrolü
+            const currentGame = games[data.gameId];
+            if (!currentGame || ws !== currentGame.playerData[currentGame.turn]) return; // Sıra kontrolü
             
-            const legalMoves = getLegalMoves(data.gameId, data.pos, game.turn);
-            ws.send(JSON.stringify({ type: 'LEGAL_MOVES', moves: legalMoves }));
+            const moves = getLegalMoves(data.gameId, data.pos, currentGame.turn);
+            ws.send(JSON.stringify({ type: 'LEGAL_MOVES', moves: moves }));
             break;
 
         case 'MAKE_MOVE':
-            // Gerçek tahta hareketini uygula ve kural kontrolü yap
-            // Eğer legal ve başarılıysa:
-            // const newBoard = applyMove(data.gameId, data.from, data.to); 
-            // games[data.gameId].turn = (games[data.gameId].turn === 'red' ? 'black' : 'red');
+            const game = games[data.gameId];
+            if (!game || ws !== game.playerData[game.turn]) {
+                ws.send(JSON.stringify({ type: 'ERROR', message: 'Sıra sizde değil veya oyun bulunamadı' }));
+                return;
+            }
             
-            // Simülasyon: Oyunu güncelle
-            const simGame = games[data.gameId];
-            const nextTurn = simGame.turn === 'red' ? 'black' : 'red';
-
-            // Burası tamamen sunucu mantığına bağlıdır. Başarılı bir hareket olduğunu varsayıyoruz:
-            const newBoardState = simGame.boardState; // Tahtayı burada güncelle
+            const { from, to } = data;
+            const piece = game.boardState[from];
             
-            broadcastGameUpdate(data.gameId, 'GAME_UPDATE', { boardState: newBoardState, turn: nextTurn });
+            // Geçerli hamle kontrolü
+            if (!piece || piece.color !== game.turn) {
+                ws.send(JSON.stringify({ type: 'ERROR', message: 'Geçersiz hamle: Taş bulunamadı veya sıra sizde değil' }));
+                return;
+            }
+            
+            // Yasal hamleleri kontrol et
+            const legalMoves = getLegalMoves(data.gameId, from, game.turn);
+            if (!legalMoves.includes(to)) {
+                ws.send(JSON.stringify({ type: 'ERROR', message: 'Geçersiz hamle: Bu taş oraya gidemez' }));
+                return;
+            }
+            
+            // Hamleyi uygula
+            delete game.boardState[from];
+            game.boardState[to] = piece;
+            
+            // Eğer son sıraya ulaşıldıysa kral yap
+            const row = parseInt(to.slice(1));
+            if ((piece.color === 'red' && row === 8) || (piece.color === 'black' && row === 1)) {
+                piece.isKing = true;
+            }
+            
+            // Eğer zıplama yapıldıysa, arada kalan taşı kaldır
+            const fromCol = from.charCodeAt(0) - 'A'.charCodeAt(0);
+            const fromRow = parseInt(from.slice(1)) - 1;
+            const toCol = to.charCodeAt(0) - 'A'.charCodeAt(0);
+            const toRow = parseInt(to.slice(1)) - 1;
+            
+            // Eğer 2 kare atlandıysa (zıplama yapıldıysa)
+            if (Math.abs(fromRow - toRow) === 2) {
+                const jumpedRow = (fromRow + toRow) / 2;
+                const jumpedCol = String.fromCharCode(((fromCol + toCol) / 2) + 'A'.charCodeAt(0));
+                const jumpedPos = jumpedCol + (jumpedRow + 1);
+                delete game.boardState[jumpedPos];
+                
+                // Zorunlu yeme kuralı: Eğer başka yeme hamlesi varsa sıra aynı kalır
+                const hasMoreJumps = getLegalMoves(data.gameId, to, game.turn).some(move => 
+                    Math.abs(parseInt(move.slice(1)) - 1 - toRow) === 2
+                );
+                
+                if (!hasMoreJumps) {
+                    game.turn = game.turn === 'red' ? 'black' : 'red';
+                }
+            } else {
+                // Normal hamlede sıra değişir
+                game.turn = game.turn === 'red' ? 'black' : 'red';
+            }
+            
+            // Tüm oyunculara güncelleme gönder
+            broadcastGameUpdate(data.gameId, 'GAME_UPDATE', { 
+                boardState: game.boardState, 
+                turn: game.turn,
+                lastMove: { from, to }
+            });
             break;
             
     }
