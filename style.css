@@ -1,287 +1,170 @@
-/* --- Global ve Animasyonlar --- */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+/* style.css - Profesyonel, Işıklı ve Mobil Uyumlu Stil */
 
-/* Işıklı/Parlama Animasyonu */
-@keyframes glow {
-    0% { box-shadow: 0 0 5px #00aaff, 0 0 10px #00aaff; }
-    50% { box-shadow: 0 0 15px #00aaff, 0 0 25px #00aaff; }
-    100% { box-shadow: 0 0 5px #00aaff, 0 0 10px #00aaff; }
-}
-
-/* Dönen Spinner Animasyonu */
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
+/* GENEL ve MOBİL UYUMLULUK */
 body {
-    font-family: 'Poppins', sans-serif;
+    background-color: #1a1a2e; /* Koyu gece mavisi */
+    color: #fff;
+    font-family: 'Electrolize', sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #1f1c2c, #2f2c4a);
-    color: #f0f0f0;
-    overflow: hidden;
+    margin: 0;
+    padding: 10px;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
-.hidden {
-    display: none !important;
-}
-
-/* --- Bağlantı Durumu --- */
-#connectionStatus {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 14px;
-    font-weight: 600;
-    background-color: #f0ad4e; /* Sarı - Bağlanıyor */
-    color: #333;
-    transition: all 0.5s ease;
-    z-index: 1001;
-}
-
-/* --- Lobi Stilleri --- */
-#lobby {
-    background: rgba(40, 40, 60, 0.85);
-    padding: 30px 40px;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
+#app-container {
+    width: 100%;
+    max-width: 600px; 
     text-align: center;
-    transition: all 0.3s ease;
 }
 
-.logo-title {
-    font-size: 3.5rem;
-    font-weight: 700;
-    color: #00aaff;
-    margin-top: 0;
-    margin-bottom: 25px;
-    letter-spacing: 2px;
-    text-shadow: 0 0 10px #00aaff, 0 0 20px #00aaff;
+/* BAĞLANTI DURUMU */
+.status-box {
+    padding: 10px;
+    margin: 15px 0;
+    border-radius: 5px;
+    font-weight: bold;
+}
+.connecting { background-color: #f7b731; box-shadow: 0 0 10px #f7b731; }
+.connected { background-color: #4CAF50; box-shadow: 0 0 10px #4CAF50; }
+.disconnected { background-color: #f44336; box-shadow: 0 0 10px #f44336; }
+
+/* 🌟 NEON BAŞLIK VE BUTONLAR */
+.neon-text {
+    font-size: clamp(2em, 5vw, 2.5em);
+    text-shadow: 0 0 10px #ff0099, 0 0 20px #00ffff;
+    color: #fff;
+    animation: flicker 1.5s infinite alternate;
+}
+@keyframes flicker {
+    from { opacity: 1; } to { opacity: 0.9; }
 }
 
-.lobby-menu {
+.button-group {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 15px;
-    width: 300px;
+    margin: 20px 0;
 }
 
-.lobby-btn {
-    padding: 15px 20px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    font-family: 'Poppins', sans-serif;
+.animated-button {
+    width: 100%;
+    max-width: 350px;
+    padding: 18px 25px;
     border: none;
-    border-radius: 8px;
+    background: #161625;
+    color: #fff;
+    font-size: 1.1em;
+    font-weight: bold;
+    border-radius: 40px;
     cursor: pointer;
     transition: all 0.3s ease;
+    text-transform: uppercase;
+}
+.animated-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* BUTON 1: DERECE (Pulse Effect) */
+.pulse-effect { border: 3px solid #00ffff; box-shadow: 0 0 15px #00ffff; }
+.pulse-effect:not(.searching):hover { animation: button-pulse 1s infinite; }
+.pulse-effect.searching { 
+    background-color: #ff0099;
+    box-shadow: 0 0 20px #ff0099;
+    animation: searching-pulse 1s infinite alternate;
+    pointer-events: none;
+}
+@keyframes searching-pulse { 0% { transform: scale(1); } 100% { transform: scale(1.02); } }
+
+/* BUTON 2 & 3 FORM */
+.glow-effect { border: 2px solid #ff0099; box-shadow: 0 0 10px #ff0099; }
+.room-connect-form {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    align-items: center;
     gap: 10px;
+    padding: 20px 0;
+    margin-top: 15px;
 }
+#room-code-input {
+    flex-grow: 1;
+    max-width: 150px;
+    padding: 12px;
+    border: 2px solid #00ffff;
+    background: #111;
+    color: #fff;
+    border-radius: 5px;
+    font-size: 1em;
+    text-align: center;
+}
+.connect-effect { border-color: limegreen; }
+.copy-effect { border-color: gold; }
 
-.lobby-btn:hover {
-    transform: scale(1.05);
-}
-
-.lobby-btn .icon {
-    font-size: 1.2rem;
-}
-
-/* Birincil Buton (Dereceli) */
-.lobby-btn.primary {
-    background: linear-gradient(135deg, #00aaff, #0077cc);
-    color: white;
-    /* IŞIKLI EFEKT */
-    animation: glow 3s infinite ease-in-out;
-}
-.lobby-btn.primary:hover {
-    box-shadow: 0 0 15px #00aaff, 0 0 25px #00aaff;
-}
-
-/* İkincil Buton (Arkadaş) */
-.lobby-btn.secondary {
-    background: #5a67d8;
-    color: white;
-}
-.lobby-btn.secondary:hover {
-    background: #434190;
-}
-
-/* Üçüncül Buton (Katıl/İptal) */
-.lobby-btn.tertiary {
-    background: #4a5568;
-    color: #e2e8f0;
-}
-.lobby-btn.tertiary:hover {
-    background: #2d3748;
-}
-
-/* Odaya Katıl Alanı */
-.join-area {
+/* OYUN TAHTASI VE MOBİL UYUMLULUK */
+#game-container {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 15px;
-}
-
-#roomCodeInput {
-    padding: 12px;
-    border-radius: 6px;
-    border: 1px solid #4a5568;
-    background: #2d3748;
-    color: white;
-    font-size: 1.1rem;
-    text-align: center;
-    font-family: 'Poppins', sans-serif;
-}
-#roomCodeInput::placeholder {
-    color: #a0aec0;
-}
-
-/* --- Modal Stilleri (Arama, Oda Kodu) --- */
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(5px);
-    display: flex;
-    justify-content: center;
     align-items: center;
-    z-index: 1000;
+    width: 100%;
 }
 
-.modal-content {
-    background: #2d3748;
-    padding: 30px;
-    border-radius: 12px;
-    text-align: center;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
-}
-
-.spinner {
-    width: 50px;
-    height: 50px;
-    border: 5px solid #4a5568;
-    border-top-color: #00aaff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 20px auto;
-}
-
-#roomCodeDisplay {
-    font-size: 2.5rem;
-    font-weight: 700;
-    background: #1a202c;
-    padding: 10px 20px;
-    border-radius: 8px;
-    margin: 15px 0;
-    letter-spacing: 4px;
-    color: #00aaff;
-}
-
-#copyCodeBtn {
-    margin-top: 10px;
-}
-#copyInfo {
-    font-size: 0.9rem;
-    color: #00aaff;
-    height: 15px;
-    margin-top: 10px;
-}
-
-/* --- Oyun Alanı Stilleri (Değişmedi, sadece eklemeler) --- */
-#gameArea {
-    background: rgba(40, 40, 60, 0.85);
-    padding: 20px;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
-}
-
-#board {
+#game-board {
+    width: 90vw; height: 90vw;
+    max-width: 480px; max-height: 480px;
     display: grid;
-    grid-template-columns: repeat(8, 60px);
-    grid-template-rows: repeat(8, 60px);
-    border: 3px solid #333;
-    width: 480px;
-    height: 480px;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    border: 5px solid #444;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+    transition: transform 0.8s ease-in-out;
 }
 
 .cell {
-    width: 60px;
-    height: 60px;
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    box-sizing: border-box; 
+    border: 1px solid #333;
+    box-sizing: border-box;
 }
 
-.cell.light { background-color: #eee; }
-.cell.dark { background-color: #8B4513; }
+.cell.light { background-color: #f0d2b4; }
+.cell.dark { background-color: #b58863; }
 
+/* ♟️ TAŞLAR VE ANİMASYONLAR */
 .piece {
-    width: 50px;
-    height: 50px;
+    width: 90%; height: 90%;
     border-radius: 50%;
-    border: 2px solid #555;
+    position: absolute;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-    /* Taş Animasyonu */
-    transition: transform 0.2s ease; 
-}
-.piece:hover {
-    transform: scale(1.1);
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s ease-out, box-shadow 0.2s;
 }
 
-.piece.w { background-color: #fff; }
-.piece.b { background-color: #111; }
-.piece.wk { background-color: #fff; border: 4px solid gold; }
-.piece.bk { background-color: #111; border: 4px solid gold; }
+.piece.red { background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c); border: 2px solid #c0392b; }
+.piece.black { background: radial-gradient(circle at 30% 30%, #4a6981, #34495e); border: 2px solid #2c3e50; }
+.piece.king::after { content: '★'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5em; color: gold; text-shadow: 0 0 5px #000; }
 
-/* Vurgulamalar */
-.selected-piece {
-    outline: 3px solid #00FFFF;
-    box-shadow: 0 0 15px #00FFFF;
-    transform: scale(1.1);
-}
+/* 💡 VURGULAMA VE SIRA IŞIĞI */
+.turn-status { padding: 10px 0; font-size: 1.2em; transition: all 0.5s; }
+.turn-status.my-turn-light { color: #00ffff; text-shadow: 0 0 8px #00ffff; animation: glow-pulse 1s infinite alternate; }
+.turn-status.opponent-turn-light { color: #aaa; text-shadow: none; }
+@keyframes glow-pulse { from { opacity: 1; } to { opacity: 0.8; } }
 
-.valid-move {
-    background-color: rgba(4, 255, 0, 0.4) !important;
-    border: 2px dashed green;
+/* Legal Hamle Vurgusu (Nereye Oynanmalı) */
+.legal-move {
+    background-color: rgba(0, 255, 0, 0.3) !important; 
+    box-shadow: inset 0 0 10px #0f0, 0 0 5px #0f0;
+    cursor: pointer;
+    border: 2px solid #0f0;
+    animation: legal-pulse 0.8s infinite alternate;
 }
+.selected > .piece { transform: scale(1.1) translateY(-5px); box-shadow: 0 0 15px orange, 0 8px 10px rgba(0, 0, 0, 0.8); }
 
-#playerInfo {
-    display: flex;
-    justify-content: space-between;
-    width: 480px;
-    margin-bottom: 10px;
-}
-
-.player-box {
-    padding: 10px 20px;
-    border-radius: 5px;
-    font-weight: bold;
-    border: 2px solid transparent;
-    transition: all 0.3s ease;
-}
-
-.player-turn {
-    border: 2px solid #00FF00 !important;
-    box-shadow: 0 0 10px #00FF00;
-    transform: scale(1.05);
-}
+/* Genel Gizleme */
+.hidden { display: none !important; }
