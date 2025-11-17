@@ -406,11 +406,35 @@ function handleCellClick(event) {
     const pos = cell.dataset.pos;
     const piece = cell.querySelector('.piece');
     
-    // If clicking on your own piece, select it
-    if (piece && piece.classList.contains(gameState.myColor)) {
+    // If clicking on a piece that belongs to the current player
+    if (piece && (piece.classList.contains(gameState.myColor) || 
+                 (gameState.myColor === 'red' && piece.classList.contains('white')) ||
+                 (gameState.myColor === 'white' && piece.classList.contains('red')))) {
         // Clear previous selection
         clearHighlights();
         
+        // Select this piece
+        gameState.selectedPiecePos = pos;
+        cell.classList.add('selected');
+        
+        // Request legal moves for this piece
+        sendMessage('GET_LEGAL_MOVES', { 
+            gameId: gameState.gameId, 
+            pos: pos 
+        });
+    }
+    // If clicking on a highlighted move
+    else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
+        // Make the move
+        sendMessage('MAKE_MOVE', {
+            gameId: gameState.gameId,
+            from: gameState.selectedPiecePos,
+            to: pos
+        });
+        
+        // Clear highlights after move
+        clearHighlights();
+    }
         // Select new piece
         gameState.selectedPiecePos = pos;
         cell.classList.add('selected');
