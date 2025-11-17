@@ -138,33 +138,144 @@ body {
 
 /* ♟️ TAŞLAR VE ANİMASYONLAR */
 .piece {
-    width: 90%; height: 90%;
+    width: 90%; 
+    height: 90%;
     border-radius: 50%;
     position: absolute;
     cursor: pointer;
     box-shadow: 0 3px 5px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
-    transition: transform 0.2s ease-out, box-shadow 0.2s;
+    transition: transform 0.2s ease-out, box-shadow 0.2s, filter 0.2s;
+    will-change: transform;
 }
 
-.piece.red { background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c); border: 2px solid #c0392b; }
-.piece.black { background: radial-gradient(circle at 30% 30%, #4a6981, #34495e); border: 2px solid #2c3e50; }
-.piece.king::after { content: '★'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5em; color: gold; text-shadow: 0 0 5px #000; }
+.piece.red { 
+    background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c); 
+    border: 2px solid #c0392b; 
+}
+
+.piece.black { 
+    background: radial-gradient(circle at 30% 30%, #4a6981, #34495e); 
+    border: 2px solid #2c3e50; 
+}
+
+.piece.king {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+.piece.king::after { 
+    content: '★'; 
+    position: absolute; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%); 
+    font-size: 1.5em; 
+    color: gold; 
+    text-shadow: 0 0 5px #000;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.7));
+}
+
+/* Disabled state for non-turn pieces */
+.piece:not(.selected) {
+    filter: grayscale(20%);
+}
+
+/* Hover effect for pieces */
+.piece:not(.selected):hover {
+    transform: scale(1.05);
+    filter: brightness(1.1) grayscale(0%);
+    z-index: 5;
+}
 
 /* 💡 VURGULAMA VE SIRA IŞIĞI */
 .turn-status { padding: 10px 0; font-size: 1.2em; transition: all 0.5s; }
 .turn-status.my-turn-light { color: #00ffff; text-shadow: 0 0 8px #00ffff; animation: glow-pulse 1s infinite alternate; }
 .turn-status.opponent-turn-light { color: #aaa; text-shadow: none; }
-@keyframes glow-pulse { from { opacity: 1; } to { opacity: 0.8; } }
+@keyframes glow-pulse { 
+    from { 
+        opacity: 1; 
+        text-shadow: 0 0 8px #00ffff, 0 0 16px #00ffff;
+    } 
+    to { 
+        opacity: 0.8; 
+        text-shadow: 0 0 4px #00ffff, 0 0 12px #00ffff;
+    } 
+}
+
+/* Piece drop animation */
+@keyframes piece-drop {
+    0% { 
+        transform: translateY(-50px) scale(0.5);
+        opacity: 0;
+    }
+    80% {
+        transform: translateY(5px) scale(1.1);
+    }
+    100% { 
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+/* Legal move pulse animation */
+@keyframes legal-pulse {
+    from { 
+        box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+    }
+    to { 
+        box-shadow: 0 0 15px rgba(0, 255, 0, 0.8);
+    }
+}
 
 /* Legal Hamle Vurgusu (Nereye Oynanmalı) */
 .legal-move {
-    background-color: rgba(0, 255, 0, 0.3) !important; 
-    box-shadow: inset 0 0 10px #0f0, 0 0 5px #0f0;
+    position: relative;
     cursor: pointer;
-    border: 2px solid #0f0;
     animation: legal-pulse 0.8s infinite alternate;
 }
-.selected > .piece { transform: scale(1.1) translateY(-5px); box-shadow: 0 0 15px orange, 0 8px 10px rgba(0, 0, 0, 0.8); }
+
+.legal-move::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 30%;
+    height: 30%;
+    background-color: rgba(0, 255, 0, 0.7);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+/* Capture move indicator */
+.capture-move::after {
+    width: 60%;
+    height: 60%;
+    background-color: rgba(255, 0, 0, 0.3);
+    border: 2px solid red;
+    animation: capture-pulse 0.8s infinite alternate;
+}
+
+@keyframes capture-pulse {
+    from { transform: translate(-50%, -50%) scale(0.8); opacity: 0.7; }
+    to { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+}
+
+/* Selected piece */
+.selected > .piece { 
+    transform: scale(1.1) translateY(-5px); 
+    box-shadow: 0 0 15px orange, 0 8px 10px rgba(0, 0, 0, 0.8);
+    z-index: 10;
+    transition: all 0.2s ease-out;
+}
+
+/* Hover effects for better UX */
+.cell:not(.light):hover {
+    filter: brightness(1.1);
+}
+
+.cell.light:hover {
+    filter: brightness(0.95);
+}
 
 /* Genel Gizleme */
 .hidden { display: none !important; }
