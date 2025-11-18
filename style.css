@@ -111,17 +111,23 @@ body {
     flex-direction: column;
     align-items: center;
     width: 100%;
+    perspective: 1000px;
 }
 
 #game-board {
-    width: 90vw; height: 90vw;
-    max-width: 480px; max-height: 480px;
+    width: 90vw; 
+    height: 90vw;
+    max-width: 500px; 
+    max-height: 500px;
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-    border: 5px solid #444;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
-    transition: transform 0.8s ease-in-out;
+    border: 8px solid #5d4037;
+    border-radius: 5px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    background: #8d6e63;
+    overflow: hidden;
+    transform-style: preserve-3d;
 }
 
 .cell {
@@ -129,26 +135,128 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    border: 1px solid #333;
-    box-sizing: border-box;
+    transition: all 0.3s ease;
+    user-select: none;
 }
 
-.cell.light { background-color: #f0d2b4; }
-.cell.dark { background-color: #b58863; }
+.cell.light { 
+    background-color: #f0d9b5;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+}
+.cell.dark { 
+    background-color: #b58863;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.2);
+}
 
-/* ♟️ TAŞLAR VE ANİMASYONLAR */
+/* Taş Stilleri */
 .piece {
-    width: 90%; height: 90%;
+    width: 80%; 
+    height: 80%;
     border-radius: 50%;
-    position: absolute;
+    position: relative;
     cursor: pointer;
-    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
-    transition: transform 0.2s ease-out, box-shadow 0.2s;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s ease;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
-.piece.red { background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c); border: 2px solid #c0392b; }
-.piece.black { background: radial-gradient(circle at 30% 30%, #4a6981, #34495e); border: 2px solid #2c3e50; }
-.piece.king::after { content: '★'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5em; color: gold; text-shadow: 0 0 5px #000; }
+.piece::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8), rgba(255,255,255,0));
+    opacity: 0.6;
+    z-index: 1;
+}
+
+.piece.red { 
+    background: linear-gradient(145deg, #e74c3c, #c0392b);
+    border: 2px solid #a93226;
+    color: #fff;
+}
+
+.piece.black { 
+    background: linear-gradient(145deg, #2c3e50, #34495e);
+    border: 2px solid #1a252f;
+    color: #ecf0f1;
+}
+
+/* Kral Taşı Stili */
+.piece.king {
+    box-shadow: 0 0 15px gold, 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+.piece.king::after {
+    content: '👑';
+    position: absolute;
+    font-size: 1.2em;
+    z-index: 3;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7));
+}
+
+/* Seçili Taş */
+.cell.selected .piece {
+    transform: scale(1.1);
+    box-shadow: 0 0 15px #f39c12, 0 0 25px rgba(243, 156, 18, 0.6);
+    z-index: 10;
+}
+
+/* Yasal Hamle İşaretleri */
+.legal-move {
+    position: relative;
+    z-index: 1;
+    cursor: pointer;
+}
+
+.legal-move::after {
+    content: '';
+    position: absolute;
+    width: 30%;
+    height: 30%;
+    background: rgba(0, 255, 0, 0.7);
+    border-radius: 50%;
+    animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+    from { transform: scale(0.8); opacity: 0.7; }
+    to { transform: scale(1.2); opacity: 1; }
+}
+
+/* Yeme Hamlesi İşareti */
+.legal-move.capture::after {
+    background: rgba(255, 0, 0, 0.7);
+    width: 40%;
+    height: 40%;
+    animation: pulse-red 0.8s infinite alternate;
+}
+
+@keyframes pulse-red {
+    from { box-shadow: 0 0 5px 2px rgba(255, 0, 0, 0.5); }
+    to { box-shadow: 0 0 15px 5px rgba(255, 0, 0, 0.8); }
+}
+
+/* Mobil Dokunmatik İyileştirmeleri */
+@media (max-width: 768px) {
+    #game-board {
+        width: 95vw;
+        height: 95vw;
+    }
+    
+    .piece {
+        width: 85%;
+        height: 85%;
+    }
+}
 
 /* 💡 VURGULAMA VE SIRA IŞIĞI */
 .turn-status { padding: 10px 0; font-size: 1.2em; transition: all 0.5s; }
