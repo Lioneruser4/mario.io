@@ -1,7 +1,11 @@
 // main.js - Amerikan Daması İstemci Mantığı (Frontend)
 
-// Daha güvenilir bir WebSocket sunucusu
-const SERVER_URL = "wss://socketsbay.com/wss/v2/1/demo/"; // Örnek bir WebSocket sunucusu
+// Sunucu URL'leri (öncelik sırasına göre denenecek)
+const SERVER_URLS = [
+    "wss://mario-io-1.onrender.com/",  // Ana sunucu adresi
+    "wss://mario-io-1.onrender.com"   // Alternatif yazım
+];
+let currentServerIndex = 0;
 let socket = null;
 let gameState = {
     gameId: null,
@@ -29,45 +33,114 @@ const dom = {
 // 1. SUNUCU İLETİŞİMİ
 // ==========================================================
 
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+let reconnectTimeout;
+
+function updateStatus(message, type = 'connecting') {
+    const statusEl = document.getElementById('connection-status');
+    if (!statusEl) return;
+    
+    statusEl.className = `status-box ${type}`;
+    statusEl.innerHTML = `
+        <i class="fas fa-${type === 'connected' ? 'check-circle' : type === 'disconnected' ? 'times-circle' : 'sync-alt fa-spin'}"></i>
+        <span>${message}</span>
+    `;
+}
+
 function connect() {
-    dom.connStatusEl.className = 'status-box connecting';
-    dom.connStatusEl.textContent = 'Sunucuya Bağlanılıyor...';
+    // Önceki bağlantıyı temizle
+    if (socket) {
+        socket.onopen = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.onmessage = null;
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.close();
+        }
+    }
+
+    const currentServer = SERVER_URLS[currentServerIndex];
+    const displayUrl = currentServer.replace('wss://', '').replace('/ws', '');
+    updateStatus(`Sunucuya bağlanılıyor: ${displayUrl}...`, 'connecting');
     
     try {
-        socket = new WebSocket(SERVER_URL);
+        console.log('Bağlantı kuruluyor:', currentServer);
+        socket = new WebSocket(currentServer);
 
         socket.onopen = () => {
-            dom.connStatusEl.className = 'status-box connected';
-            dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
-            // Bağlantı başarılı olduğunda kullanıcı arayüzünü güncelle
+            console.log('WebSocket bağlantısı açıldı');
+            reconnectAttempts = 0;
+            updateStatus('✅ Sunucuya bağlandı. Oyun yükleniyor...', 'connected');
             document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+            
+            // Sunucuya bağlandıktan sonra bir ping gönder
+            if (socket.readyState === WebSocket.OPEN) {
+                console.log('Ping gönderiliyor...');
+                socket.send(JSON.stringify({ type: 'PING' }));
+            }
         };
         
         socket.onclose = (event) => {
-            dom.connStatusEl.className = 'status-box disconnected';
-            dom.connStatusEl.textContent = `❌ Bağlantı Kesildi (${event.code}). 5s Sonra Yeniden Deneniyor...`;
-            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
-            setTimeout(connect, 5000);
+            console.log('WebSocket bağlantısı kapandı:', event);
+            clearTimeout(reconnectTimeout);
+            
+            // Sunucu değiştir
+            currentServerIndex = (currentServerIndex + 1) % SERVER_URLS.length;
+            
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS * SERVER_URLS.length) {
+                reconnectAttempts++;
+                const delay = Math.min(1000 * Math.pow(2, Math.floor(reconnectAttempts / SERVER_URLS.length)), 30000);
+                
+                updateStatus(
+                    `❌ Bağlantı kesildi. Tekrar deneniyor (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS * SERVER_URLS.length})...`,
+                    'disconnected'
+                );
+                
+                document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+                reconnectTimeout = setTimeout(connect, delay);
+            } else {
+                updateStatus(
+                    '❌ Tüm sunuculara bağlanılamadı. Lütfen internet bağlantınızı kontrol edip sayfayı yenileyin.',
+                    'disconnected'
+                );
+            }
         };
         
         socket.onerror = (error) => {
-            console.error("WebSocket Hatası:", error);
-            dom.connStatusEl.textContent = `❌ Bağlantı Hatası: ${error.message || 'Bilinmeyen hata'}`;
+            console.error('WebSocket hatası:', error);
+            updateStatus('❌ Bağlantı hatası oluştu. Tekrar deneniyor...', 'disconnected');
+            
+            // Hata durumunda hemen yeniden bağlanmayı dene
+            currentServerIndex = (currentServerIndex + 1) % SERVER_URLS.length;
+            reconnectTimeout = setTimeout(connect, 2000);
         };
         
         socket.onmessage = (event) => {
             try {
+                console.log('Sunucudan gelen ham veri:', event.data);
                 const data = JSON.parse(event.data);
-                console.log('Sunucudan gelen veri:', data);
+                console.log('Ayrıştırılmış veri:', data);
+                
+                // Ping yanıtı kontrolü
+                if (data.type === 'PONG') {
+                    console.log('✅ Sunucudan ping yanıtı alındı');
+                    updateStatus('✅ Sunucuya bağlandı. Oyun hazır!', 'connected');
+                    return;
+                }
+                
                 handleServerMessage(data);
             } catch (e) { 
-                console.error("Geçersiz Sunucu Verisi:", event.data, e);
+                console.error('Geçersiz sunucu verisi:', event.data, e);
             }
         };
     } catch (error) {
-        console.error("WebSocket bağlantı hatası:", error);
-        dom.connStatusEl.textContent = `❌ Bağlantı Hatası: ${error.message}`;
-        setTimeout(connect, 5000);
+        console.error('WebSocket bağlantı hatası:', error);
+        updateStatus('❌ Bağlantı hatası: ' + (error.message || 'Bilinmeyen hata'), 'disconnected');
+        
+        // Hata durumunda diğer sunucuya geç
+        currentServerIndex = (currentServerIndex + 1) % SERVER_URLS.length;
+        reconnectTimeout = setTimeout(connect, 2000);
     }
 }
 
