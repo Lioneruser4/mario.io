@@ -3,155 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Şaşkı Dama Online - Mario IO</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-    <style>
-        /* Çok basit animasyonlu ve işıklı buton stili */
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #222; color: #eee; }
-        .lobby { text-align: center; background: #333; padding: 40px; border-radius: 15px; box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); }
-        .lobby h2 { color: #00bcd4; margin-bottom: 30px; }
-        .btn {
-            background-color: #00bcd4;
-            color: white;
-            padding: 15px 30px;
-            margin: 10px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1.1em;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 10px rgba(0, 188, 212, 0.5);
-            /* Işıklı animasyon */
-            animation: pulse 2s infinite alternate;
-        }
-        .btn:hover {
-            background-color: #00a0b8;
-            box-shadow: 0 0 20px rgba(0, 188, 212, 0.8), 0 0 30px rgba(0, 188, 212, 0.4);
-            transform: translateY(-2px);
-        }
-        @keyframes pulse {
-            from { box-shadow: 0 0 10px rgba(0, 188, 212, 0.5); }
-            to { box-shadow: 0 0 20px rgba(0, 188, 212, 1); }
-        }
-        #status-message {
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 5px;
-            display: none; /* Başlangıçta gizli */
-        }
-        .connected { background: #4CAF50; color: white; }
-        .disconnected { background: #F44336; color: white; }
-        #friend-connect { margin-top: 20px; }
-        #room-code-display { color: #FFEB3B; font-size: 1.2em; margin-top: 10px; display: none; }
-    </style>
+    <title>🏆 Şaşki Dama Online</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-    <div class="lobby">
-        <h2>✨ Şaşki Dama Online Lobi ✨</h2>
+    <div id="app-container">
         
-        <div id="status-message">Bağlanılıyor...</div>
+        <div id="connection-status" class="status-indicator">Bağlanıyor...</div>
 
-        <button class="btn" onclick="startRankedMatch()">🏆 Dereceli Oyna (Çevrim İçi Eşleşme) 🚀</button>
-        
-        <button class="btn" onclick="createRoom()">🤝 Arkadaşla Oyna (Oda Kur) 🔒</button>
-        <div id="room-code-display">Oda Kodunuz: <span id="room-code"></span> <button onclick="copyRoomCode()">Kopyala</button></div>
+        <div id="lobby-view">
+            <h1>Şaşki Dama Online</h1>
+            <p id="matchmaking-message"></p>
 
-        <div id="friend-connect">
-            <input type="text" id="join-code" placeholder="4 Rakamlı Oda Kodunu Girin" maxlength="4" style="padding: 10px; border-radius: 5px; border: none;">
-            <button class="btn" style="margin-top: 5px;" onclick="joinRoom()">🔗 Bağlan</button>
+            <div class="button-group">
+                <button id="btn-find-match" class="animated-button primary-btn">🥇 Dereceli Oyna</button>
+
+                <button id="btn-create-room" class="animated-button secondary-btn">👥 Arkadaşla Oyna (Oda Kur)</button>
+
+                <div class="room-join-section">
+                    <input type="text" id="room-code-input" placeholder="4 Rakamlı Oda Kodu" maxlength="4">
+                    <button id="btn-join-room" class="animated-button">➡️ Odaya Bağlan</button>
+                </div>
+            </div>
         </div>
 
+        <div id="game-view" style="display: none;">
+            <h2 id="turn-indicator"></h2> 
+            
+            <div id="checkerboard" class="board-grid">
+                </div>
+        </div>
     </div>
 
-    <script>
-        // Sunucu adresi
-        const SERVER_URL = 'https://mario-io-1.onrender.com';
-        let socket;
-
-        function updateStatus(message, type) {
-            const statusDiv = document.getElementById('status-message');
-            statusDiv.textContent = message;
-            statusDiv.className = type;
-            statusDiv.style.display = 'block';
-        }
-
-        // Sunucuya bağlanma işlemi
-        function connectToServer() {
-            updateStatus('Sunucuya bağlanılıyor...', '');
-            
-            // Socket.IO bağlantısı
-            socket = io(SERVER_URL, {
-                reconnection: true,
-                reconnectionAttempts: 5
-            });
-
-            socket.on('connect', () => {
-                updateStatus('✅ Sunucuya başarıyla bağlandı!', 'connected');
-            });
-
-            socket.on('disconnect', () => {
-                updateStatus('❌ Sunucu bağlantısı kesildi.', 'disconnected');
-            });
-
-            socket.on('connect_error', (err) => {
-                console.error("Bağlantı Hatası:", err);
-                updateStatus(`❌ Bağlantı hatası: ${err.message}`, 'disconnected');
-            });
-
-            // Sunucudan gelen özel mesajları dinle
-            socket.on('roomCreated', (code) => {
-                document.getElementById('room-code').textContent = code;
-                document.getElementById('room-code-display').style.display = 'block';
-                updateStatus(`🎉 Oda kuruldu! Kod: ${code}`, 'connected');
-            });
-            
-            socket.on('matchFound', (room) => {
-                updateStatus(`🕹️ Rakip bulundu! Oyun başlıyor: ${room}`, 'connected');
-                // Oyun tahtası arayüzünü göster ve lobi butonlarını gizle
-                // startGame(room); 
-            });
-
-            // Diğer olaylar (taş hareketi, oyun sırası vb.) buraya eklenecek
-        }
-
-        // Buton Fonksiyonları
-        function startRankedMatch() {
-            updateStatus('🔎 Rakip aranıyor...', '');
-            socket.emit('findMatch'); 
-            // Sunucu, kuyruğa alır ve eşleşme bulursa 'matchFound' olayını gönderir.
-        }
-
-        function createRoom() {
-            document.getElementById('room-code-display').style.display = 'none';
-            updateStatus('Yeni oda oluşturuluyor...', '');
-            socket.emit('createRoom');
-            // Sunucu bir kod oluşturur ve 'roomCreated' ile geri döner.
-        }
-
-        function joinRoom() {
-            const code = document.getElementById('join-code').value.trim();
-            if (code.length === 4) {
-                updateStatus(`Odaya bağlanılıyor: ${code}...`, '');
-                socket.emit('joinRoom', code);
-                // Sunucu, bağlantı başarılıysa 'matchFound' veya 'joinedRoom' gibi bir olay gönderir.
-            } else {
-                updateStatus('Lütfen 4 haneli bir oda kodu girin.', 'disconnected');
-            }
-        }
-        
-        function copyRoomCode() {
-            const code = document.getElementById('room-code').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                alert(`Oda Kodu kopyalandı: ${code}`);
-            }).catch(err => {
-                console.error('Kopyalama hatası:', err);
-            });
-        }
-
-
-        // Uygulama başladığında sunucuya bağlan
-        connectToServer();
-    </script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="game.js"></script>
 </body>
 </html>
