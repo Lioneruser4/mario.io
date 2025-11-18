@@ -204,45 +204,107 @@ body {
 }
 
 /* Seçili Taş */
-.cell.selected .piece {
-    transform: scale(1.1);
-    box-shadow: 0 0 15px #f39c12, 0 0 25px rgba(243, 156, 18, 0.6);
+.cell.selected {
+    position: relative;
     z-index: 10;
+}
+
+.cell.selected .piece {
+    transform: scale(1.15);
+    box-shadow: 0 0 20px #f1c40f, 0 0 30px rgba(241, 196, 15, 0.8);
+    z-index: 11;
+    transition: all 0.2s ease-out;
 }
 
 /* Yasal Hamle İşaretleri */
 .legal-move {
     position: relative;
-    z-index: 1;
     cursor: pointer;
+    z-index: 5;
+    transition: all 0.2s ease;
 }
 
-.legal-move::after {
+.legal-move::before {
     content: '';
     position: absolute;
-    width: 30%;
-    height: 30%;
-    background: rgba(0, 255, 0, 0.7);
+    top: 50%;
+    left: 50%;
+    width: 60%;
+    height: 60%;
+    background: rgba(46, 204, 113, 0.3);
     border-radius: 50%;
-    animation: pulse 1s infinite alternate;
-}
-
-@keyframes pulse {
-    from { transform: scale(0.8); opacity: 0.7; }
-    to { transform: scale(1.2); opacity: 1; }
+    transform: translate(-50%, -50%);
+    z-index: -1;
+    animation: pulse 1.5s infinite ease-in-out;
 }
 
 /* Yeme Hamlesi İşareti */
-.legal-move.capture::after {
-    background: rgba(255, 0, 0, 0.7);
-    width: 40%;
-    height: 40%;
-    animation: pulse-red 0.8s infinite alternate;
+.legal-move.capture-move::before {
+    background: rgba(231, 76, 60, 0.4);
+    width: 80%;
+    height: 80%;
+    animation: pulse-red 1s infinite alternate;
+}
+
+/* Yenecek Taş İşareti */
+.will-be-captured .piece {
+    position: relative;
+    animation: shake 0.5s ease-in-out infinite;
+}
+
+.will-be-captured .piece::after {
+    content: '⚠️';
+    position: absolute;
+    top: -15px;
+    right: -15px;
+    font-size: 1.2em;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
+}
+
+@keyframes pulse {
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.6; }
+    100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.9; }
 }
 
 @keyframes pulse-red {
-    from { box-shadow: 0 0 5px 2px rgba(255, 0, 0, 0.5); }
-    to { box-shadow: 0 0 15px 5px rgba(255, 0, 0, 0.8); }
+    0% { 
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7);
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    70% { 
+        box-shadow: 0 0 0 10px rgba(231, 76, 60, 0);
+        transform: translate(-50%, -50%) scale(1);
+    }
+    100% { 
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+}
+
+/* Taşların üzerine gelindiğinde */
+.piece:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+    transition: all 0.2s ease;
+}
+
+/* Mobil dokunmatik için daha büyük tıklama alanı */
+@media (max-width: 768px) {
+    .legal-move::before {
+        width: 70%;
+        height: 70%;
+    }
+    
+    .legal-move.capture-move::before {
+        width: 90%;
+        height: 90%;
+    }
 }
 
 /* Mobil Dokunmatik İyileştirmeleri */
