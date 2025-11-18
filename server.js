@@ -1,155 +1,151 @@
-// server.js dosyasının başlangıç içeriği (Node.js/Express/Socket.IO)
-
+// server.js
 const express = require('express');
 const http = require('http');
-const { Server } = require("socket.io");
-const { v4: uuidv4 } = require('uuid'); // Oda ID'leri için
+const { Server } = require('socket.io');
+const { GameState, initialGameState, calculateValidMoves, attemptMove } = require('./gameLogic'); // gameLogic.js'i import ediyoruz
 
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO Sunucusunu Başlatma
-// İstemci (Front-End) buna bağlanacak: https://mario-io-1.onrender.com
+// CORS ayarlarını Render'da çalıştırmak için düzenledik
 const io = new Server(server, {
     cors: {
-        origin: "*", // Tüm kökenlerden gelen isteklere izin verir (GitHub Pages için gerekli)
+        origin: "*", // Güvenlik için sadece kendi frontend adresinizi yazın.
         methods: ["GET", "POST"]
     }
 });
 
-// Sunucu Durum Yönetimi
-let matchmakingQueue = []; // Dereceli eşleşme bekleyenler
-let activeRooms = {};       // Aktif oyun odaları (key: roomCode, value: { player1: socketId, player2: socketId, gameState: {} })
+const PORT = process.env.PORT || 3000;
 
+// Global Durum Yönetimi
+const rooms = {}; // Oda kodlarına göre oyun durumlarını ve oyuncu bilgilerini tutar
+let matchmakingQueue = []; // Dereceli eşleşme bekleyen oyuncular
 
-/**
- * 🔑 Yardımcı Fonksiyon: 4 Haneli Oda Kodu Oluşturma
- */
-function generateRoomCode() {
-    // 4 rastgele rakam oluşturur.
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-/**
- * 🎲 Dama Oyununun Başlangıç Durumunu Oluşturma
- * (Tahta dizisi, başlangıç sırası vb.)
- */
-function initializeGameState() {
-    return {
-        board: [ /* 8x8 Dama tahtası dizisi burada tanımlanır */ ],
-        currentPlayer: 'RED', // Kırmızı başlar varsayalım
-        status: 'playing',
-        // ... diğer oyun bilgileri
-    };
-}
-
-
-// Yeni bir kullanıcı bağlandığında
+// --- SOCKET.IO BAĞLANTI İŞLEMLERİ ---
 io.on('connection', (socket) => {
-    console.log('Yeni bir kullanıcı bağlandı:', socket.id);
+    console.log(`Yeni bir oyuncu bağlandı: ${socket.id}`);
 
-    // --- 1. LOBİ İŞLEVLERİ ---
+    // Sunucuya bağlanma bildirimi
+    socket.emit('serverMessage', 'Sunucuya başarıyla bağlandınız. Lobi hazır!');
 
-    // Dereceli Eşleşme İsteği
+    // 1. DERECE EŞLEŞME (Matchmaking)
     socket.on('findMatch', () => {
-        // ... Eşleşme kuyruğu mantığı buraya gelir.
+        console.log(`Oyuncu ${socket.id} eşleşme aramaya başladı.`);
         matchmakingQueue.push(socket.id);
-        
+
         if (matchmakingQueue.length >= 2) {
             const player1Id = matchmakingQueue.shift();
             const player2Id = matchmakingQueue.shift();
             
-            const roomCode = uuidv4(); // Benzersiz bir oyun odası ID'si
+            const roomCode = Math.floor(1000 + Math.random() * 9000).toString(); // 4 haneli kod
             
-            // Oda durumunu oluştur ve kaydet
-            activeRooms[roomCode] = {
-                player1: player1Id,
-                player2: player2Id,
-                gameState: initializeGameState()
-            };
+            // Odaları kur
+            const player1Socket = io.sockets.sockets.get(player1Id);
+            const player2Socket = io.sockets.sockets.get(player2Id);
 
-            // Her iki oyuncuyu da odaya dahil et ve oyunun başladığını bildir.
-            io.to(player1Id).emit('matchFound', roomCode);
-            io.to(player2Id).emit('matchFound', roomCode);
-            
-            // Oyunu başlatma mesajı
-            io.to(player1Id).emit('gameStateUpdate', activeRooms[roomCode].gameState);
-            io.to(player2Id).emit('gameStateUpdate', activeRooms[roomCode].gameState);
+            if (player1Socket && player2Socket) {
+                player1Socket.join(roomCode);
+                player2Socket.join(roomCode);
+                
+                // Oyunu başlat ve durumu kaydet
+                rooms[roomCode] = {
+                    players: { white: player1Id, black: player2Id },
+                    game: initialGameState(player1Id, player2Id)
+                };
 
-            console.log(`Eşleşme bulundu. Oda: ${roomCode}`);
+                // Oyunculara eşleşme bulunduğunu bildir ve odaya yönlendir
+                player1Socket.emit('matchFound', roomCode);
+                player2Socket.emit('matchFound', roomCode);
+                
+                // Oyun başlangıç durumunu gönder
+                io.to(roomCode).emit('gameStateUpdate', rooms[roomCode].game);
+                console.log(`Eşleşme bulundu. Yeni oda: ${roomCode}`);
+            }
         }
     });
 
-    // Arkadaşla Oyna (Oda Kur) İsteği
+    // 2. ÖZEL ODA KURMA
     socket.on('createRoom', () => {
-        const code = generateRoomCode();
-        activeRooms[code] = {
-            player1: socket.id,
-            player2: null, // İkinci oyuncuyu bekliyor
-            gameState: null // Oyun durumu henüz başlamadı
+        const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        socket.join(roomCode);
+        
+        rooms[roomCode] = {
+            players: { white: socket.id, black: null }, // Siyah oyuncu bekleniyor
+            game: null 
         };
-        socket.join(code);
-        socket.emit('roomCreated', code);
-        console.log(`Özel oda kuruldu. Kod: ${code}`);
+
+        socket.emit('roomCreated', roomCode);
+        console.log(`Yeni oda kuruldu: ${roomCode} (Kurucu: ${socket.id})`);
     });
-    
-    // Odaya Bağlan İsteği
-    socket.on('joinRoom', (code) => {
-        const room = activeRooms[code];
-        if (room && !room.player2) {
-            room.player2 = socket.id;
-            room.gameState = initializeGameState();
+
+    // 3. ODAYA BAĞLANMA
+    socket.on('joinRoom', ({ roomCode }) => {
+        if (rooms[roomCode] && !rooms[roomCode].players.black) {
+            socket.join(roomCode);
+            rooms[roomCode].players.black = socket.id;
             
-            socket.join(code);
-            socket.emit('matchFound', code);
+            // Oyunu başlat ve durumu kaydet
+            rooms[roomCode].game = initialGameState(rooms[roomCode].players.white, socket.id);
             
-            // Odanın her iki oyuncusuna da oyunun başladığını ve durumu gönder
-            io.to(code).emit('gameStateUpdate', room.gameState);
-            console.log(`Oyuncu odaya bağlandı: ${code}`);
+            // Odanın tüm oyuncularına oyunun başladığını bildir
+            io.to(roomCode).emit('roomJoined', roomCode); 
+            io.to(roomCode).emit('gameStateUpdate', rooms[roomCode].game);
+            console.log(`Oyuncu ${socket.id} odaya katıldı: ${roomCode}`);
         } else {
-            socket.emit('roomError', 'Oda bulunamadı veya dolu.');
+            socket.emit('error', 'Oda bulunamadı veya dolu.');
         }
     });
 
-    // --- 2. OYUN İŞLEVLERİ (DAMA MANTIĞI BURAYA GELİR) ---
-    
-    // Taş seçimi ve geçerli hareketleri hesaplama
-    socket.on('pieceSelected', ({ row, col }) => {
-        const roomCode = /* oyuncunun bulunduğu odayı bul */;
-        const gameState = activeRooms[roomCode].gameState;
-        
-        // **!!! BURASI EN KRİTİK KISIMDIR !!!**
-        // Server: Dama kurallarına göre (zorunlu yeme, normal hareket)
-        //         seçilen taş için geçerli hareketleri HESAPLA.
-        const validMoves = calculateValidMoves(gameState, row, col); 
-        
-        socket.emit('validMoves', validMoves);
+    // OYUN HAMLE İŞLEMLERİ
+    socket.on('makeMove', ({ roomCode, move }) => {
+        const room = rooms[roomCode];
+        if (!room || !room.game) return;
+
+        const playerRole = room.players.white === socket.id ? 'white' : room.players.black === socket.id ? 'black' : null;
+
+        if (playerRole && playerRole === room.game.currentPlayer) {
+            
+            const newGameState = attemptMove(room.game, move, playerRole);
+
+            if (newGameState) {
+                // Hamle geçerliyse oyun durumunu güncelle
+                rooms[roomCode].game = newGameState;
+
+                // Oyun durumunu odadaki her iki oyuncuya da yayınla
+                io.to(roomCode).emit('gameStateUpdate', rooms[roomCode].game);
+
+                if (newGameState.gameOver) {
+                    io.to(roomCode).emit('gameOver', newGameState.winner);
+                }
+            } else {
+                // Geçersiz hamle bildirimi
+                socket.emit('error', 'Geçersiz hamle.');
+            }
+        }
     });
 
-    // Hareket yapma isteği
-    socket.on('makeMove', ({ from, to }) => {
-        const roomCode = /* oyuncunun bulunduğu odayı bul */;
-        const room = activeRooms[roomCode];
-        
-        // Server: Hareketin geçerli olup olmadığını KONTROL ET.
-        // Server: Oyunu GÜNCELLE (taşı hareket ettir, rakip taşı yediyse sil, sırayı değiştir, king yap).
-        // const newGameState = updateGame(room.gameState, from, to);
-        
-        // Oda içindeki her iki oyuncuya da yeni oyun durumunu gönder
-        // io.to(roomCode).emit('gameStateUpdate', newGameState);
-    });
-
-    // Bağlantı kesildiğinde
+    // BAĞLANTI KESİLİNCE
     socket.on('disconnect', () => {
-        console.log('Kullanıcının bağlantısı kesildi:', socket.id);
-        // Kullanıcıyı kuyruktan veya aktif odadan çıkar (Oyun Terk Etme Mantığı)
+        console.log(`Oyuncu bağlantısı kesildi: ${socket.id}`);
+        // Matchmaking kuyruğundan çıkar
+        matchmakingQueue = matchmakingQueue.filter(id => id !== socket.id);
+        
+        // Odalardan birini terk ettiyse:
+        for (const code in rooms) {
+            if (rooms[code].players.white === socket.id || rooms[code].players.black === socket.id) {
+                // Diğer oyuncuya rakibin ayrıldığını bildir
+                const opponentId = rooms[code].players.white === socket.id ? rooms[code].players.black : rooms[code].players.white;
+                if(opponentId) {
+                    io.to(opponentId).emit('opponentDisconnected', 'Rakip oyundan ayrıldı. Oyun sonlandırıldı.');
+                }
+                delete rooms[code];
+                console.log(`Oda ${code} temizlendi.`);
+                break;
+            }
+        }
     });
 });
 
-
-// Sunucuyu belirtilen portta başlatma
-const PORT = process.env.PORT || 3000; 
 server.listen(PORT, () => {
-    console.log(`Sunucu çalışıyor: http://localhost:${PORT}`);
-    console.log(`Render Sunucunuzun URL'si: ${SERVER_URL} olmalıdır.`);
+    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
