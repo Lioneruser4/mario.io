@@ -5,31 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏆 Online Checkers Arena | Amerikan Daması</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Electrolize&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
 
     <div id="app-container">
         
         <div id="lobby-container">
-            <h1 class="neon-text">⚡ DAMA ARENASI ⚡</h1>
+            <h1 class="neon-text"><i class="fas fa-chess-king"></i> DAMA ARENASI <i class="fas fa-chess-king"></i></h1>
             
             <div id="connection-status" class="status-box connecting">Sunucuya Bağlanılıyor...</div>
 
             <div class="button-group">
-                <button id="btn-ranked" class="animated-button pulse-effect">
-                    <span id="ranked-text">Dereceli Oyna (Eşleşme Bul)</span>
+                <button id="btn-ranked" class="animated-button">
+                    <i class="fas fa-trophy"></i>
+                    <span id="ranked-text">Dereceli Oyna</span>
                 </button>
 
-                <button id="btn-create-room" class="animated-button small glow-effect">
-                    Oda Kur / Arkadaşla Oyna
+                <button id="btn-create-room" class="animated-button small">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Arkadaşla Oyna</span>
                 </button>
             </div>
             
             <div class="room-connect-form">
                 <input type="text" id="room-code-input" maxlength="4" placeholder="4 Rakamlı Oda Kodu" pattern="\d*">
-                <button id="btn-connect-room" class="animated-button small connect-effect">Odaya Bağlan</button>
-                <button id="btn-copy-code" class="animated-button small copy-effect hidden">Kodu Kopyala</button>
+                <button id="btn-connect-room" class="animated-button small">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Odaya Bağlan</span>
+                </button>
+                <button id="btn-copy-code" class="animated-button small hidden">
+                    <i class="far fa-copy"></i>
+                    <span>Kodu Kopyala</span>
+                </button>
             </div>
         </div>
 
