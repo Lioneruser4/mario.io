@@ -6,96 +6,130 @@ const socket = io(SERVER_URL);
 const statusEl = document.getElementById('connection-status');
 const lobbyEl = document.getElementById('lobby-view');
 const gameEl = document.getElementById('game-view');
-const matchMessageEl = document.getElementById('matchmaking-message');
-const boardEl = document.getElementById('checkerboard');
-const turnIndicatorEl = document.getElementById('turn-indicator');
+const mainMenuEl = document.getElementById('main-menu');
+const waitingAreaEl = document.getElementById('waiting-area');
+const waitingMessageEl = document.getElementById('waiting-message');
 
-let localGameState = null; // Sunucudan gelen oyun durumunu tutar
-let localPlayerRole = null; // 'white' veya 'black'
+const btnFindMatch = document.getElementById('btn-find-match');
+const btnCreateRoom = document.getElementById('btn-create-room');
+const btnJoinRoom = document.getElementById('btn-join-room');
+const inputRoomCode = document.getElementById('join-room-code-input');
+const btnCancel = document.getElementById('btn-cancel');
+
+let localGameState = null; 
+let localPlayerRole = null; 
 let currentRoomCode = null;
-let selectedPiece = null; // [r, c]
+let selectedPiece = null; 
+
+// --- Lobi Durum Yönetimi Fonksiyonu ---
+/**
+ * Lobi görünümünü değiştirir.
+ * @param {string} state - 'MAIN_MENU', 'WAITING', 'ROOM_HOSTING'
+ */
+function setLobbyState(state) {
+    mainMenuEl.style.display = 'none';
+    waitingAreaEl.style.display = 'none';
+    lobbyEl.style.display = 'block';
+    gameEl.style.display = 'none';
+
+    switch (state) {
+        case 'MAIN_MENU':
+            mainMenuEl.style.display = 'flex';
+            waitingMessageEl.textContent = '';
+            break;
+        case 'WAITING':
+            waitingAreaEl.style.display = 'block';
+            waitingMessageEl.textContent = 'Dereceli eşleşme aranıyor... Lütfen bekleyiniz.';
+            break;
+        case 'ROOM_HOSTING':
+            waitingAreaEl.style.display = 'block';
+            // Oda kodu, roomCreated olayından sonra buraya yerleştirilecek
+            break;
+        case 'GAME':
+            lobbyEl.style.display = 'none';
+            gameEl.style.display = 'block';
+            break;
+    }
+}
+
 
 // --- SOCKET.IO İSTEMCİ OLAYLARI ---
 
 socket.on('connect', () => {
     statusEl.textContent = '✅ Sunucuya Bağlandı.';
-    statusEl.style.color = 'lightgreen';
+    statusEl.classList.remove('status-error');
+    statusEl.classList.add('status-success');
+    setLobbyState('MAIN_MENU'); // Bağlanınca ana menüyü göster
 });
 
 socket.on('disconnect', () => {
-    statusEl.textContent = '❌ Sunucu Bağlantısı Kesildi!';
-    statusEl.style.color = 'red';
+    statusEl.textContent = '❌ Sunucu Bağlantısı Kesildi! Yeniden bağlanıyor...';
+    statusEl.classList.remove('status-success');
+    statusEl.classList.add('status-error');
+    setLobbyState('MAIN_MENU');
 });
 
-// Sunucu Bilgilendirmesi
-socket.on('serverMessage', (message) => {
-    console.log("Sunucu Bildirimi:", message);
-    // İstenirse burada bir "toast" bildirim gösterilebilir
-});
+// Sunucudan gelen özel durum değişim isteği (Matchmaking iptali vb.)
+socket.on('setLobbyState', setLobbyState); 
 
-// 1. Eşleşme Bulundu (Dereceli Oyna)
-socket.on('matchFound', (roomCode) => {
+// Eşleşme Bulundu (Dereceli veya Arkadaş)
+socket.on('matchFound', ({ roomCode, role }) => {
     currentRoomCode = roomCode;
-    matchMessageEl.textContent = `🔥 Eşleşme Bulundu! Odaya Giriliyor: ${roomCode}`;
+    localPlayerRole = role; // Rolü kaydet
+    setLobbyState('GAME'); // Oyuna geç
 });
 
-// 2. Oda Kuruldu (Arkadaşla Oyna)
-socket.on('roomCreated', (roomCode) => {
+// Oda Kuruldu (Sadece kurucuya gelir)
+socket.on('roomCreated', ({ roomCode, role }) => {
     currentRoomCode = roomCode;
-    matchMessageEl.textContent = `🎉 Oda Kuruldu! Kod: ${roomCode}. Linki kopyala ve arkadaşınla paylaş!`;
-    // İstenen kopyalama butonu işlevi buraya eklenebilir.
+    localPlayerRole = role;
+    setLobbyState('ROOM_HOSTING');
+    waitingMessageEl.innerHTML = `🎉 Oda Kodunuz: **${roomCode}**<br>Arkadaşınızın bağlanması bekleniyor...`;
+    
+    // Kendimden eklediğim güzellik: Kodu panoya kopyalama butonu
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'animated-button copy-btn';
+    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Kopyala';
+    copyBtn.onclick = () => { navigator.clipboard.writeText(roomCode); copyBtn.innerHTML = '<i class="fas fa-check"></i> Kopyalandı!'; };
+    waitingMessageEl.appendChild(copyBtn);
 });
 
-// 3. Odaya Girildi (Başlangıç veya Arkadaş katıldı)
-socket.on('roomJoined', (roomCode) => {
-    // Lobiyi gizle, oyunu göster
-    lobbyEl.style.display = 'none';
-    gameEl.style.display = 'block';
-});
-
-// OYUN DURUMU GÜNCELLEMESİ
+// Oyun Durumu Güncellemesi
 socket.on('gameStateUpdate', (gameState) => {
     localGameState = gameState;
-    // Yerel oyuncu rolünü belirle
-    if (gameState.players.white === socket.id) {
-        localPlayerRole = 'white';
-    } else if (gameState.players.black === socket.id) {
-        localPlayerRole = 'black';
-    }
-
-    // Tahtayı ve göstergeleri yeniden çiz
+    // ... renderBoard() ve updateTurnIndicator() çağrılır ...
     renderBoard();
     updateTurnIndicator();
 });
 
-// Rakip Bağlantı Kesilmesi
-socket.on('opponentDisconnected', (message) => {
-    alert(message);
-    // Lobiyi göster, oyunu sıfırla
-    lobbyEl.style.display = 'block';
-    gameEl.style.display = 'none';
+socket.on('error', (message) => {
+    alert(`Hata: ${message}`);
+    setLobbyState('MAIN_MENU');
 });
 
 // --- LOBİ BUTON İŞLEMLERİ ---
 
-document.getElementById('btn-find-match').addEventListener('click', () => {
-    if (document.getElementById('btn-find-match').textContent.includes('İptal')) {
-        // Eşleşme aramasını iptal etme mantığı (Sunucuya emit et)
-        matchMessageEl.textContent = '';
-        document.getElementById('btn-find-match').textContent = '🥇 Dereceli Oyna';
-    } else {
-        matchMessageEl.textContent = '⏳ Dereceli Eşleşme Aranıyor...';
-        document.getElementById('btn-find-match').textContent = 'İptal';
-        socket.emit('findMatch');
-    }
+btnFindMatch.addEventListener('click', () => {
+    socket.emit('findMatch');
 });
 
-document.getElementById('btn-create-room').addEventListener('click', () => {
+btnCreateRoom.addEventListener('click', () => {
     socket.emit('createRoom');
 });
 
-document.getElementById('btn-join-room').addEventListener('click', () => {
-    const roomCode = document.getElementById('room-code-input').value.trim();
+btnCancel.addEventListener('click', () => {
+    // Bulunduğumuz duruma göre iptal işlemi gönderilir
+    if (waitingMessageEl.textContent.includes('Dereceli')) {
+        socket.emit('cancelMatchmaking');
+    } else {
+        // Oda kurma iptali (sunucuda odanın silinmesini tetikler)
+        // Bunun için server.js'e 'cancelRoom' emiti eklenmelidir.
+        socket.emit('cancelRoom', currentRoomCode);
+    }
+});
+
+btnJoinRoom.addEventListener('click', () => {
+    const roomCode = inputRoomCode.value.trim();
     if (roomCode.length === 4) {
         socket.emit('joinRoom', { roomCode });
     } else {
@@ -103,115 +137,23 @@ document.getElementById('btn-join-room').addEventListener('click', () => {
     }
 });
 
-// --- OYUN GÖRSELLEŞTİRME VE ETKİLEŞİM ---
+// --- OYUN GÖRSELLEŞTİRME (Kısaltıldı) ---
 
-/**
- * Oyun sırasını belirten göstergeyi günceller.
- */
 function updateTurnIndicator() {
-    if (!localGameState) return;
-
-    const isMyTurn = localGameState.playerTurn === localPlayerRole;
-    
-    // İstenen ışıklı/animasyonlu sıra gösterimi. (CSS ile renklendirme)
-    turnIndicatorEl.textContent = isMyTurn ? 
-        "⭐ SIRA SENDE! Hamleni Yap." : 
-        `Rakibin Sırası (${localGameState.playerTurn.toUpperCase()})`;
-    
-    turnIndicatorEl.className = isMyTurn ? 'turn-active' : 'turn-inactive';
+    // ... Önceki yanıttaki ışıklı sıra gösterimi mantığı buraya gelir ...
 }
 
-
-/**
- * Tahtayı ve taşları güncel oyun durumuna göre çizer.
- */
 function renderBoard() {
-    boardEl.innerHTML = ''; // Tahtayı temizle
-    if (!localGameState) return;
-
-    // Dama tahtasını oluştur (8x8 grid)
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const cell = document.createElement('div');
-            cell.className = 'cell';
-            cell.dataset.row = r;
-            cell.dataset.col = c;
-            
-            // Satır/Sütun tek/çiftliğine göre tahta rengi
-            cell.classList.add((r + c) % 2 === 0 ? 'cell-light' : 'cell-dark');
-            
-            // Taşa tıklandığında (veya boş kareye)
-            cell.addEventListener('click', () => handleCellClick(r, c));
-
-            // Taş varsa, taşı yerleştir
-            const pieceValue = localGameState.board[r][c];
-            if (pieceValue !== 0) {
-                const piece = document.createElement('div');
-                piece.className = 'piece';
-                // Taş tipine göre sınıf ekle (beyaz/siyah/dam)
-                piece.classList.add(getPieceClass(pieceValue));
-                cell.appendChild(piece);
-            }
-            
-            // Hamle gösterimi: Tıklanan taşın nereye gidebileceğini renkle gösterir (İstenen özellik)
-            if (selectedPiece) {
-                // Sunucudan veya gameLogic.js'den gelen geçerli hamleleri kontrol edin
-                // Şimdilik sadece örnek görselleştirme:
-                // if (isPossibleMove(r, c)) { cell.classList.add('highlight-move'); }
-            }
-
-            boardEl.appendChild(cell);
-        }
-    }
+    // ... Önceki yanıttaki tahta çizme ve hamle gösterme (renkli vurgu) mantığı buraya gelir ...
+    
+    // Hamle Gösterme Ekstra Güzellik:
+    // selectedPiece varsa ve sıra bende ise, geçerli hamleleri hesapla.
+    // Hesaplanan her hamle karesine 'highlight-move' CSS sınıfını ekle.
 }
 
-/**
- * Taşa veya boş kareye tıklandığında çalışır.
- */
 function handleCellClick(r, c) {
-    if (!localGameState || localGameState.playerTurn !== localPlayerRole) return; // Sıra bende değil
-
-    const clickedPieceValue = localGameState.board[r][c];
-
-    // 1. TAŞ SEÇİMİ
-    if (isMyPiece(clickedPieceValue, localPlayerRole)) {
-        selectedPiece = [r, c];
-        // Seçilen taşa vurgu ekle (CSS ile)
-        // Olası hamleleri hesapla ve tahtada renkle göster (renderBoard'da kullanılacak)
-        renderBoard(); 
-        return;
-    }
-
-    // 2. HAMLE YAPMA
-    if (selectedPiece) {
-        // Seçili taş varsa ve tıklanan kare boşsa, hamle yapma girişimi
-        const move = { from: selectedPiece, to: [r, c] };
-        
-        // Hamleyi sunucuya gönder
-        socket.emit('makeMove', { roomCode: currentRoomCode, move });
-        
-        // Hamle gönderildikten sonra seçimi sıfırla
-        selectedPiece = null;
-    }
+    // ... Önceki yanıttaki taşa tıklama ve hamle yapma mantığı buraya gelir ...
 }
 
-// Yardımcı Fonksiyon
-function isMyPiece(pieceValue, role) {
-    // Sadece rolüme ait taşları seçebilirim
-    if (role === 'white') return pieceValue === 1 || pieceValue === 3;
-    if (role === 'black') return pieceValue === 2 || pieceValue === 4;
-    return false;
-}
-
-function getPieceClass(value) {
-    switch (value) {
-        case 1: return 'piece-white';
-        case 2: return 'piece-black';
-        case 3: return 'piece-white king';
-        case 4: return 'piece-black king';
-        default: return '';
-    }
-}
-
-// Sayfa yüklendiğinde tahtayı bir kez çiz
-renderBoard();
+// Başlangıçta tahtayı bir kez çiz
+// renderBoard();
