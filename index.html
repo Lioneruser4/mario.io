@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏆 Şaşki Dama Online</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div id="app-container">
@@ -13,25 +14,37 @@
 
         <div id="lobby-view">
             <h1>Şaşki Dama Online</h1>
-            <p id="matchmaking-message"></p>
 
-            <div class="button-group">
-                <button id="btn-find-match" class="animated-button primary-btn">🥇 Dereceli Oyna</button>
+            <div id="main-menu" class="lobby-section">
+                <button id="btn-find-match" class="animated-button primary-btn">
+                    <i class="fas fa-medal"></i> Dereceli Oyna
+                </button>
 
-                <button id="btn-create-room" class="animated-button secondary-btn">👥 Arkadaşla Oyna (Oda Kur)</button>
+                <button id="btn-create-room" class="animated-button secondary-btn">
+                    <i class="fas fa-users"></i> Arkadaşla Oyna (Oda Kur)
+                </button>
 
-                <div class="room-join-section">
-                    <input type="text" id="room-code-input" placeholder="4 Rakamlı Oda Kodu" maxlength="4">
-                    <button id="btn-join-room" class="animated-button">➡️ Odaya Bağlan</button>
+                <div class="room-join-form">
+                    <input type="text" id="join-room-code-input" placeholder="Oda Kodu" maxlength="4">
+                    <button id="btn-join-room" class="animated-button">
+                        <i class="fas fa-sign-in-alt"></i> Bağlan
+                    </button>
                 </div>
             </div>
+
+            <div id="waiting-area" class="lobby-section" style="display: none;">
+                <p id="waiting-message"></p>
+                <div class="waiting-spinner"></div>
+                <button id="btn-cancel" class="animated-button danger-btn">
+                    <i class="fas fa-times"></i> İptal Et
+                </button>
+            </div>
+            
         </div>
 
         <div id="game-view" style="display: none;">
-            <h2 id="turn-indicator"></h2> 
-            
-            <div id="checkerboard" class="board-grid">
-                </div>
+            <div id="turn-indicator" class="turn-box"></div> 
+            <div id="checkerboard" class="board-grid"></div>
         </div>
     </div>
 
