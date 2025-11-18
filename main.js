@@ -164,15 +164,34 @@ function drawBoard() {
 }
 
 function updateBoard(boardState) {
+    // Tüm taşları kaldır
     document.querySelectorAll('.piece').forEach(p => p.remove());
+    
+    // Tahtayı güncelle
     for (const pos in boardState) {
         const { color, isKing } = boardState[pos];
         const cell = document.querySelector(`[data-pos="${pos}"]`);
         if (cell) {
             const piece = document.createElement('div');
-            piece.classList.add('piece', color, isKing ? 'king' : 'standard');
-            // Yeni taşa ufak bir "düşme" animasyonu
-            piece.style.animation = 'piece-drop 0.3s ease-out';
+            piece.classList.add('piece', color);
+            if (isKing) piece.classList.add('king');
+            
+            // Taşlara tıklanabilirlik ekle
+            piece.style.cursor = 'pointer';
+            
+            // Mobil dokunmatik olayları için
+            piece.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleCellClick({ currentTarget: cell });
+            });
+            
+            // Kral taşlarına özel işaret ekle
+            if (isKing) {
+                const crown = document.createElement('div');
+                crown.className = 'crown';
+                piece.appendChild(crown);
+            }
+            
             cell.appendChild(piece);
         }
     }
@@ -194,10 +213,38 @@ function handleCellClick(event) {
 
     const cell = event.currentTarget;
     const pos = cell.dataset.pos;
-    const hasMyPiece = cell.querySelector(`.piece.${gameState.myColor}`);
+    const piece = cell.querySelector('.piece');
+    const hasMyPiece = piece && piece.classList.contains(gameState.myColor);
 
+    // Eğer zaten seçili bir taş varsa ve farklı bir taşa tıklandıysa
+    if (gameState.selectedPiecePos && gameState.selectedPiecePos !== pos) {
+        // Eğer tıklanan yerde kendi taşımız varsa, onu seç
+        if (hasMyPiece) {
+            gameState.selectedPiecePos = pos;
+            sendMessage('GET_LEGAL_MOVES', { position: pos });
+        }
+        // Eğer tıklanan yer yasal bir hamle ise, hamleyi yap
+        else if (cell.classList.contains('legal-move')) {
+            const fromPos = gameState.selectedPiecePos;
+            const toPos = pos;
+            sendMessage('MAKE_MOVE', { from: fromPos, to: toPos });
+            gameState.selectedPiecePos = null;
+            clearHighlights();
+        }
+        return;
+    }
+
+    // Eğer kendi taşımıza tıklandıysa
     if (hasMyPiece) {
-        // Taşa tıklandı: Legal hamleleri iste
+        // Eğer aynı taşa tekrar tıklandıysa seçimi kaldır
+        if (gameState.selectedPiecePos === pos) {
+            gameState.selectedPiecePos = null;
+            clearHighlights();
+        } else {
+            // Yeni bir taş seç
+            gameState.selectedPiecePos = pos;
+            sendMessage('GET_LEGAL_MOVES', { position: pos });
+        }
         clearHighlights();
         gameState.selectedPiecePos = pos;
         cell.classList.add('selected');
@@ -218,14 +265,16 @@ function handleCellClick(event) {
 }
 
 function highlightLegalMoves(moves) {
-    clearHighlights(); 
-    // Seçili taşı tekrar vurgula
-    if(gameState.selectedPiecePos) document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`).classList.add('selected');
-    
-    // Yasal hamleleri renklendir (CSS: .legal-move)
-    moves.forEach(pos => {
-        const cell = document.querySelector(`[data-pos="${pos}"]`);
-        if (cell) cell.classList.add('legal-move');
+    clearHighlights();
+    moves.forEach(move => {
+        const cell = document.querySelector(`[data-pos="${move.to}"]`);
+        if (cell) {
+            cell.classList.add('legal-move');
+            // Eğer bu bir yeme hamlesiyse özel stil uygula
+            if (move.isCapture) {
+                cell.style.boxShadow = 'inset 0 0 15px #ff0000, 0 0 8px #ff0000';
+            }
+        }
     });
 }
 
