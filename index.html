@@ -3,52 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏆 Şaşki Dama Online</title>
-    <link rel="stylesheet" href="style.css"> 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>🏆 Online Checkers Arena | Amerikan Daması</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Electrolize&display=swap" rel="stylesheet">
 </head>
 <body>
+
     <div id="app-container">
         
-        <div id="connection-status" class="status-indicator">Bağlanıyor...</div>
+        <div id="lobby-container">
+            <h1 class="neon-text">⚡ DAMA ARENASI ⚡</h1>
+            
+            <div id="connection-status" class="status-box connecting">Sunucuya Bağlanılıyor...</div>
 
-        <div id="lobby-view">
-            <h1>Şaşki Dama Online</h1>
-
-            <div id="main-menu" class="lobby-section">
-                <button id="btn-find-match" class="animated-button primary-btn">
-                    <i class="fas fa-medal"></i> Dereceli Oyna
+            <div class="button-group">
+                <button id="btn-ranked" class="animated-button pulse-effect">
+                    <span id="ranked-text">Dereceli Oyna (Eşleşme Bul)</span>
                 </button>
 
-                <button id="btn-create-room" class="animated-button secondary-btn">
-                    <i class="fas fa-users"></i> Arkadaşla Oyna (Oda Kur)
-                </button>
-
-                <div class="room-join-form">
-                    <input type="text" id="join-room-code-input" placeholder="Oda Kodu" maxlength="4">
-                    <button id="btn-join-room" class="animated-button">
-                        <i class="fas fa-sign-in-alt"></i> Bağlan
-                    </button>
-                </div>
-            </div>
-
-            <div id="waiting-area" class="lobby-section" style="display: none;">
-                <p id="waiting-message"></p>
-                <div class="waiting-spinner"></div>
-                <button id="btn-cancel" class="animated-button danger-btn">
-                    <i class="fas fa-times"></i> İptal Et
+                <button id="btn-create-room" class="animated-button small glow-effect">
+                    Oda Kur / Arkadaşla Oyna
                 </button>
             </div>
             
+            <div class="room-connect-form">
+                <input type="text" id="room-code-input" maxlength="4" placeholder="4 Rakamlı Oda Kodu" pattern="\d*">
+                <button id="btn-connect-room" class="animated-button small connect-effect">Odaya Bağlan</button>
+                <button id="btn-copy-code" class="animated-button small copy-effect hidden">Kodu Kopyala</button>
+            </div>
         </div>
 
-        <div id="game-view" style="display: none;">
-            <div id="turn-indicator" class="turn-box"></div> 
-            <div id="checkerboard" class="board-grid"></div>
+        <div id="game-container" class="hidden">
+            <div id="game-info">
+                <h2 id="player-turn-status" class="turn-status"></h2>
+            </div>
+            <div id="game-board">
+                </div>
+            <div id="game-messages"></div>
         </div>
+
     </div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="game.js"></script>
+    <script src="main.js" type="module"></script>
 </body>
 </html>
