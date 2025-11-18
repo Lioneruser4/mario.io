@@ -214,65 +214,88 @@ function handleCellClick(event) {
     const cell = event.currentTarget;
     const pos = cell.dataset.pos;
     const piece = cell.querySelector('.piece');
-    const hasMyPiece = piece && piece.classList.contains(gameState.myColor);
-
-    // Eğer zaten seçili bir taş varsa ve farklı bir taşa tıklandıysa
-    if (gameState.selectedPiecePos && gameState.selectedPiecePos !== pos) {
-        // Eğer tıklanan yerde kendi taşımız varsa, onu seç
-        if (hasMyPiece) {
-            gameState.selectedPiecePos = pos;
-            sendMessage('GET_LEGAL_MOVES', { position: pos });
-        }
-        // Eğer tıklanan yer yasal bir hamle ise, hamleyi yap
-        else if (cell.classList.contains('legal-move')) {
-            const fromPos = gameState.selectedPiecePos;
-            const toPos = pos;
-            sendMessage('MAKE_MOVE', { from: fromPos, to: toPos });
-            gameState.selectedPiecePos = null;
-            clearHighlights();
-        }
+    const isMyPiece = piece && piece.classList.contains(gameState.myColor);
+    
+    // Eğer yasal bir hamle kutusuna tıklandıysa
+    if (cell.classList.contains('legal-move')) {
+        const fromPos = gameState.selectedPiecePos;
+        const toPos = pos;
+        const isCapture = cell.classList.contains('capture-move');
+        
+        // Hamle yap
+        sendMessage('MAKE_MOVE', { 
+            from: fromPos, 
+            to: toPos,
+            isCapture: isCapture,
+            gameId: gameState.gameId
+        });
+        
+        // Seçimleri temizle
+        clearHighlights();
+        gameState.selectedPiecePos = null;
         return;
     }
 
     // Eğer kendi taşımıza tıklandıysa
-    if (hasMyPiece) {
-        // Eğer aynı taşa tekrar tıklandıysa seçimi kaldır
+    if (isMyPiece) {
+        // Aynı taşa tekrar tıklandıysa seçimi kaldır
         if (gameState.selectedPiecePos === pos) {
-            gameState.selectedPiecePos = null;
             clearHighlights();
+            gameState.selectedPiecePos = null;
         } else {
-            // Yeni bir taş seç
+            // Yeni taş seç
+            clearHighlights();
             gameState.selectedPiecePos = pos;
-            sendMessage('GET_LEGAL_MOVES', { position: pos });
+            cell.classList.add('selected');
+            
+            // Yasal hamleleri al
+            sendMessage('GET_LEGAL_MOVES', { 
+                position: pos,
+                gameId: gameState.gameId
+            });
         }
+    } else if (gameState.selectedPiecePos) {
+        // Eğer başka bir yere tıklandıysa seçimi kaldır
         clearHighlights();
-        gameState.selectedPiecePos = pos;
-        cell.classList.add('selected');
-        sendMessage('GET_LEGAL_MOVES', { gameId: gameState.gameId, pos: pos });
-
-    } else if (cell.classList.contains('legal-move') && gameState.selectedPiecePos) {
-        // Vurgulanmış hedefe tıklandı: Hamleyi yap
-        sendMessage('MAKE_MOVE', { 
-            gameId: gameState.gameId, 
-            from: gameState.selectedPiecePos, 
-            to: pos 
-        });
-        clearHighlights();
-    } else {
-        // Geçersiz tıklama: Seçimi kaldır
-        clearHighlights();
+        gameState.selectedPiecePos = null;
+    }
+}
     }
 }
 
 function highlightLegalMoves(moves) {
     clearHighlights();
+    
+    // Seçili taşı vurgula
+    if (gameState.selectedPiecePos) {
+        const selectedCell = document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`);
+        if (selectedCell) {
+            selectedCell.classList.add('selected');
+        }
+    }
+    
+    // Yasal hamleleri işaretle
     moves.forEach(move => {
         const cell = document.querySelector(`[data-pos="${move.to}"]`);
         if (cell) {
             cell.classList.add('legal-move');
-            // Eğer bu bir yeme hamlesiyse özel stil uygula
             if (move.isCapture) {
-                cell.style.boxShadow = 'inset 0 0 15px #ff0000, 0 0 8px #ff0000';
+                cell.classList.add('capture-move');
+                
+                // Yenecek taşın pozisyonunu bul ve işaretle
+                const fromRow = gameState.selectedPiecePos.charCodeAt(0) - 'A'.charCodeAt(0);
+                const fromCol = 8 - parseInt(gameState.selectedPiecePos[1]);
+                const toRow = move.to.charCodeAt(0) - 'A'.charCodeAt(0);
+                const toCol = 8 - parseInt(move.to[1]);
+                
+                const capturedRow = fromRow + (toRow > fromRow ? 1 : -1);
+                const capturedCol = fromCol + (toCol > fromCol ? 1 : -1);
+                const capturedPos = String.fromCharCode(65 + capturedRow) + (8 - capturedCol);
+                
+                const capturedCell = document.querySelector(`[data-pos="${capturedPos}"]`);
+                if (capturedCell) {
+                    capturedCell.classList.add('will-be-captured');
+                }
             }
         }
     });
