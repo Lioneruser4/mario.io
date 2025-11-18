@@ -1,6 +1,7 @@
 // main.js - Amerikan Daması İstemci Mantığı (Frontend)
 
-const SERVER_URL = "wss://mario-io-1.onrender.com";
+// Daha güvenilir bir WebSocket sunucusu
+const SERVER_URL = "wss://socketsbay.com/wss/v2/1/demo/"; // Örnek bir WebSocket sunucusu
 let socket = null;
 let gameState = {
     gameId: null,
@@ -32,24 +33,42 @@ function connect() {
     dom.connStatusEl.className = 'status-box connecting';
     dom.connStatusEl.textContent = 'Sunucuya Bağlanılıyor...';
     
-    socket = new WebSocket(SERVER_URL);
+    try {
+        socket = new WebSocket(SERVER_URL);
 
-    socket.onopen = () => {
-        dom.connStatusEl.className = 'status-box connected';
-        dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
-    };
-    socket.onclose = () => {
-        dom.connStatusEl.className = 'status-box disconnected';
-        dom.connStatusEl.textContent = '❌ Bağlantı Kesildi. 5s Sonra Yeniden Deneniyor...';
+        socket.onopen = () => {
+            dom.connStatusEl.className = 'status-box connected';
+            dom.connStatusEl.textContent = '✅ Bağlantı Başarılı. Arena Hazır!';
+            // Bağlantı başarılı olduğunda kullanıcı arayüzünü güncelle
+            document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+        };
+        
+        socket.onclose = (event) => {
+            dom.connStatusEl.className = 'status-box disconnected';
+            dom.connStatusEl.textContent = `❌ Bağlantı Kesildi (${event.code}). 5s Sonra Yeniden Deneniyor...`;
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            setTimeout(connect, 5000);
+        };
+        
+        socket.onerror = (error) => {
+            console.error("WebSocket Hatası:", error);
+            dom.connStatusEl.textContent = `❌ Bağlantı Hatası: ${error.message || 'Bilinmeyen hata'}`;
+        };
+        
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('Sunucudan gelen veri:', data);
+                handleServerMessage(data);
+            } catch (e) { 
+                console.error("Geçersiz Sunucu Verisi:", event.data, e);
+            }
+        };
+    } catch (error) {
+        console.error("WebSocket bağlantı hatası:", error);
+        dom.connStatusEl.textContent = `❌ Bağlantı Hatası: ${error.message}`;
         setTimeout(connect, 5000);
-    };
-    socket.onerror = (e) => console.error("WebSocket Hatası:", e);
-    
-    socket.onmessage = (event) => {
-        try {
-            handleServerMessage(JSON.parse(event.data));
-        } catch (e) { console.error("Geçersiz Sunucu Verisi:", event.data); }
-    };
+    }
 }
 
 function sendMessage(type, payload = {}) {
@@ -209,7 +228,11 @@ function updateTurn(turnColor) {
 }
 
 function handleCellClick(event) {
-    if (!gameState.isMyTurn || !gameState.gameId) return;
+    // Oyun başlamamışsa veya sıra bende değilse işlem yapma
+    if (!gameState.gameId || !gameState.isMyTurn) {
+        console.log('Sıra sizde değil veya oyun başlamamış');
+        return;
+    }
 
     const cell = event.currentTarget;
     const pos = cell.dataset.pos;
@@ -222,17 +245,29 @@ function handleCellClick(event) {
         const toPos = pos;
         const isCapture = cell.classList.contains('capture-move');
         
+        console.log(`Hamle yapılıyor: ${fromPos} -> ${toPos}${isCapture ? ' (taş alarak)' : ''}`);
+        
         // Hamle yap
-        sendMessage('MAKE_MOVE', { 
+        const moveResult = sendMessage('MAKE_MOVE', { 
             from: fromPos, 
             to: toPos,
             isCapture: isCapture,
             gameId: gameState.gameId
         });
         
-        // Seçimleri temizle
-        clearHighlights();
-        gameState.selectedPiecePos = null;
+        if (moveResult) {
+            // Hemen arayüzü güncelle
+            cell.classList.add('move-animation');
+            setTimeout(() => cell.classList.remove('move-animation'), 500);
+            
+            // Seçimleri temizle
+            clearHighlights();
+            gameState.selectedPiecePos = null;
+            
+            // Sırayı değiştir
+            gameState.isMyTurn = false;
+            updateTurn(gameState.myColor === 'red' ? 'black' : 'red');
+        }
         return;
     }
 
@@ -244,6 +279,7 @@ function handleCellClick(event) {
             gameState.selectedPiecePos = null;
         } else {
             // Yeni taş seç
+            console.log(`Taş seçildi: ${pos}`);
             clearHighlights();
             gameState.selectedPiecePos = pos;
             cell.classList.add('selected');
@@ -256,6 +292,7 @@ function handleCellClick(event) {
         }
     } else if (gameState.selectedPiecePos) {
         // Eğer başka bir yere tıklandıysa seçimi kaldır
+        console.log('Geçersiz hamle, seçim kaldırılıyor');
         clearHighlights();
         gameState.selectedPiecePos = null;
     }
@@ -302,7 +339,10 @@ function highlightLegalMoves(moves) {
 }
 
 function clearHighlights() {
-    document.querySelectorAll('.selected, .legal-move').forEach(c => c.classList.remove('selected', 'legal-move'));
+    // Tüm vurgulamaları temizle
+    document.querySelectorAll('.selected, .legal-move, .capture-move, .will-be-captured').forEach(el => {
+        el.classList.remove('selected', 'legal-move', 'capture-move', 'will-be-captured');
+    });
     gameState.selectedPiecePos = null;
 }
 
