@@ -1,34 +1,49 @@
-const socket = io("https://mario-io-1.onrender.com", { transports: ["websocket"] });
+const socket = io("https://mario-io-1.onrender.com", { 
+  transports: ["websocket"],
+  timeout: 30000
+});
 
-let board = null, selected = null, myColor = null, myTurn = false, flipped = false;
+let board = null;
+let selected = null;
+let myColor = null;
+let myTurn = false;
+let flipped = false;
+let canEatPieces = []; // Yeme mümkün olan taşlar (parlayacak)
+
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
-let cellSize;
+let cellSize = 0;
 
-function resize() {
-  const size = Math.min(innerWidth * 0.95, innerHeight * 0.75);
+// Resize
+function resizeCanvas() {
+  const size = Math.min(window.innerWidth * 0.92, window.innerHeight * 0.72);
   canvas.width = canvas.height = size;
   cellSize = size / 8;
-  draw();
+  drawBoard();
 }
-window.addEventListener("resize", resize);
-resize();
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
 
+// Koordinat dönüşümü
 function realToScreen(x, y) { return flipped ? { x: 7 - x, y: 7 - y } : { x, y }; }
 function screenToReal(x, y) { return flipped ? { x: 7 - x, y: 7 - y } : { x, y }; }
 
-function draw() {
+// Tahta çiz
+function drawBoard() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
-      const s = realToScreen(x, y);
-      ctx.fillStyle = (x + y) % 2 === 0 ? "#f0d9b5" : "#b58863";
-      ctx.fillRect(s.x * cellSize, s.y * cellSize, cellSize, cellSize);
+      const screen = realToScreen(x, y);
+      const isLight = (x + y) % 2 === 0;
+      ctx.fillStyle = isLight ? "#f4e4bc" : "#b58863";
+      ctx.fillRect(screen.x * cellSize, screen.y * cellSize, cellSize, cellSize);
 
+      // Seçili taş
       if (selected && selected.x === x && selected.y === y) {
         ctx.strokeStyle = "#00ff00";
-        ctx.lineWidth = 8;
-        ctx.strokeRect(s.x * cellSize + 6, s.y * cellSize + 6, cellSize - 12, cellSize - 12);
+        ctx.lineWidth = 10;
+        ctx.strokeRect(screen.x * cellSize + 8, screen.y * cellSize + 8, cellSize - 16, cellSize - 16);
       }
 
       const piece = board[y][x];
@@ -37,150 +52,169 @@ function draw() {
       const isWhite = piece === 1 || piece === 2;
       const isKing = piece === 2 || piece === 4;
 
-      ctx.fillStyle = isWhite ? "#ffffff" : "#1a1a1a";
+      // YEME MÜMKÜN İSE PARLA
+      const canEat = canEatPieces.some(p => p.x === x && p.y === y);
+      if (canEat && myTurn) {
+        ctx.shadowColor = "#ff0000";
+        ctx.shadowBlur = 40;
+      }
+
+      // Taş gövde
+      ctx.fillStyle = isWhite ? "#ffffff" : "#1e1e1e";
       ctx.beginPath();
-      ctx.arc(s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2, cellSize * 0.38, 0, Math.PI * 2);
+      ctx.arc(
+        screen.x * cellSize + cellSize / 2,
+        screen.y * cellSize + cellSize / 2,
+        cellSize * 0.38,
+        0, Math.PI * 2
+      );
       ctx.fill();
       ctx.strokeStyle = isWhite ? "#000" : "#fff";
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 6;
       ctx.stroke();
 
+      // Kral tacı
       if (isKing) {
         ctx.fillStyle = "#ffd700";
         ctx.shadowColor = "#ffd700";
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 30;
         ctx.font = `bold ${cellSize * 0.4}px Arial`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("K", s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2 + 5);
-        ctx.shadowBlur = 0;
+        ctx.fillText("K", screen.x * cellSize + cellSize / 2, screen.y * cellSize + cellSize / 2 + 5);
       }
+
+      ctx.shadowBlur = 0;
     }
   }
 
+  // Geçerli hamleler
   if (selected && myTurn) {
     const moves = getValidMoves(selected.x, selected.y);
-    moves.forEach(m => {
-      const s = realToScreen(m.x, m.y);
-      ctx.fillStyle = m.captures?.length > 0 ? "rgba(255,0,0,0.5)" : "rgba(0,255,255,0.5)";
+    moves.forEach(move => {
+      const s = realToScreen(move.x, move.y);
+      ctx.fillStyle = "rgba(0, 255, 255, 0.5)";
       ctx.beginPath();
-      ctx.arc(s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2, cellSize * 0.3, 0, Math.PI * 2);
+      ctx.arc(s.x * cellSize + cellSize / 2, s.y * cellSize + cellSize / 2, cellSize * 0.25, 0, Math.PI * 2);
       ctx.fill();
-
-      if (m.captures?.length > 0) {
-        const fromS = realToScreen(selected.x, selected.y);
-        ctx.strokeStyle = "#ff0000";
-        ctx.lineWidth = 6;
-        ctx.setLineDash([10, 10]);
-        ctx.beginPath();
-        ctx.moveTo(fromS.x * cellSize + cellSize/2, fromS.y * cellSize + cellSize/2);
-        ctx.lineTo(s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
     });
   }
 }
 
+// Geçerli hamleler (yeme yok, sadece boş kare)
 function getValidMoves(x, y) {
   const moves = [];
-  const p = board[y][x];
-  if (!p) return moves;
-  const white = p === 1 || p === 2;
-  const king = p === 2 || p === 4;
-  const dirs = king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (white ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
+  const piece = board[y][x];
+  if (!piece) return moves;
 
-  // Zorunlu yeme
-  for (const [dy, dx] of dirs) {
-    const mx = x + dx, my = y + dy;
-    const tx = x + dx*2, ty = y + dy*2;
-    if (tx >= 0 && tx < 8 && ty >= 0 && ty < 8 &&
-        board[my] && board[my][mx] && (board[my][mx] === 3 || board[my][mx] === 4 ? white : !white) &&
-        board[ty][tx] === 0) {
-      moves.push({ x: tx, y: ty, captures: [{x: mx, y: my}] });
+  const isWhite = piece === 1 || piece === 2;
+  const isKing = piece === 2 || piece === 4;
+  const dirs = isKing 
+    ? [[-1,-1],[-1,1],[1,-1],[1,1]] 
+    : (isWhite ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
+
+  // Yeme mümkünse kaydet (parlatmak için)
+  canEatPieces = [];
+  dirs.forEach(([dy, dx]) => {
+    const nx = x + dx, ny = y + dy;
+    const ex = x + dx * 2, ey = y + dy * 2;
+    if (ex >= 0 && ex < 8 && ey >= 0 && ey < 8 && 
+        board[ny][nx] && board[ny][nx] !== piece && 
+        board[ey][ex] === 0) {
+      canEatPieces.push({ x, y });
     }
-  }
-  if (moves.length > 0) return moves;
+  });
 
   // Normal hareket
-  for (const [dy, dx] of dirs) {
+  dirs.forEach(([dy, dx]) => {
     const nx = x + dx, ny = y + dy;
     if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
-      moves.push({ x: nx, y: ny, captures: [] });
+      moves.push({ x: nx, y: ny });
     }
-  }
+  });
+
   return moves;
 }
 
-function getClickPos(e) {
+// Tıklama
+function handleClick(e) {
+  if (!myTurn) return;
   const rect = canvas.getBoundingClientRect();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
   const sx = Math.floor((clientX - rect.left) / cellSize);
   const sy = Math.floor((clientY - rect.top) / cellSize);
-  return screenToReal(sx, sy);
-}
+  const pos = screenToReal(sx, sy);
 
-["click", "touchend"].forEach(ev => {
-  canvas.addEventListener(ev, e => {
-    if (!myTurn) return;
-    const pos = getClickPos(e);
-    if (pos.x < 0 || pos.x > 7 || pos.y < 0 || pos.y > 7) return;
+  if (pos.x < 0 || pos.x > 7 || pos.y < 0 || pos.y > 7) return;
 
-    const piece = board[pos.y][pos.x];
-    const isMine = (myColor === "white" && (piece === 1 || piece === 2)) ||
-                   (myColor === "black" && (piece === 3 || piece === 4));
+  const piece = board[pos.y][pos.x];
+  const isMine = (myColor === "white" && (piece === 1 || piece === 2)) ||
+                 (myColor === "black" && (piece === 3 || piece === 4));
 
-    if (isMine) {
-      selected = pos;
-    } else if (selected) {
-      const moves = getValidMoves(selected.x, selected.y);
-      const valid = moves.find(m => m.x === pos.x && m.y === pos.y);
-      if (valid) {
-        socket.emit("move", { from: selected, to: pos });
-        selected = null;
-      } else {
-        selected = null;
-      }
+  if (isMine) {
+    selected = pos;
+  } else if (selected) {
+    const moves = getValidMoves(selected.x, selected.y);
+    if (moves.some(m => m.x === pos.x && m.y === pos.y)) {
+      socket.emit("move", { from: selected, to: pos });
+      selected = null;
     } else {
       selected = null;
     }
-    draw();
-  });
-});
+  } else {
+    selected = null;
+  }
+  drawBoard();
+}
+
+canvas.addEventListener("click", handleClick);
+canvas.addEventListener("touchend", handleClick);
 
 // Socket
-socket.on("connect", () => document.getElementById("status").textContent = "Bağlandı!");
-socket.on("searching", () => document.getElementById("searching").classList.remove("hidden"));
-socket.on("roomCreated", code => {
-  document.getElementById("roomCode").textContent = code;
-  document.getElementById("roomCreated").classList.remove("hidden");
+socket.on("connect", () => {
+  document.querySelector(".status-text").textContent = "Bağlandı!";
+  document.querySelector(".status-icon").style.background = "#00ff00";
 });
-socket.on("errorMsg", msg => alert(msg));
 
 socket.on("gameStart", data => {
   board = data.board;
   myColor = data.color;
   myTurn = data.turn === data.color;
   flipped = data.flipped || false;
+  
   document.getElementById("lobby").classList.remove("active");
   document.getElementById("gameScreen").classList.add("active");
-  updateLights();
-  draw();
+  
+  updateTurnDisplay();
+  drawBoard();
 });
 
 socket.on("boardUpdate", data => {
   board = data.board;
   myTurn = data.turn === myColor;
   flipped = data.flipped || false;
-  updateLights();
-  draw();
+  updateTurnDisplay();
+  drawBoard();
 });
 
-function updateLights() {
-  const myActive = myTurn;
-  document.getElementById("myLight").classList.toggle("active", myActive);
-  document.getElementById("oppLight").classList.toggle("active", !myActive);
+function updateTurnDisplay() {
+  const myBox = document.getElementById("myTurnBox");
+  const oppBox = document.getElementById("oppTurnBox");
+  const myText = document.getElementById("myTurnText");
+  const oppText = document.getElementById("oppTurnText");
+
+  if (myTurn) {
+    myBox.classList.add("active");
+    oppBox.classList.remove("active");
+    myText.textContent = "SENİN SIRAN";
+    oppText.textContent = "RAKİP BEKLİYOR";
+  } else {
+    myBox.classList.remove("active");
+    oppBox.classList.add("active");
+    myText.textContent = "SEN BEKLİYORSUN";
+    oppText.textContent = "RAKİBİN SIRASI";
+  }
 }
 
 // Butonlar
