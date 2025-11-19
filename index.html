@@ -1,51 +1,90 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Şaşki Online</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Şaşki Online</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        /* SADECE ZAMANLAYICI VE OYUNCU İSİMLERİ İÇİN EK STİLLER */
+        
+        .header {
+            /* Zamanlayıcılar için yeterli alan sağlamak amacıyla genişliği artır */
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .p {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        .timer-display {
+            /* Zamanlayıcıyı daha belirgin yap */
+            margin-left: 10px;
+            margin-right: 10px;
+            font-weight: 900;
+            color: #f44336; /* Kırmızı renk */
+            min-width: 40px; /* Sabit genişlik */
+            text-align: center;
+        }
+        
+        /* Rakip tarafındaki (p2) göstergelerin sırasını ayarlamak için */
+        #p2 {
+            flex-direction: row-reverse; /* Işık ve Zamanlayıcının sağa geçmesi için */
+        }
+    </style>
 </head>
 <body>
 
 <div id="lobby" class="screen active">
-  <h1 class="title">ŞAŞKİ ONLINE</h1>
-  <div class="buttons">
-    <button id="ranked" class="btn cyan">Dereceli Maç</button>
-    <button id="create" class="btn pink">Arkadaşla Oyna</button>
-    <button id="joinToggle" class="btn green">Oda Kodu ile Katıl</button>
-  </div>
+  <h1 class="title">ŞAŞKİ ONLINE</h1>
+  <div class="buttons">
+    <button id="ranked" class="btn cyan">Dereceli Maç</button>
+    <button id="create" class="btn pink">Arkadaşla Oyna</button>
+    <button id="joinToggle" class="btn green">Oda Kodu ile Katıl</button>
+  </div>
 
-  <div id="joinBox" class="hidden">
-    <input id="codeInput" maxlength="4" placeholder="0000">
-    <button id="joinBtn" class="btn purple">Katıl</button>
-  </div>
+  <div id="joinBox" class="hidden">
+    <input id="codeInput" maxlength="4" placeholder="0000">
+    <button id="joinBtn" class="btn purple">Katıl</button>
+  </div>
 
-  <div id="roomInfo" class="hidden">
-    <p>Oda Kodu: <strong id="roomCode">0000</strong></p>
-    <button id="copyBtn" class="btn yellow">Kopyala</button>
-    <p>Rakip bekleniyor...</p>
-  </div>
+  <div id="roomInfo" class="hidden">
+    <p>Oda Kodu: <strong id="roomCode">0000</strong></p>
+    <button id="copyBtn" class="btn yellow">Kopyala</button>
+    <p>Rakip bekleniyor...</p>
+  </div>
 
-  <div id="searching" class="hidden">
-    <div class="loader"></div>
-    <p>Eşleşme aranıyor...</p>
-    <button id="cancel" class="btn red">İptal</button>
-  </div>
+  <div id="searching" class="hidden">
+    <div class="loader"></div>
+    <p>Eşleşme aranıyor...</p>
+    <button id="cancel" class="btn red">İptal</button>
+  </div>
 
-  <div id="status">Sunucuya bağlanılıyor...</div>
+  <div id="status">Sunucuya bağlanılıyor...</div>
 </div>
 
 <div id="game" class="screen">
-  <div class="header">
-    <div class="p" id="p1"><div class="light" id="l1"></div> Sen</div>
-    <div class="vs">VS</div>
-    <div class="p" id="p2">Rakip <div class="light" id="l2"></div></div>
-  </div>
-  <canvas id="board"></canvas>
-  <button id="leave" class="btn red">Çık</button>
+  <div class="header">
+            <div class="p" id="p1">
+            <div class="light" id="l1"></div> 
+            <span id="player1Name">Sen (Beyaz)</span> 
+            <span id="timer1" class="timer-display">0:20</span> </div>
+    <div class="vs">VS</div>
+            <div class="p" id="p2">
+            <span id="timer2" class="timer-display">0:20</span> <span id="player2Name">Rakip (Siyah)</span> 
+            <div class="light" id="l2"></div>
+        </div>
+  </div>
+  <canvas id="board"></canvas>
+  <button id="leave" class="btn red">Çık</button>
 </div>
 
 <script src="main.js"></script>
