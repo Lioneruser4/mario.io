@@ -3,51 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Domino IO - Online Multiplayer</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Online Dama Oyunu</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="app" class="container">
-        <div id="status-display">Bağlanıyor...</div>
-
-        <header>
-            <h1>✨ Domino IO ✨</h1>
-            <p>Gerçek zamanlı çok oyunculu Domino oyunu</p>
-        </header>
-
-        <section id="lobby-view">
-            <h2>Lobi</h2>
-            <div class="button-group">
-                <button id="btn-matchmaking" class="animated-btn competitive">
-                    🏆 Dereceli Oyna
-                </button>
+    <div class="app-container">
+        <!-- Lobby Screen -->
+        <div id="lobby" class="screen active">
+            <div class="lobby-container">
+                <h1 class="title animate__animated animate__fadeInDown">ONLINE DAMA</h1>
+                <div class="game-modes">
+                    <button id="rankedBtn" class="game-mode-btn animate__animated animate__fadeInUp">
+                        <span class="btn-icon">🏆</span>
+                        <span class="btn-text">Dereceli Oyna</span>
+                    </button>
+                    
+                    <button id="friendBtn" class="game-mode-btn animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
+                        <span class="btn-icon">👥</span>
+                        <span class="btn-text">Arkadaşla Oyna</span>
+                    </button>
+                    
+                    <div id="friendSection" class="hidden">
+                        <div class="room-code-container">
+                            <input type="text" id="roomCode" placeholder="Oda Kodu" maxlength="4">
+                            <button id="copyCodeBtn" class="icon-btn" title="Kopyala">📋</button>
+                        </div>
+                        <button id="createRoomBtn" class="secondary-btn">Oda Oluştur</button>
+                        
+                        <div class="divider">veya</div>
+                        
+                        <div class="room-code-container">
+                            <input type="text" id="joinCode" placeholder="Oda Kodunu Gir" maxlength="4">
+                        </div>
+                        <button id="joinRoomBtn" class="secondary-btn">Odaya Katıl</button>
+                    </div>
+                    
+                    <button id="backBtn" class="back-btn hidden">← Geri</button>
+                </div>
                 
-                <button id="btn-create-room" class="animated-btn private">
-                    🤝 Arkadaşla Oyna (Oda Kur)
-                </button>
-            </div>
-
-            <div id="room-join-section" class="input-area">
-                <input type="text" id="input-room-code" placeholder="4 haneli oda kodunu yaz" maxlength="4">
-                <button id="btn-join-room" class="animated-btn join">
-                    🔑 Bağlan
-                </button>
-            </div>
-        </section>
-
-        <section id="game-view" class="hidden">
-            <h2 id="room-code-display">Oda:</h2>
-            <div id="game-board">
+                <div id="searchingContainer" class="hidden">
+                    <div class="searching-animation"></div>
+                    <p>Rakip aranıyor...</p>
+                    <button id="cancelSearchBtn" class="secondary-btn">İptal</button>
                 </div>
-            <div id="player-hand">
-                </div>
-            <div id="info-panel">
-                <p id="turn-indicator">Sıra: Bekleniyor...</p>
             </div>
-        </section>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game" class="screen">
+            <div class="game-header">
+                <div class="player-info" id="player1Info">
+                    <div class="player-avatar">👤</div>
+                    <span class="player-name" id="player1Name">Sen</span>
+                    <div class="player-status" id="player1Status"></div>
+                </div>
+                
+                <div class="game-status" id="gameStatus">Sıra Sende</div>
+                
+                <div class="player-info" id="player2Info">
+                    <div class="player-avatar">👤</div>
+                    <span class="player-name" id="player2Name">Rakip</span>
+                    <div class="player-status" id="player2Status"></div>
+                </div>
+            </div>
+            
+            <div class="game-board-container">
+                <div id="gameBoard" class="game-board"></div>
+                <div id="moveHints" class="move-hints"></div>
+            </div>
+            
+            <div class="game-controls">
+                <button id="leaveGameBtn" class="secondary-btn">Oyundan Ayrıl</button>
+            </div>
+        </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="main.js"></script>
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="game.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
