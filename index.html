@@ -3,71 +3,117 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Şaşki Online - Türk Daması</title>
+  <title>ŞAŞKİ ONLINE - Türk Daması</title>
+  <meta name="description" content="Gerçek Türk Daması! Yeme yok, herkes kendini altta görür, sıra kutusu parlar!">
   <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@300;500;700&family=Exo+2:wght@400;600;800&display=swap" rel="stylesheet">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-track { background: #0f0c29; }
+    ::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 10px; }
+    ::selection { background: #ff00ff; color: #000; }
+  </style>
 </head>
 <body>
-  <!-- LOBİ -->
+
+  <!-- LOBİ EKRANI -->
   <div id="lobby" class="screen active">
-    <div class="lobby-container">
-      <h1 class="title neon">ŞAŞKİ ONLINE</h1>
-      <p class="tagline">Türk Daması • Gerçek Kurallar • Canlı Rakip</p>
+    <div class="lobby-wrapper">
+      <div class="logo-area">
+        <h1 class="main-title">ŞAŞKİ<br><span class="online-text">ONLINE</span></h1>
+        <p class="subtitle-text">Türk Daması • Gerçek Kurallar • Canlı Rakip</p>
+      </div>
 
-      <div class="buttons">
-        <button id="rankedBtn" class="btn primary glow">
-          <span>Dereceli Maç</span>
+      <div class="menu-buttons">
+        <button id="rankedBtn" class="menu-btn ranked">
+          <span class="icon">TROPHY</span>
+          <span class="text">Dereceli Maç Bul</span>
+          <span class="glow"></span>
         </button>
-        <button id="createRoomBtn" class="btn secondary glow">
-          <span>Arkadaşla Oyna</span>
+
+        <button id="createRoomBtn" class="menu-btn create">
+          <span class="icon">FRIENDS</span>
+          <span class="text">Arkadaşla Oyna</span>
+          <span class="glow"></span>
         </button>
-        <button id="joinToggle" class="btn accent glow">
-          <span>Oda Kodu ile Katıl</span>
+
+        <button id="joinToggle" class="menu-btn join">
+          <span class="icon">KEY</span>
+          <span class="text">Oda Kodu ile Katıl</span>
+          <span class="glow"></span>
         </button>
       </div>
 
-      <div id="joinSection" class="input-section hidden">
-        <input type="text" id="roomInput" maxlength="4" placeholder="4 haneli kod gir">
-        <button id="joinBtn" class="btn small glow">Katıl</button>
+      <!-- ODA GİRİŞ -->
+      <div id="joinSection" class="join-area hidden">
+        <input type="text" id="roomInput" maxlength="4" placeholder="••••" class="code-input">
+        <button id="joinBtn" class="action-btn join-now">KATIL</button>
       </div>
 
-      <div id="roomCreated" class="room-box hidden">
-        <h3>Oda Oluşturuldu!</h3>
-        <div class="code-box">
+      <!-- ODA OLUŞTURULDU -->
+      <div id="roomCreated" class="room-info hidden">
+        <h2 class="room-title">ODA OLUŞTURULDU!</h2>
+        <div class="code-display">
           <span id="roomCode">0000</span>
-          <button id="copyBtn" class="btn small yellow">Kopyala</button>
         </div>
-        <p class="waiting">Rakip bekleniyor...</p>
+        <button id="copyBtn" class="action-btn copy">Kodu Kopyala</button>
+        <p class="waiting-text">Rakip bekleniyor... <span class="dots">...</span></p>
       </div>
 
-      <div id="searching" class="searching-box hidden">
-        <div class="spinner"></div>
-        <p>Eşleşme aranıyor...</p>
-        <button id="cancelBtn" class="btn small red">İptal Et</button>
+      <!-- EŞLEŞME ARANIYOR -->
+      <div id="searching" class="searching-area hidden">
+        <div class="search-spinner"></div>
+        <h2>EŞLEŞME ARANIYOR</h2>
+        <p class="search-text">Rakip bulunuyor<span class="dots">...</span></p>
+        <button id="cancelBtn" class="action-btn cancel">İptal Et</button>
       </div>
 
-      <div id="status" class="status-bar">Sunucuya bağlanılıyor...</div>
+      <div id="status" class="connection-status">
+        <span class="status-icon"></span>
+        <span class="status-text">Sunucuya bağlanılıyor...</span>
+      </div>
     </div>
   </div>
 
   <!-- OYUN EKRANI -->
   <div id="gameScreen" class="screen">
-    <div class="game-header">
-      <div class="player-info">
-        <div class="turn-light" id="myLight"></div>
-        <span>Sen</span>
+    <div class="game-container">
+
+      <!-- ÜST BİLGİ -->
+      <div class="game-header">
+        <div class="player-box you">
+          <div class="turn-indicator" id="myTurnBox">
+            <span class="turn-text" id="myTurnText">SENİN SIRAN</span>
+          </div>
+          <span class="player-name">SEN</span>
+        </div>
+
+        <div class="vs-area">
+          <span class="vs-text">VS</span>
+        </div>
+
+        <div class="player-box opponent">
+          <span class="player-name">RAKİP</span>
+          <div class="turn-indicator" id="oppTurnBox">
+            <span class="turn-text" id="oppTurnText">RAKİBİN SIRASI</span>
+          </div>
+        </div>
       </div>
-      <div class="vs-text">VS</div>
-      <div class="player-info">
-        <span>Rakip</span>
-        <div class="turn-light" id="oppLight"></div>
+
+      <!-- TAHTA -->
+      <div class="board-container">
+        <canvas id="board" width="800" height="800"></canvas>
       </div>
+
+      <!-- ÇIKIŞ BUTONU -->
+      <button id="leaveGame" class="exit-btn">
+        <span>LOBİYE DÖN</span>
+      </button>
     </div>
-
-    <canvas id="board" width="800" height="800"></canvas>
-
-    <button id="leaveGame" class="btn small red leave-btn">Lobiye Dön</button>
   </div>
 
   <script src="main.js"></script>
