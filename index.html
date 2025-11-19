@@ -1,62 +1,64 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Şaşki Online</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
   <div id="lobby" class="screen active">
-    <div class="lobby-content">
-      <h1 class="title">ŞAŞKİ ONLINE</h1>
+    <div class="content">
+      <h1 class="title">⚔️ ŞAŞKİ ONLINE</h1>
       <p class="subtitle">Türk Daması</p>
 
-      <div class="btn-group">
-        <button id="rankedBtn" class="btn neon-btn cyan">Dereceli Maç</button>
-        <button id="createRoomBtn" class="btn neon-btn pink">Arkadaşla Oyna</button>
-        <button id="toggleJoin" class="btn neon-btn green">Oda Kodu ile Katıl</button>
+      <div class="buttons">
+        <button id="rankedBtn" class="btn cyan">🎖️ Dereceli Maç</button>
+        <button id="createBtn" class="btn pink">👥 Arkadaşla Oyna</button>
+        <button id="joinToggle" class="btn green">🔑 Oda Kodu ile Katıl</button>
       </div>
 
-      <div id="joinSection" class="input-group" style="display:none;">
-        <input type="text" id="roomInput" placeholder="4 haneli kod" maxlength="4"/>
-        <button id="joinBtn" class="btn neon-btn purple">Katıl</button>
+      <div id="joinForm" class="form hidden">
+        <input type="text" id="roomCode" placeholder="0000" maxlength="4">
+        <button id="joinBtn" class="btn purple">🚀 Katıl</button>
       </div>
 
-      <div id="roomDisplay" style="display:none;">
-        <p>Oda Kodu: <strong id="roomCode">0000</strong></p>
-        <button id="copyBtn" class="btn neon-btn yellow">Kopyala</button>
-        <p class="waiting">Rakip bekleniyor...</p>
+      <div id="roomCreated" class="room-info hidden">
+        <h3>✅ Oda Oluşturuldu!</h3>
+        <div class="code-display">
+          <span id="displayCode">0000</span>
+          <button id="copyBtn" class="btn yellow">📋 Kopyala</button>
+        </div>
+        <p>Rakibini bekliyoruz...</p>
       </div>
 
-      <div id="searching" style="display:none;">
-        <div class="loader"></div>
-        <p>Eşleşme aranıyor...</p>
-        <button id="cancelBtn" class="btn neon-btn red">İptal</button>
+      <div id="searching" class="searching hidden">
+        <div class="spinner"></div>
+        <p>Eşleşme arıyoruz...</p>
+        <button id="cancelBtn" class="btn red">❌ İptal</button>
       </div>
 
-      <div id="status">Sunucuya bağlanılıyor...</div>
+      <div id="status" class="status">Sunucuya bağlanılıyor...</div>
     </div>
   </div>
 
-  <div id="game" class="screen">
-    <div class="header">
-      <div class="player" id="p1">
-        <div class="turn-light" id="light1"></div>
-        <span>Sen (Alt)</span>
+  <div id="gameScreen" class="screen hidden">
+    <div class="game-header">
+      <div class="player-info" id="player1">
+        <div class="turn-indicator" id="turn1"></div>
+        <span>Sen</span>
       </div>
       <div class="vs">VS</div>
-      <div class="player" id="p2">
-        <div class="turn-light" id="light2"></div>
-        <span>Rakip (Üst)</span>
+      <div class="player-info" id="player2">
+        <span>Rakip</span>
+        <div class="turn-indicator" id="turn2"></div>
       </div>
     </div>
-
-    <canvas id="board" width="800" height="800"></canvas>
-
-    <button id="leaveGame" class="btn neon-btn red">Lobiye Dön</button>
+    
+    <canvas id="gameBoard"></canvas>
+    <button id="leaveBtn" class="btn red">🏠 Lobiye Dön</button>
   </div>
 
   <script src="main.js"></script>
