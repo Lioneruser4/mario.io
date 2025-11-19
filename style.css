@@ -6,18 +6,14 @@
     --danger-color: #ff3333;
     --bg-color: #111;
     --text-color: #eee;
-    --board-light: #f0c080; /* Açık ahşap */
-    --board-dark: #804000; /* Koyu ahşap */
+    --board-light: #f0c080; 
+    --board-dark: #804000; 
     --red-piece: #ff4444;
     --black-piece: #333333;
 }
 
 /* Genel ve Mobil Ayarlar */
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
     background-color: var(--bg-color);
@@ -31,7 +27,7 @@ body {
 
 #app-container {
     width: 100%;
-    max-width: 600px; /* Mobil uyumluluk için max genişlik */
+    max-width: 600px; 
     padding: 10px;
 }
 
@@ -43,17 +39,10 @@ body {
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
-.hidden {
-    display: none !important;
-}
+.hidden { display: none !important; }
+.active { display: flex; flex-direction: column; gap: 15px; }
 
-.active {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-/* --- TİTLE VE BAĞLANTI DURUMU --- */
+/* TİTLE VE BAĞLANTI DURUMU */
 .neon-title {
     text-align: center;
     font-size: 2.5em;
@@ -62,110 +51,34 @@ body {
     text-shadow: 0 0 7px var(--primary-color), 0 0 10px var(--primary-color), 0 0 21px var(--primary-color);
     animation: flicker 1.5s infinite alternate;
 }
+.status-indicator { padding: 8px; text-align: center; border-radius: 5px; font-weight: bold; transition: all 0.5s; }
+.status-indicator.waiting { background: #444; color: #aaa; }
+.status-indicator.success { background: var(--accent-color); box-shadow: 0 0 5px var(--accent-color); color: var(--bg-color); }
 
-.status-indicator {
-    padding: 8px;
-    text-align: center;
-    border-radius: 5px;
-    font-weight: bold;
-    transition: all 0.5s;
-}
-
-.status-indicator.waiting {
-    background: #444;
-    color: #aaa;
-}
-.status-indicator.success {
-    background: var(--accent-color);
-    box-shadow: 0 0 5px var(--accent-color);
-    color: var(--bg-color);
-}
-
-/* --- BUTONLAR VE GLOW EFEKTİ --- */
+/* BUTONLAR VE GLOW EFEKTİ */
 .lobby-buttons button, .join-area button {
-    width: 100%;
-    padding: 15px;
-    margin-bottom: 10px;
-    font-size: 1.1em;
-    font-weight: bold;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 100%; padding: 15px; margin-bottom: 10px; font-size: 1.1em;
+    font-weight: bold; border: none; border-radius: 8px; cursor: pointer;
+    transition: all 0.3s ease; text-transform: uppercase; display: flex;
+    align-items: center; justify-content: center;
 }
+.glowing-btn:hover { transform: translateY(-2px); }
+.glowing-btn.primary-btn { background: var(--primary-color); box-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color); color: var(--bg-color); }
+.glowing-btn.secondary-btn { background: var(--secondary-color); box-shadow: 0 0 8px var(--secondary-color); color: var(--bg-color); }
+.glowing-btn.accent-btn { background: var(--accent-color); box-shadow: 0 0 8px var(--accent-color); color: var(--bg-color); }
+.glowing-btn.danger-btn { background: var(--danger-color); box-shadow: 0 0 8px var(--danger-color); color: white; }
+.icon { margin-right: 10px; animation: pulse 1s infinite alternate; }
 
-.lobby-buttons {
-    padding-top: 10px;
-}
-
-.glowing-btn:hover {
-    transform: translateY(-2px);
-}
-
-.glowing-btn.primary-btn {
-    background: var(--primary-color);
-    box-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color);
-    color: var(--bg-color);
-}
-
-.glowing-btn.secondary-btn {
-    background: var(--secondary-color);
-    box-shadow: 0 0 8px var(--secondary-color);
-    color: var(--bg-color);
-}
-
-.glowing-btn.accent-btn {
-    background: var(--accent-color);
-    box-shadow: 0 0 8px var(--accent-color);
-    color: var(--bg-color);
-}
-
-.glowing-btn.danger-btn {
-    background: var(--danger-color);
-    box-shadow: 0 0 8px var(--danger-color);
-    color: white;
-}
-
-.glowing-btn:active {
-    opacity: 0.8;
-}
-
-.icon {
-    margin-right: 10px;
-    animation: pulse 1s infinite alternate;
-}
-
-/* KOD GİRİŞ ALANI */
-.join-area {
-    display: flex;
-    gap: 10px;
-}
-
+.join-area { display: flex; gap: 10px; }
 .join-area input {
-    flex-grow: 1;
-    padding: 10px;
-    border-radius: 8px;
-    border: 2px solid var(--secondary-color);
-    background: #2a2a2a;
-    color: var(--text-color);
-    font-size: 1em;
-    text-align: center;
+    flex-grow: 1; padding: 10px; border-radius: 8px; border: 2px solid var(--secondary-color);
+    background: #2a2a2a; color: var(--text-color); font-size: 1em; text-align: center;
 }
 
-.join-area input:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 5px var(--primary-color);
-}
-
-/* --- OYUN ALANI (Dama Tahtası) --- */
+/* OYUN ALANI (Dama Tahtası) */
 #board-container {
     width: 100%;
-    padding-top: 100%; /* Kare görünüm için */
+    padding-top: 100%; 
     position: relative;
     margin: 20px auto;
     max-width: 400px;
@@ -193,61 +106,35 @@ body {
     transition: background-color 0.2s;
 }
 
-.light {
-    background-color: var(--board-light);
-}
-
-.dark {
-    background-color: var(--board-dark);
-}
+.light { background-color: var(--board-light); }
+.dark { background-color: var(--board-dark); }
 
 .highlight-move {
     background-color: var(--accent-color) !important;
     cursor: pointer;
-    /* Hafif bir yanıp sönme efekti */
     animation: highlightPulse 0.8s infinite alternate; 
 }
 
 /* Taşlar */
 .piece {
-    width: 80%;
-    height: 80%;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 0.8em;
-    font-weight: bold;
-    cursor: pointer;
+    width: 80%; height: 80%; border-radius: 50%;
+    display: flex; justify-content: center; align-items: center;
+    font-size: 0.8em; font-weight: bold; cursor: pointer;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6);
     transition: transform 0.2s, box-shadow 0.3s;
 }
 
-.piece-red {
-    background-color: var(--red-piece);
-    border: 3px solid #f00;
-}
-
-.piece-black {
-    background-color: var(--black-piece);
-    border: 3px solid #000;
-}
+.piece-red { background-color: var(--red-piece); border: 3px solid #f00; }
+.piece-black { background-color: var(--black-piece); border: 3px solid #000; }
 
 .selected-piece {
     transform: scale(1.1) translateY(-5px);
     box-shadow: 0 0 15px white, 0 8px 10px rgba(0, 0, 0, 0.8);
     z-index: 10;
 }
+.piece.king { font-size: 1.5em; line-height: 1; } /* Taç (King) */
 
 /* SIRA GÖSTERGESİ (Işıklı) */
-#turn-indicator {
-    text-align: center;
-    padding: 10px;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    font-size: 1.2em;
-}
-
 .turn-red #current-player-color {
     color: var(--red-piece);
     text-shadow: 0 0 5px var(--red-piece), 0 0 10px var(--red-piece);
@@ -261,27 +148,8 @@ body {
 }
 
 
-/* --- ANİMASYONLAR --- */
-@keyframes flicker {
-    0%, 18%, 22%, 25%, 53%, 57%, 100% {
-        text-shadow: 0 0 4px var(--primary-color), 0 0 11px var(--primary-color), 0 0 19px var(--primary-color), 0 0 40px var(--primary-color);
-    }
-    20%, 24%, 55% {
-        text-shadow: none;
-    }
-}
-
-@keyframes pulse {
-    from { transform: scale(1); }
-    to { transform: scale(1.05); }
-}
-
-@keyframes highlightPulse {
-    from { box-shadow: 0 0 5px var(--accent-color); }
-    to { box-shadow: 0 0 15px var(--accent-color); }
-}
-
-@keyframes glowingTurn {
-    from { opacity: 0.7; }
-    to { opacity: 1; }
-}
+/* ANİMASYONLAR */
+@keyframes flicker { 0%, 18%, 22%, 25%, 53%, 57%, 100% { text-shadow: 0 0 4px var(--primary-color), 0 0 11px var(--primary-color), 0 0 19px var(--primary-color), 0 0 40px var(--primary-color); } 20%, 24%, 55% { text-shadow: none; } }
+@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+@keyframes highlightPulse { from { box-shadow: 0 0 5px var(--accent-color); } to { box-shadow: 0 0 15px var(--accent-color); } }
+@keyframes glowingTurn { from { opacity: 0.7; } to { opacity: 1; } }
