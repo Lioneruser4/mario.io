@@ -1,11 +1,12 @@
 {
-  "name": "dama-online-server",
+  "name": "render-express-mario",
   "version": "1.0.0",
-  "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  },
+  "description": "Simple Express server for Render.",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
   }
 }
