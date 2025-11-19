@@ -1,8 +1,9 @@
 const socket = io("https://mario-io-1.onrender.com", { transports: ["websocket"] });
 
 let board = null, selected = null, myColor = null, myTurn = false, animating = false;
-let gameTimer = 0; // Kalan saniye
+let gameTimer = 20; // Başlangıç süresi: 20 saniye
 let timerInterval = null; // Sayacı tutar
+
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 let cell = 80;
@@ -10,11 +11,7 @@ let flashTimer = 0; // Animasyon için zamanlayıcı
 
 // DOM Elementleri
 const statusEl = document.getElementById("status");
-const timer1El = document.getElementById("timer1"); // Beyaz zamanlayıcı (p1)
-const timer2El = document.getElementById("timer2"); // Siyah zamanlayıcı (p2)
-const p1NameEl = document.getElementById("player1Name"); // Yeni eklendi: HTML'de player1Name, player2Name'i güncellemeyi unutmayın!
-const p2NameEl = document.getElementById("player2Name");
-
+const timerEl = document.getElementById("centralTimer"); // Yeni merkezi zamanlayıcı
 
 // --- ARAYÜZ VE ZAMANLAYICI YÖNETİMİ ---
 
@@ -31,13 +28,14 @@ function startTimer(seconds) {
     gameTimer = seconds;
     updateTimerDisplay();
 
+    timerEl.classList.remove("hidden");
+    
     timerInterval = setInterval(() => {
         gameTimer--;
         updateTimerDisplay();
 
         if (gameTimer <= 0) {
             clearInterval(timerInterval);
-            // Zaman bittiğinde sunucuya bildir. Sunucu AFK kuralını uygulayacaktır.
             socket.emit("timeout"); 
             statusEl.textContent = "Süreniz Bitti! Rakibiniz bekleniyor...";
         }
@@ -49,14 +47,8 @@ function updateTimerDisplay() {
     const seconds = gameTimer % 60;
     const timeStr = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     
-    // Sıra kimdeyse o zamanlayıcıyı güncelle
-    if (myTurn) {
-        if (myColor === "white") timer1El.textContent = timeStr;
-        if (myColor === "black") timer2El.textContent = timeStr;
-    } else {
-        if (myColor === "white") timer2El.textContent = timeStr;
-        if (myColor === "black") timer1El.textContent = timeStr;
-    }
+    timerEl.textContent = timeStr;
+    timerEl.style.color = gameTimer <= 5 ? "red" : "#f44336";
 }
 
 
@@ -89,8 +81,10 @@ function draw() {
 
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
-      // Kareler
-      ctx.fillStyle = (x + y) % 2 ? "#b58863" : "#f0d9b5";
+      // Kareler: Sadece siyah kareler oynanabilir.
+      const isPlayableSquare = (x + y) % 2 === 1; // Siyah kareler için (Çapraz Dama kuralı)
+      
+      ctx.fillStyle = isPlayableSquare ? "#b58863" : "#f0d9b5";
       ctx.fillRect(x * cell, y * cell, cell, cell);
 
       // --- HAMLE İPUCU VURGULAMASI (Kutu/Kare olarak) ---
@@ -163,11 +157,10 @@ function draw() {
     requestAnimationFrame(draw);
   }
 }
-// İlk animasyon döngüsünü başlat
 requestAnimationFrame(draw);
 
 
-// --- OYUN MANTIK FONKSİYONLARI ---
+// --- OYUN MANTIK FONKSİYONLARI (Çapraz Dama) ---
 
 /**
  * @param {number} sx - Başlangıç X koordinatı (sütun)
@@ -183,37 +176,37 @@ function getBestMoves(sx, sy) {
   const isKing = piece === 2 || piece === 4;
   const myPieceColor = white ? 1 : 3;
   
-  // Türk Daması'nda normal hareket yönleri (King değilse ileri/yan, King ise tüm yönler)
+  // Çapraz Dama (İngiliz/Uluslararası) hareket yönleri
   const normalDirs = isKing ? 
-    [[0,-1], [0,1], [-1,0], [1,0]] : // King: Düz ve yan
-    (white ? [[0,-1], [-1,0], [1,0]] : [[0,1], [-1,0], [1,0]]); // Er: İleri ve yan
+    [[-1,-1], [-1,1], [1,-1], [1,1]] : // King: Tüm çapraz yönler
+    (white ? [[-1,-1], [-1,1]] : [[1,-1], [1,1]]); // Er: Sadece ileri çapraz
 
-  // Yeme yönleri (tüm 4 ana yön)
-  const captureDirs = [[0,-1], [0,1], [-1,0], [1,0]]; 
+  // Yeme yönleri (tüm 4 çapraz yön)
+  const captureDirs = [[-1,-1], [-1,1], [1,-1], [1,1]]; 
   
   // --- YEME ZORUNLULUĞU KONTROLÜ (Tüm tahta için) ---
   let mandatoryCaptureAvailable = false;
   const allCapturesForSelectedPiece = [];
   
+  // Tahtadaki tüm kendi taşlarımızı tarıyoruz
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const p = board[r][c];
-      // Yalnızca kendi renk taşlarımızı kontrol ediyoruz
       if (p && (p === myPieceColor || p === myPieceColor + 1)) {
         const pieceIsKing = p === 2 || p === 4;
         
-        captureDirs.forEach(([dx, dy]) => { // dx: X değişimi (sütun), dy: Y değişimi (satır)
-          // Yeme, taştan 2 birim uzakta boş bir kareye yapılır.
-          // Aradaki rakip taş atlanır.
-          
-          let potentialCaptures = []; // Yeme zinciri için kullanılabilir (basitleştirilmiş versiyon)
-          
+        captureDirs.forEach(([dy, dx]) => { // dy: Y değişimi (satır), dx: X değişimi (sütun)
           let targetY = r + 2 * dy;
           let targetX = c + 2 * dx;
           let capturedY = r + dy;
           let capturedX = c + dx;
 
-          // Sadece bir birim ötesinde rakip taş var mı kontrol et
+          const isForwardCapture = (myPieceColor === 1 && dy < 0) || (myPieceColor === 3 && dy > 0);
+
+          // King değilse, geriye çapraz yiyemez.
+          if (!pieceIsKing && !isForwardCapture) return;
+
+          // Aradaki rakip taşı kontrol et
           if (capturedX >= 0 && capturedX < 8 && capturedY >= 0 && capturedY < 8) {
               const capturedPiece = board[capturedY][capturedX];
               const isOpponent = capturedPiece !== 0 && (capturedPiece === (myPieceColor === 1 ? 3 : 1) || capturedPiece === (myPieceColor === 1 ? 4 : 2));
@@ -222,9 +215,6 @@ function getBestMoves(sx, sy) {
               const isValidTarget = targetX >= 0 && targetX < 8 && targetY >= 0 && targetY < 8 && board[targetY][targetX] === 0;
 
               if (isOpponent && isValidTarget) {
-                  // King olmayan taşlar için geriye yeme kısıtlaması (Türk Daması'nda geçerli değil, sadece çapraz damada geçerli olabilir)
-                  // Türk Daması'nda er de geriye yiyebilir, bu yüzden kısıtlama kaldırıldı.
-                  
                   mandatoryCaptureAvailable = true;
                   
                   if (r === sy && c === sx) { // Bu, seçili taşın yakalaması
@@ -246,23 +236,13 @@ function getBestMoves(sx, sy) {
     return allCapturesForSelectedPiece;
   }
   
-  // Yeme yoksa normal hareket
-  normalDirs.forEach(([dx, dy]) => {
+  // Yeme yoksa normal hareket (Sadece tek bir adım çapraz)
+  normalDirs.forEach(([dy, dx]) => {
     let nx = sx + dx, ny = sy + dy;
     
-    // Er taşı sadece bir adım ilerler
-    if (!isKing) {
-        if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
-            moves.push({ x: nx, y: ny, captures: [] });
-        }
-        return;
-    }
-    
-    // King (Dama) taşı boş kareler boyunca hareket eder
-    while (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
+    // Çapraz Dama'da tüm taşlar tek adım hareket eder (Dama, çoklu boş kare atlayamaz)
+    if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
         moves.push({ x: nx, y: ny, captures: [] });
-        nx += dx;
-        ny += dy;
     }
   });
   
@@ -296,7 +276,7 @@ function getPos(e) {
     const mandatoryCaptures = [];
     const myPieceColor = myColor === "white" ? 1 : 3;
 
-    // Yeme zorunluluğu olan tüm taşları bul (tekrar hesaplama, performans için optimize edilebilir)
+    // Yeme zorunluluğu olan tüm taşları bul
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const p = board[r][c];
@@ -315,12 +295,12 @@ function getPos(e) {
       if (captureIsMandatory) {
           const canCapture = mandatoryCaptures.some(p => p.x === pos.x && p.y === pos.y);
           if (canCapture) {
-              selected = pos; // Zorunluluk var ve bu taş yiyebilir -> Seç
+              selected = pos; 
           } else {
-              selected = null; // Zorunluluk var ama bu taş yiyemez -> Seçime izin verme
+              selected = null; 
           }
       } else {
-        selected = pos; // Zorunluluk yok -> Seç
+        selected = pos; 
       }
       
     } else if (selected) {
@@ -332,7 +312,7 @@ function getPos(e) {
         selected = null;
         clearInterval(timerInterval); // Hamle yapıldı, zamanlayıcıyı durdur
       } else {
-        selected = null; // Geçersiz hamle
+        selected = null; 
       }
     } else {
       selected = null;
@@ -363,10 +343,6 @@ socket.on("gameStart", data => {
   document.getElementById("lobby").classList.remove("active");
   document.getElementById("game").classList.add("active");
   
-  // Zamanlayıcıları sıfırla ve başlat
-  timer1El.textContent = "0:20";
-  timer2El.textContent = "0:20";
-
   updateStatus(data.turn);
   requestAnimationFrame(draw); 
 });
@@ -394,6 +370,7 @@ function updateStatus(currentTurn) {
   } else {
     statusEl.textContent = "SIRA ONDA. Bekleniyor...";
     clearInterval(timerInterval); // Sayacı durdur
+    timerEl.classList.add("hidden"); // Zamanlayıcıyı gizle
   }
 }
 
