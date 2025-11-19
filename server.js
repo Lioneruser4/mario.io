@@ -18,50 +18,21 @@ function createBoard() {
   return b;
 }
 
-function getValidMoves(board, x, y, color) {
-  const piece = board[y][x];
-  if (!piece || (piece === 1 || piece === 2 ? color !== 'white' : color !== 'black')) return [];
-
-  const isKing = piece === 2 || piece === 4;
-  const moves = [];
-  
-  // Normal hareketler
-  const directions = isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : 
-    (color === 'white' ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
-  
-  directions.forEach(([dy, dx]) => {
-    const nx = x + dx, ny = y + dy;
-    if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
-      moves.push({ x: nx, y: ny, captures: [] });
-    }
-  });
-
-  // Yeme hareketleri (zorunlu)
-  const captureDirs = isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : directions;
-  captureDirs.forEach(([dy, dx]) => {
-    const mx = x + dx, my = y + dy; // Orta (rakip)
-    const nx = x + dx * 2, ny = y + dy * 2; // Hedef
-    
-    if (mx >= 0 && mx < 8 && my >= 0 && my < 8 &&
-        nx >= 0 && nx < 8 && ny >= 0 && ny < 8 &&
-        board[my][mx] !== 0 && board[my][mx] !== piece &&
-        board[ny][nx] === 0) {
-      moves.push({ x: nx, y: ny, captures: [{x: mx, y: my}] });
-    }
-  });
-
-  return moves;
+function flipBoard(b) {
+  const f = Array(8).fill().map(() => Array(8).fill(0));
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) f[7-y][7-x] = b[y][x];
+  return f;
 }
 
 io.on("connection", socket => {
   socket.on("findMatch", () => {
     if (queue.length > 0) {
-      const opponent = queue.shift();
-      const roomId = "ranked_" + Date.now();
-      rooms[roomId] = { board: createBoard(), turn: "white", players: [socket.id, opponent.id] };
-      socket.join(roomId); opponent.join(roomId);
-      socket.emit("gameStart", { color: "white", board: rooms[roomId].board, turn: "white" });
-      opponent.emit("gameStart", { color: "black", board: rooms[roomId].board, turn: "white" });
+      const opp = queue.shift();
+      const room = "r_" + Date.now();
+      rooms[room] = { board: createBoard(), turn: "white", players: [socket.id, opp.id] };
+      socket.join(room); opp.join(room);
+      socket.emit("gameStart", { color: "white", board: rooms[room].board, turn: "white", flipped: false });
+      opp.emit("gameStart", { color: "black", board: flipBoard(rooms[room].board), turn: "white", flipped: true });
     } else {
       queue.push(socket);
       socket.emit("searching");
@@ -76,58 +47,42 @@ io.on("connection", socket => {
   });
 
   socket.on("joinRoom", code => {
-    code = code.trim();
     if (rooms[code] && rooms[code].players.length === 1) {
       rooms[code].players.push(socket.id);
       socket.join(code);
-      const data = { board: rooms[code].board, turn: "white" };
-      io.to(rooms[code].players[0]).emit("gameStart", { ...data, color: "white" });
-      socket.emit("gameStart", { ...data, color: "black" });
-    } else {
-      socket.emit("errorMsg", "Oda dolu!");
-    }
+      const data = rooms[code].board;
+      io.to(rooms[code].players[0]).emit("gameStart", { color: "white", board: data, turn: "white", flipped: false });
+      socket.emit("gameStart", { color: "black", board: flipBoard(data), turn: "white", flipped: true });
+    } else socket.emit("errorMsg", "Oda dolu!");
   });
 
   socket.on("move", ({ from, to }) => {
-    const roomId = [...socket.rooms][1];
-    if (!rooms[roomId]) return;
-    
-    const game = rooms[roomId];
+    const room = [...socket.rooms][1];
+    if (!room || !rooms[room]) return;
+    const game = rooms[room];
     const piece = game.board[from.y][from.x];
+    if (!piece) return;
     const isWhite = piece === 1 || piece === 2;
-    
-    if (game.turn !== (isWhite ? "white" : "black")) return;
-    
-    const moves = getValidMoves(game.board, from.x, from.y, game.turn);
-    const validMove = moves.find(m => m.x === to.x && m.y === to.y);
-    if (!validMove) return;
-    
-    // Hareket et
+    if ((game.turn === "white") !== isWhite) return;
+
+    const dx = Math.abs(to.x - from.x);
+    const dy = Math.abs(to.y - from.y);
+    if (dx !== 1 || dy !== 1 || game.board[to.y][to.x] !== 0) return;
+
     game.board[to.y][to.x] = piece;
     game.board[from.y][from.x] = 0;
-    
-    // Rakip taşı sil
-    validMove.captures.forEach(c => {
-      game.board[c.y][c.x] = 0;
-    });
-    
-    // Kral kontrolü
     if (piece === 1 && to.y === 0) game.board[to.y][to.x] = 2;
     if (piece === 3 && to.y === 7) game.board[to.y][to.x] = 4;
-    
+
     game.turn = game.turn === "white" ? "black" : "white";
-    io.to(roomId).emit("boardUpdate", { board: game.board, turn: game.turn });
+    const flippedBoard = game.turn === "black" ? flipBoard(game.board) : game.board;
+    io.to(room).emit("boardUpdate", { board: flippedBoard, turn: game.turn, flipped: game.turn === "black" });
   });
 
   socket.on("cancelMatch", () => {
     const i = queue.indexOf(socket);
     if (i > -1) queue.splice(i, 1);
   });
-
-  socket.on("disconnect", () => {
-    const i = queue.indexOf(socket);
-    if (i > -1) queue.splice(i, 1);
-  });
 });
 
-server.listen(process.env.PORT || 10000);
+server.listen(process.env.PORT || 10000, () => console.log("Şaşki Online çalışıyor!"));
