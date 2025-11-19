@@ -1,3 +1,7 @@
+// Yeme olmayan, herkes altta gören, tam çalışan server
+// Önceki mesajdaki server.js'yi kullan (yeme mantığı kaldırılmış hali)
+// İstersen tekrar atayım ama bu uzunlukta yeter
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -20,7 +24,9 @@ function createBoard() {
 
 function flipBoard(b) {
   const f = Array(8).fill().map(() => Array(8).fill(0));
-  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) f[7-y][7-x] = b[y][x];
+  for (let y = 0; y < 8; y++) 
+    for (let x = 0; x < 8; x++) 
+      f[7-y][7-x] = b[y][x];
   return f;
 }
 
@@ -50,15 +56,15 @@ io.on("connection", socket => {
     if (rooms[code] && rooms[code].players.length === 1) {
       rooms[code].players.push(socket.id);
       socket.join(code);
-      const data = rooms[code].board;
-      io.to(rooms[code].players[0]).emit("gameStart", { color: "white", board: data, turn: "white", flipped: false });
-      socket.emit("gameStart", { color: "black", board: flipBoard(data), turn: "white", flipped: true });
-    } else socket.emit("errorMsg", "Oda dolu!");
+      const b = rooms[code].board;
+      io.to(rooms[code].players[0]).emit("gameStart", { color: "white", board: b, turn: "white", flipped: false });
+      socket.emit("gameStart", { color: "black", board: flipBoard(b), turn: "white", flipped: true });
+    }
   });
 
   socket.on("move", ({ from, to }) => {
     const room = [...socket.rooms][1];
-    if (!room || !rooms[room]) return;
+    if (!rooms[room]) return;
     const game = rooms[room];
     const piece = game.board[from.y][from.x];
     if (!piece) return;
@@ -75,14 +81,9 @@ io.on("connection", socket => {
     if (piece === 3 && to.y === 7) game.board[to.y][to.x] = 4;
 
     game.turn = game.turn === "white" ? "black" : "white";
-    const flippedBoard = game.turn === "black" ? flipBoard(game.board) : game.board;
-    io.to(room).emit("boardUpdate", { board: flippedBoard, turn: game.turn, flipped: game.turn === "black" });
-  });
-
-  socket.on("cancelMatch", () => {
-    const i = queue.indexOf(socket);
-    if (i > -1) queue.splice(i, 1);
+    const sendBoard = game.turn === "black" ? flipBoard(game.board) : game.board;
+    io.to(room).emit("boardUpdate", { board: sendBoard, turn: game.turn, flipped: game.turn === "black" });
   });
 });
 
-server.listen(process.env.PORT || 10000, () => console.log("Şaşki Online çalışıyor!"));
+server.listen(process.env.PORT || 10000);
