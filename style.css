@@ -1,549 +1,287 @@
-/* style.css - Modern ve Şık Dama Oyunu Stili */
-
-/* GENEL ve MOBİL UYUMLULUK */
+/* style.css */
 :root {
-    --primary-color: #6c5ce7;
-    --secondary-color: #a29bfe;
-    --accent-color: #00cec9;
-    --dark-bg: #1e272e;
-    --light-bg: #2d3436;
-    --text-color: #f5f6fa;
-    --success-color: #00b894;
-    --warning-color: #fdcb6e;
-    --danger-color: #ff7675;
+    --primary-color: #ff00ff; /* Neon Pembe/Mor */
+    --secondary-color: #00ffff; /* Neon Mavi */
+    --accent-color: #00ff00; /* Neon Yeşil */
+    --danger-color: #ff3333;
+    --bg-color: #111;
+    --text-color: #eee;
+    --board-light: #f0c080; /* Açık ahşap */
+    --board-dark: #804000; /* Koyu ahşap */
+    --red-piece: #ff4444;
+    --black-piece: #333333;
 }
 
+/* Genel ve Mobil Ayarlar */
 * {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 body {
-    background: linear-gradient(135deg, var(--dark-bg) 0%, #2d3436 100%);
+    background-color: var(--bg-color);
     color: var(--text-color);
-    font-family: 'Poppins', 'Segoe UI', sans-serif;
-    margin: 0;
-    padding: 20px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    overflow: auto;
-    line-height: 1.6;
 }
 
 #app-container {
     width: 100%;
-    max-width: 600px;
-    text-align: center;
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    padding: 30px;
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 600px; /* Mobil uyumluluk için max genişlik */
+    padding: 10px;
 }
 
-/* BAĞLANTI DURUMU */
-.status-box {
-    padding: 12px 24px;
-    margin: 20px auto;
-    border-radius: 50px;
-    font-weight: 600;
-    font-size: 0.95em;
-    letter-spacing: 0.5px;
-    max-width: 90%;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+.screen {
+    padding: 20px;
+    border: 1px solid #333;
+    border-radius: 12px;
+    background: #1e1e1e;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
-.status-box::before {
-    content: '';
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
+.hidden {
+    display: none !important;
 }
 
-.connecting { 
-    background: rgba(253, 203, 110, 0.15);
-    color: var(--warning-color);
-    border: 1px solid var(--warning-color);
-}
-
-.connecting::before {
-    background: var(--warning-color);
-    box-shadow: 0 0 10px var(--warning-color);
-}
-
-.connected { 
-    background: rgba(0, 184, 148, 0.15);
-    color: var(--success-color);
-    border: 1px solid var(--success-color);
-}
-
-.connected::before {
-    background: var(--success-color);
-    box-shadow: 0 0 10px var(--success-color);
-}
-
-.disconnected { 
-    background: rgba(255, 118, 117, 0.15);
-    color: var(--danger-color);
-    border: 1px solid var(--danger-color);
-}
-
-.disconnected::before {
-    background: var(--danger-color);
-    box-shadow: 0 0 10px var(--danger-color);
-}
-
-/* BAŞLIK STİLLERİ */
-.neon-text {
-    font-size: clamp(2em, 5vw, 2.8em);
-    color: #fff;
-    font-weight: 800;
-    margin: 20px 0;
-    background: linear-gradient(90deg, #a18cd1 0%, #fbc2eb 50%, #8fd3f4 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    position: relative;
-    letter-spacing: 1px;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    animation: gradientShift 8s ease infinite;
-    background-size: 200% 200%;
-}
-
-@keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
-
-/* BUTON STİLLERİ */
-.button-group {
+.active {
     display: flex;
     flex-direction: column;
     gap: 15px;
-    margin: 25px 0;
-    align-items: center;
 }
 
-.animated-button {
-    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
-    color: white;
-    border: none;
-    padding: 15px 30px;
-    margin: 5px;
-    border-radius: 50px;
-    cursor: pointer;
-    font-family: 'Poppins', sans-serif;
-    font-size: 1em;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4);
-    position: relative;
-    overflow: hidden;
-    z-index: 1;
-    min-width: 200px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.animated-button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 100%;
-    background: linear-gradient(45deg, var(--secondary-color), var(--accent-color));
-    transition: all 0.3s ease;
-    z-index: -1;
-}
-
-.animated-button:hover::before {
-    width: 100%;
-}
-
-.animated-button:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(108, 92, 231, 0.6);
-}
-
-.animated-button:active {
-    transform: translateY(1px);
-    box-shadow: 0 2px 10px rgba(108, 92, 231, 0.6);
-}
-
-.animated-button.small {
-    padding: 10px 20px;
-    font-size: 0.9em;
-    min-width: 150px;
-}
-
-.animated-button.searching {
-    background: linear-gradient(45deg, #f6b93b, #e55039);
-    animation: pulse 1.5s infinite;
-}
-
-.animated-button.searching::before {
-    background: linear-gradient(45deg, #e55039, #f6b93b);
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.03); }
-    100% { transform: scale(1); }
-}
-
-/* ODA KODU GİRİŞ ALANI */
-.room-connect-form {
-    margin: 25px 0;
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-#room-code-input {
-    padding: 12px 20px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50px;
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
-    font-size: 1em;
+/* --- TİTLE VE BAĞLANTI DURUMU --- */
+.neon-title {
     text-align: center;
-    max-width: 150px;
-    transition: all 0.3s ease;
-}
-
-#room-code-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(0, 206, 201, 0.2);
-}
-
-#room-code-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-}
-
-.button-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-    margin: 20px 0;
-}
-
-.animated-button {
-    width: 100%;
-    max-width: 350px;
-    padding: 18px 25px;
-    border: none;
-    background: #161625;
+    font-size: 2.5em;
+    font-weight: bold;
     color: #fff;
+    text-shadow: 0 0 7px var(--primary-color), 0 0 10px var(--primary-color), 0 0 21px var(--primary-color);
+    animation: flicker 1.5s infinite alternate;
+}
+
+.status-indicator {
+    padding: 8px;
+    text-align: center;
+    border-radius: 5px;
+    font-weight: bold;
+    transition: all 0.5s;
+}
+
+.status-indicator.waiting {
+    background: #444;
+    color: #aaa;
+}
+.status-indicator.success {
+    background: var(--accent-color);
+    box-shadow: 0 0 5px var(--accent-color);
+    color: var(--bg-color);
+}
+
+/* --- BUTONLAR VE GLOW EFEKTİ --- */
+.lobby-buttons button, .join-area button {
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 10px;
     font-size: 1.1em;
     font-weight: bold;
-    border-radius: 40px;
+    border: none;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-transform: uppercase;
-}
-.animated-button:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
-}
-
-/* BUTON 1: DERECE (Pulse Effect) */
-.pulse-effect { border: 3px solid #00ffff; box-shadow: 0 0 15px #00ffff; }
-.pulse-effect:not(.searching):hover { animation: button-pulse 1s infinite; }
-.pulse-effect.searching { 
-    background-color: #ff0099;
-    box-shadow: 0 0 20px #ff0099;
-    animation: searching-pulse 1s infinite alternate;
-    pointer-events: none;
-}
-@keyframes searching-pulse { 0% { transform: scale(1); } 100% { transform: scale(1.02); } }
-
-/* BUTON 2 & 3 FORM */
-.glow-effect { border: 2px solid #ff0099; box-shadow: 0 0 10px #ff0099; }
-.room-connect-form {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 20px 0;
-    margin-top: 15px;
 }
-#room-code-input {
+
+.lobby-buttons {
+    padding-top: 10px;
+}
+
+.glowing-btn:hover {
+    transform: translateY(-2px);
+}
+
+.glowing-btn.primary-btn {
+    background: var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color);
+    color: var(--bg-color);
+}
+
+.glowing-btn.secondary-btn {
+    background: var(--secondary-color);
+    box-shadow: 0 0 8px var(--secondary-color);
+    color: var(--bg-color);
+}
+
+.glowing-btn.accent-btn {
+    background: var(--accent-color);
+    box-shadow: 0 0 8px var(--accent-color);
+    color: var(--bg-color);
+}
+
+.glowing-btn.danger-btn {
+    background: var(--danger-color);
+    box-shadow: 0 0 8px var(--danger-color);
+    color: white;
+}
+
+.glowing-btn:active {
+    opacity: 0.8;
+}
+
+.icon {
+    margin-right: 10px;
+    animation: pulse 1s infinite alternate;
+}
+
+/* KOD GİRİŞ ALANI */
+.join-area {
+    display: flex;
+    gap: 10px;
+}
+
+.join-area input {
     flex-grow: 1;
-    max-width: 150px;
-    padding: 12px;
-    border: 2px solid #00ffff;
-    background: #111;
-    color: #fff;
-    border-radius: 5px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid var(--secondary-color);
+    background: #2a2a2a;
+    color: var(--text-color);
     font-size: 1em;
     text-align: center;
 }
-.connect-effect { border-color: limegreen; }
-.copy-effect { border-color: gold; }
 
-/* OYUN TAHTASI VE MOBİL UYUMLULUK */
-#game-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    perspective: 1000px;
+.join-area input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 5px var(--primary-color);
 }
 
-#game-board {
+/* --- OYUN ALANI (Dama Tahtası) --- */
+#board-container {
+    width: 100%;
+    padding-top: 100%; /* Kare görünüm için */
+    position: relative;
+    margin: 20px auto;
+    max-width: 400px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+}
+
+#board {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-    gap: 1px;
-    width: 90vmin;
-    height: 90vmin;
-    max-width: 500px;
-    max-height: 500px;
-    margin: 20px auto;
-    background: #2c3e50;
-    border: 4px solid #34495e;
-    border-radius: 5px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    transform-origin: center;
-    transition: all 0.3s ease;
+    border: 5px solid #444;
 }
 
-.cell {
+.square {
+    width: 100%;
+    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    position: relative;
+    transition: background-color 0.2s;
+}
+
+.light {
+    background-color: var(--board-light);
+}
+
+.dark {
+    background-color: var(--board-dark);
+}
+
+.highlight-move {
+    background-color: var(--accent-color) !important;
     cursor: pointer;
-    transition: all 0.2s ease;
-    border-radius: 2px;
+    /* Hafif bir yanıp sönme efekti */
+    animation: highlightPulse 0.8s infinite alternate; 
 }
 
-.cell.light {
-    background: linear-gradient(145deg, #f8e8c8, #e6d5b3);
-}
-
-.cell.dark {
-    background: linear-gradient(145deg, #c19a7c, #a87b5e);
-}
-
-/* Taş Stilleri */
+/* Taşlar */
 .piece {
-    width: 85%;
-    height: 85%;
+    width: 80%;
+    height: 80%;
     border-radius: 50%;
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-    position: relative;
-    transition: all 0.2s ease;
-    z-index: 2;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-}
-
-.piece:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
-}
-
-.piece.red {
-    background: linear-gradient(145deg, #e74c3c, #c0392b);
-}
-
-.piece.black {
-    background: linear-gradient(145deg, #2c3e50, #1a1a2e);
-}
-
-.piece.king {
-    box-shadow: 0 0 0 3px gold, 0 0 10px rgba(255, 215, 0, 0.5);
-}
-
-.piece.king::after {
-    content: '👑';
-    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     font-size: 0.8em;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    opacity: 0.9;
-}
-
-/* Seçili Taş */
-.cell.selected {
-    box-shadow: 0 0 0 3px #f1c40f inset;
-    transform: scale(0.98);
-    z-index: 3;
-}
-
-/* Yasal Hamle İşaretleri */
-.legal-move {
-    background-color: rgba(46, 204, 113, 0.25) !important;
-    position: relative;
-    z-index: 1;
-}
-
-.legal-move::after {
-    content: '';
-    position: absolute;
-    width: 30%;
-    height: 30%;
-    background: rgba(255, 255, 255, 0.6);
-    border-radius: 50%;
-    z-index: -1;
-}
-
-.capture-move {
-    background-color: rgba(231, 76, 60, 0.3) !important;
-    position: relative;
-}
-
-.capture-move::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    border: 2px dashed #e74c3c;
-    border-radius: 5px;
-    animation: pulse-border 1.5s infinite;
-    z-index: -1;
-}
-
-.will-be-captured {
-    animation: pulse 1s infinite;
-    position: relative;
-    z-index: 1;
-}
-
-@keyframes pulse-border {
-    0% { transform: scale(0.9); opacity: 0.7; }
-    50% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(0.9); opacity: 0.7; }
-}
-
-.move-animation {
-    animation: move-highlight 0.5s ease-in-out;
-}
-
-@keyframes move-highlight {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-
-/* Responsive Tasarım */
-@media (max-width: 600px) {
-    #game-board {
-        width: 95vmin;
-        height: 95vmin;
-    }
-    
-    .piece {
-        width: 80%;
-        height: 80%;
-    }
-}
-
-/* Oyun Bilgisi Stilleri */
-#game-info {
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-.turn-status {
-    font-size: 1.5em;
-    margin: 10px 0;
-    padding: 10px 20px;
-    border-radius: 20px;
-    display: inline-block;
-    transition: all 0.3s ease;
-}
-
-.my-turn-light {
-    background: rgba(46, 204, 113, 0.2);
-    color: #2ecc71;
-    text-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
-}
-
-.opponent-turn-light {
-    background: rgba(231, 76, 60, 0.2);
-    color: #e74c3c;
-}
-
-/* Buton Stilleri */
-.animated-button {
-    background: linear-gradient(145deg, #3498db, #2980b9);
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    margin: 10px;
-    border-radius: 25px;
+    font-weight: bold;
     cursor: pointer;
-    font-family: 'Electrolize', sans-serif;
-    font-size: 1em;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6);
+    transition: transform 0.2s, box-shadow 0.3s;
 }
 
-.animated-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+.piece-red {
+    background-color: var(--red-piece);
+    border: 3px solid #f00;
 }
 
-.animated-button:active {
-    transform: translateY(1px);
+.piece-black {
+    background-color: var(--black-piece);
+    border: 3px solid #000;
 }
 
-.animated-button.searching {
-    background: linear-gradient(145deg, #f39c12, #e67e22);
+.selected-piece {
+    transform: scale(1.1) translateY(-5px);
+    box-shadow: 0 0 15px white, 0 8px 10px rgba(0, 0, 0, 0.8);
+    z-index: 10;
 }
 
-/* Bağlantı Durumu */
-.status-box {
-    padding: 10px 20px;
-    margin: 20px auto;
-    border-radius: 20px;
+/* SIRA GÖSTERGESİ (Işıklı) */
+#turn-indicator {
     text-align: center;
-    max-width: 80%;
-    transition: all 0.3s ease;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    font-size: 1.2em;
 }
 
-.connected {
-    background: rgba(46, 204, 113, 0.2);
-    color: #2ecc71;
-    border: 1px solid #2ecc71;
+.turn-red #current-player-color {
+    color: var(--red-piece);
+    text-shadow: 0 0 5px var(--red-piece), 0 0 10px var(--red-piece);
+    animation: glowingTurn 1s infinite alternate var(--red-piece);
 }
 
-.connecting {
-    background: rgba(241, 196, 15, 0.2);
-    color: #f1c40f;
-    border: 1px solid #f1c40f;
-    animation: pulse 2s infinite;
+.turn-black #current-player-color {
+    color: var(--text-color);
+    text-shadow: 0 0 5px var(--text-color), 0 0 10px var(--text-color);
+    animation: glowingTurn 1s infinite alternate #fff;
 }
 
-.disconnected {
-    background: rgba(231, 76, 60, 0.2);
-    color: #e74c3c;
-    border: 1px solid #e74c3c;
+
+/* --- ANİMASYONLAR --- */
+@keyframes flicker {
+    0%, 18%, 22%, 25%, 53%, 57%, 100% {
+        text-shadow: 0 0 4px var(--primary-color), 0 0 11px var(--primary-color), 0 0 19px var(--primary-color), 0 0 40px var(--primary-color);
+    }
+    20%, 24%, 55% {
+        text-shadow: none;
+    }
 }
 
 @keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
+    from { transform: scale(1); }
+    to { transform: scale(1.05); }
 }
 
-/* Genel Gizleme */
-.hidden { display: none !important; }
+@keyframes highlightPulse {
+    from { box-shadow: 0 0 5px var(--accent-color); }
+    to { box-shadow: 0 0 15px var(--accent-color); }
+}
+
+@keyframes glowingTurn {
+    from { opacity: 0.7; }
+    to { opacity: 1; }
+}
