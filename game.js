@@ -111,15 +111,14 @@ class CheckersGame {
         
         if (isMultiCapture) {
             // Opponent can continue capturing
-            this.captureChains = additionalCaptures.map(capture => ({
-                from: to,
-                to: { row: capture.row, col: capture.col },
-                captured: capture.captured
-            }));
+            this.selectedPiece = { row: to.row, col: to.col };
+            this.validMoves = additionalCaptures;
             this.isPlayerTurn = false;
             this.updateGameStatus('Rakibin hamlesi - Çoklu taş alma sırası');
         } else {
             // It's now player's turn
+            this.selectedPiece = null;
+            this.validMoves = [];
             this.isPlayerTurn = true;
             this.currentPlayer = this.playerColor;
             this.updateGameStatus('Sıra sende!');
@@ -137,25 +136,31 @@ class CheckersGame {
         
         const piece = this.board[row][col];
         const moves = [];
-        const captures = [];
         
-        // Check normal moves
-        const directions = [];
-        if (piece.isKing || piece.type === 'black') {
-            directions.push({ dr: 1, dc: -1 }, { dr: 1, dc: 1 }); // Black moves down
-        }
-        if (piece.isKing || piece.type === 'white') {
-            directions.push({ dr: -1, dc: -1 }, { dr: -1, dc: 1 }); // White moves up
-        }
-        
-        // Check for captures first (mandatory capture rule)
+        // --- YEME ZORUNLULUĞU KONTROLÜ (MANDATORY CAPTURE) ---
         const allCaptures = this.getAllPossibleCaptures(piece.type);
         if (allCaptures.length > 0) {
-            // If there are captures available, only return capture moves for this piece
-            return this.getValidCaptures(row, col);
+            // Eğer yeme zorunluluğu varsa, sadece bu taşın yeme hamlelerini döndür.
+            const pieceCaptures = this.getValidCaptures(row, col);
+            if (pieceCaptures.length > 0) {
+                return pieceCaptures;
+            } else {
+                // Tahta üzerinde yeme zorunluluğu var ama bu taş yiyemiyor. Geçerli hamlesi yok.
+                return []; 
+            }
         }
         
-        // If no captures, check normal moves
+        // Eğer yeme zorunluluğu yoksa, normal hareketleri kontrol et
+        const directions = [];
+        if (piece.isKing || piece.type === 'black') {
+            // Siyah (Black) normalde aşağı hareket eder (row artar)
+            directions.push({ dr: 1, dc: -1 }, { dr: 1, dc: 1 }); 
+        }
+        if (piece.isKing || piece.type === 'white') {
+            // Beyaz (White) normalde yukarı hareket eder (row azalır)
+            directions.push({ dr: -1, dc: -1 }, { dr: -1, dc: 1 }); 
+        }
+        
         for (const dir of directions) {
             const newRow = row + dir.dr;
             const newCol = col + dir.dc;
@@ -181,18 +186,31 @@ class CheckersGame {
         const piece = this.board[row][col];
         const captures = [];
         
-        const directions = [
-            { dr: 2, dc: -2, jumpRow: 1, jumpCol: -1 },  // Up-left
-            { dr: 2, dc: 2, jumpRow: 1, jumpCol: 1 },    // Up-right
-            { dr: -2, dc: -2, jumpRow: -1, jumpCol: -1 }, // Down-left
-            { dr: -2, dc: 2, jumpRow: -1, jumpCol: 1 }    // Down-right
+        const directions = [];
+        
+        // Dama tahtasında King olmayan taşlar sadece ileriye doğru zıplar (yeme yapar).
+        // Ancak bu kodda hem siyah hem beyaz için 4 yönü de kontrol edip, 
+        // taşın normal hareket yönüne uygun olmaması durumunda sadece King'in yemesine izin vermeliyiz.
+        
+        const captureDirs = [
+            { dr: 2, dc: -2, jumpRow: 1, jumpCol: -1 },  // İleri-Sol
+            { dr: 2, dc: 2, jumpRow: 1, jumpCol: 1 },    // İleri-Sağ
+            { dr: -2, dc: -2, jumpRow: -1, jumpCol: -1 }, // Geri-Sol
+            { dr: -2, dc: 2, jumpRow: -1, jumpCol: 1 }    // Geri-Sağ
         ];
         
-        for (const dir of directions) {
+        for (const dir of captureDirs) {
             const newRow = row + dir.dr;
             const newCol = col + dir.dc;
-            const jumpRow = row + dir.jumpRow;
-            const jumpCol = col + dir.jumpCol;
+            const jumpRow = row + (dir.dr / 2); // Atlanacak taşın konumu
+            const jumpCol = col + (dir.dc / 2); // Atlanacak taşın konumu
+            
+            // Eğer parça KING değilse, sadece kendi yönünde (siyah için dr=2, beyaz için dr=-2) hareket edebilir/yiyebilir.
+            const isForwardCapture = (piece.type === 'black' && dir.dr > 0) || (piece.type === 'white' && dir.dr < 0);
+            
+            if (!piece.isKing && !isForwardCapture) {
+                continue; // King olmayan taş geriye yiyemez
+            }
             
             if (this.isValidPosition(newRow, newCol) && !this.board[newRow][newCol]) {
                 if (this.isValidPosition(jumpRow, jumpCol) && 
@@ -222,6 +240,8 @@ class CheckersGame {
                 if (piece && piece.type === color) {
                     const pieceCaptures = this.getValidCaptures(row, col);
                     if (pieceCaptures.length > 0) {
+                        // Yalnızca yeme imkanı olan taşları listeliyoruz.
+                        // makeMove() içinde bu zorunluluğu kontrol edeceğiz.
                         captures.push({
                             from: { row, col },
                             captures: pieceCaptures
@@ -244,6 +264,8 @@ class CheckersGame {
         const piece = this.board[row][col];
         if (!piece) return;
         
+        // Siyah (black) 7. satıra (en alta) ulaşınca kral olur
+        // Beyaz (white) 0. satıra (en üste) ulaşınca kral olur
         if ((piece.type === 'black' && row === 7) || 
             (piece.type === 'white' && row === 0)) {
             piece.isKing = true;
@@ -257,9 +279,10 @@ class CheckersGame {
         const piece = this.board[fromRow][fromCol];
         if (!piece || piece.type !== this.playerColor) return false;
         
-        // Check if it's a valid move
-        const validMoves = this.getValidMoves(fromRow, fromCol);
-        const move = validMoves.find(m => m.row === toRow && m.col === toCol);
+        // Check if it's a valid move (capture priority is handled inside getValidMoves)
+        // Eğer selectedPiece varsa (çoklu yeme durumu), validMoves zaten sadece yeme hamlelerini içerir.
+        const movesToConsider = this.selectedPiece ? this.validMoves : this.getValidMoves(fromRow, fromCol);
+        const move = movesToConsider.find(m => m.row === toRow && m.col === toCol);
         
         if (!move) return false;
         
@@ -277,20 +300,11 @@ class CheckersGame {
             });
         }
         
-        // Check for king promotion
+        // Check for king promotion (taşı hareket ettirdikten sonra kontrol etmeliyiz)
         this.checkKingPromotion(toRow, toCol);
         
-        // If it's a multiplayer game, send the move to the server
-        if (this.isMultiplayer) {
-            this.socket.emit('makeMove', {
-                roomId: this.roomId,
-                from: { row: fromRow, col: fromCol },
-                to: { row: toRow, col: toCol },
-                captured: capturedPieces
-            });
-        }
         
-        // Check for additional captures
+        // Check for additional captures (Zorunlu çoklu yeme)
         const additionalCaptures = this.getValidCaptures(toRow, toCol);
         const isMultiCapture = additionalCaptures.length > 0 && capturedPieces.length > 0;
         
@@ -299,7 +313,11 @@ class CheckersGame {
             this.selectedPiece = { row: toRow, col: toCol };
             this.validMoves = additionalCaptures;
             this.updateGameStatus('Çoklu taş alma sırası!');
+            
+            // Eğer çoklu yeme imkanı varsa, hamleyi sunucuya göndermiyoruz (henüz bitmedi)
         } else {
+            // Hamle bitti: Sıra değiştir ve sunucuya gönder
+            
             // Switch turns
             this.selectedPiece = null;
             this.validMoves = [];
@@ -308,6 +326,14 @@ class CheckersGame {
             
             if (this.isMultiplayer) {
                 this.updateGameStatus('Rakibin hamlesi bekleniyor...');
+                
+                // Hamle bitince sunucuya gönder
+                this.socket.emit('makeMove', {
+                    roomId: this.roomId,
+                    from: { row: fromRow, col: fromCol },
+                    to: { row: toRow, col: toCol },
+                    captured: capturedPieces
+                });
             } else {
                 this.updateGameStatus(`Sıra ${this.currentPlayer === 'black' ? 'siyah' : 'beyaz'} oyuncuda`);
             }
@@ -349,12 +375,12 @@ class CheckersGame {
         
         // Check win conditions
         if (blackPieces.length === 0 || (this.currentPlayer === 'black' && !blackHasMoves)) {
-            this.handleGameOver({ winner: 'white', reason: 'Tüm taşlar yok edildi veya hamle yapılamıyor' });
+            this.handleGameOver({ winner: 'white', reason: 'Tüm siyah taşlar yok edildi veya hamle yapılamıyor' });
             return true;
         }
         
         if (whitePieces.length === 0 || (this.currentPlayer === 'white' && !whiteHasMoves)) {
-            this.handleGameOver({ winner: 'black', reason: 'Tüm taşlar yok edildi veya hamle yapılamıyor' });
+            this.handleGameOver({ winner: 'black', reason: 'Tüm beyaz taşlar yok edildi veya hamle yapılamıyor' });
             return true;
         }
         
@@ -438,27 +464,42 @@ class CheckersGame {
     
     // Render valid moves as hints
     renderValidMoves() {
+        // Bu fonksiyonun doğru çalışması için HTML yapınızda uygun bir 'moveHints' elementi olmalıdır.
         const moveHints = document.getElementById('moveHints');
-        if (!moveHints) return;
+        const gameBoard = document.getElementById('gameBoard');
+        
+        if (!moveHints || !gameBoard || !this.selectedPiece) return;
         
         moveHints.innerHTML = '';
-        
-        if (!this.selectedPiece) return;
         
         const { row, col } = this.selectedPiece;
         const piece = this.board[row][col];
         
-        if (!piece || piece.type !== this.currentPlayer) return;
+        // Multiplayer'da sadece kendi sıramızdaysa ve kendi taşımızsa göster
+        if (!piece || piece.type !== this.playerColor || !this.isPlayerTurn) return; 
         
+        // Çoklu yeme durumunda validMoves'u kullan, aksi halde yeniden hesapla
         const moves = this.validMoves.length > 0 ? this.validMoves : this.getValidMoves(row, col);
         
+        // Board'un boyutunu al (cell boyutunu bilmediğimiz için dinamik hesaplayalım)
+        const boardRect = gameBoard.getBoundingClientRect();
+        const cellWidth = boardRect.width / 8;
+        const cellHeight = boardRect.height / 8;
+
         moves.forEach(move => {
             const hint = document.createElement('div');
             hint.className = 'move-hint';
-            hint.style.width = '30px';
-            hint.style.height = '30px';
-            hint.style.left = `${(move.col / 8) * 100}%`;
-            hint.style.top = `${(move.row / 8) * 100}%`;
+            
+            // Konumu hücrenin ortasına göre ayarla
+            hint.style.left = `${move.col * cellWidth}px`;
+            hint.style.top = `${move.row * cellHeight}px`;
+            hint.style.width = `${cellWidth}px`;
+            hint.style.height = `${cellHeight}px`;
+
+            // Yeme hamlesi için farklı bir görsel stil
+            if (move.isCapture) {
+                hint.classList.add('capture-hint');
+            }
             
             hint.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -474,12 +515,16 @@ class CheckersGame {
         if (this.gameOver || !this.isPlayerTurn) return;
         
         const piece = this.board[row][col];
+        const isMyPiece = piece && piece.type === this.playerColor;
         
-        // If a piece is already selected and it's the player's turn
+        // Tahta üzerinde yeme zorunluluğu var mı?
+        const mandatoryCaptureAvailable = this.getAllPossibleCaptures(this.playerColor).length > 0;
+        
+        // Eğer bir taş zaten seçiliyse...
         if (this.selectedPiece) {
             const { row: selectedRow, col: selectedCol } = this.selectedPiece;
             
-            // If clicking on the same piece, deselect it
+            // Aynı taşa tıklanırsa seçimi kaldır
             if (selectedRow === row && selectedCol === col) {
                 this.selectedPiece = null;
                 this.validMoves = [];
@@ -487,25 +532,57 @@ class CheckersGame {
                 return;
             }
             
-            // If clicking on another piece of the same color, select it
-            if (piece && piece.type === this.playerColor) {
-                this.selectedPiece = { row, col };
-                this.validMoves = [];
-                this.render();
-                return;
+            // Başka bir kendi taşına tıklanırsa yeni taşı seç
+            if (isMyPiece) {
+                // Yeme zorunluluğu varken yiyemeyen taşı seçmeye izin verme
+                if (mandatoryCaptureAvailable) {
+                    const newPieceCaptures = this.getValidCaptures(row, col);
+                    if (newPieceCaptures.length > 0) {
+                        this.selectedPiece = { row, col };
+                        this.validMoves = newPieceCaptures; // Sadece yeme hamleleri
+                        this.render();
+                        return;
+                    } else {
+                         // Zorunluluk var ama bu taş yiyemiyor. Seçimi değiştirme/izin verme.
+                        return; 
+                    }
+                }
+                
+                // Zorunluluk yoksa veya çoklu yeme sırası değilse yeni taşı seç
+                if (!mandatoryCaptureAvailable || (this.validMoves.length === 0)) {
+                    this.selectedPiece = { row, col };
+                    this.validMoves = this.getValidMoves(row, col);
+                    this.render();
+                    return;
+                }
             }
             
-            // Try to make a move
+            // Başka bir yere tıklanırsa hamle yapmayı dene
             if (this.makeMove(selectedRow, selectedCol, row, col)) {
                 return;
             }
+            
         }
         
-        // If no piece is selected, select this one if it's the player's piece
-        if (piece && piece.type === this.playerColor) {
-            this.selectedPiece = { row, col };
-            this.validMoves = this.getValidMoves(row, col);
-            this.render();
+        // Eğer hiçbir taş seçili değilse ve kendi taşımızsa...
+        if (isMyPiece) {
+            
+            // Yeme zorunluluğu varsa, sadece yiyebilen taşı seç.
+            if (mandatoryCaptureAvailable) {
+                const pieceCaptures = this.getValidCaptures(row, col);
+                if (pieceCaptures.length > 0) {
+                    this.selectedPiece = { row, col };
+                    this.validMoves = pieceCaptures;
+                    this.render();
+                } else {
+                    // Zorunluluk var ama bu taş yiyemiyor. Seçim yapmaya izin verme.
+                }
+            } else {
+                // Zorunluluk yoksa normal taşı seç
+                this.selectedPiece = { row, col };
+                this.validMoves = this.getValidMoves(row, col);
+                this.render();
+            }
         }
     }
     
@@ -604,8 +681,10 @@ class CheckersGame {
         this.reset();
         
         // Show lobby
-        document.getElementById('lobby').classList.add('active');
-        document.getElementById('game').classList.remove('active');
+        const lobby = document.getElementById('lobby');
+        const gameEl = document.getElementById('game');
+        if (lobby) lobby.classList.add('active');
+        if (gameEl) gameEl.classList.remove('active');
         
         // Reset multiplayer state
         this.isMultiplayer = false;
