@@ -3,58 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏆 Online Checkers Arena | Amerikan Daması</title>
+    <title>Şaşki Dama | Online Checkers</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Electrolize&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
 
     <div id="app-container">
         
-        <div id="lobby-container">
-            <h1 class="neon-text"><i class="fas fa-chess-king"></i> DAMA ARENASI <i class="fas fa-chess-king"></i></h1>
+        <div id="lobby-screen" class="screen active">
+            <h1 class="neon-title">Online Şaşki Dama</h1>
             
-            <div id="connection-status" class="status-box connecting">Sunucuya Bağlanılıyor...</div>
+            <div id="connection-status" class="status-indicator waiting">Bağlanıyor...</div>
 
-            <div class="button-group">
-                <button id="btn-ranked" class="animated-button">
-                    <i class="fas fa-trophy"></i>
-                    <span id="ranked-text">Dereceli Oyna</span>
+            <div class="lobby-buttons">
+                
+                <button id="ranked-btn" class="glowing-btn primary-btn">
+                    <span class="icon">🏆</span>
+                    Dereceli Oyna (Eşleştir)
                 </button>
+                <button id="cancel-match-btn" class="glowing-btn secondary-btn hidden">İptal</button>
 
-                <button id="btn-create-room" class="animated-button small">
-                    <i class="fas fa-user-plus"></i>
-                    <span>Arkadaşla Oyna</span>
+                <button id="friend-btn" class="glowing-btn secondary-btn">
+                    <span class="icon">🤝</span>
+                    Arkadaşla Oyna (Oda Kur)
                 </button>
-            </div>
-            
-            <div class="room-connect-form">
-                <input type="text" id="room-code-input" maxlength="4" placeholder="4 Rakamlı Oda Kodu" pattern="\d*">
-                <button id="btn-connect-room" class="animated-button small">
-                    <i class="fas fa-sign-in-alt"></i>
-                    <span>Odaya Bağlan</span>
-                </button>
-                <button id="btn-copy-code" class="animated-button small hidden">
-                    <i class="far fa-copy"></i>
-                    <span>Kodu Kopyala</span>
-                </button>
-            </div>
-        </div>
-
-        <div id="game-container" class="hidden">
-            <div id="game-info">
-                <h2 id="player-turn-status" class="turn-status"></h2>
-            </div>
-            <div id="game-board">
+                
+                <hr>
+                
+                <div class="join-area">
+                    <input type="text" id="room-code-input" placeholder="Oda Kodu (4 Rakam)" maxlength="4">
+                    <button id="join-btn" class="glowing-btn accent-btn">
+                        <span class="icon">🔗</span>
+                        Odaya Bağlan
+                    </button>
                 </div>
-            <div id="game-messages"></div>
+            </div>
+            
+            <div id="notification-area"></div>
         </div>
 
+        <div id="game-screen" class="screen hidden">
+            <h2 id="turn-indicator">Sıra: <span id="current-player-color">...</span></h2>
+            <div id="board-container">
+                </div>
+            <div class="game-info">
+                <p>Oda Kodu: <span id="display-room-code"></span></p>
+                <p>Senin Rengin: <span id="my-color-display"></span></p>
+                <button id="quit-game-btn" class="glowing-btn danger-btn">Oyundan Çık</button>
+            </div>
+        </div>
+        
     </div>
 
-    <script src="main.js" type="module"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>
