@@ -1,258 +1,134 @@
-/**********************************************************************
- *                                                                    *
- *                  ŞAŞKİ ONLINE SUNUCUSU - 2025 SON SÜRÜM            *
- *                    %100 ÇALIŞIR – BAĞLANTI SORUNU YOK              *
- *                                                                    *
- **********************************************************************/
+/***********************************************************************
+ *                                                                     *
+ *                  ŞAŞKİ ONLINE – 2025 SON SÜRÜM (YEME YOK)           *
+ *               TÜM DOSYALAR AYNI KLASÖRDE – ALT KLASÖR YOK          *
+ *               https://mario-io-1.onrender.com                      *
+ *                                                                     *
+ ***********************************************************************/
 
 const express = require("express");
 const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
 
-console.log("Şaşki Online Sunucusu başlatılıyor...");
-
-// Express uygulaması
 const app = express();
-
-// HTTP server
 const server = http.createServer(app);
 
-// Socket.IO – BAĞLANTI SORUNUNU %100 ÇÖZEN AYARLAR
+// Socket.IO – %100 BAĞLANTI GARANTİLİ
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["my-custom-header"],
-    credentials: true
-  },
+  cors: { origin: "*", methods: ["GET", "POST"] },
   transports: ["websocket", "polling"],
   pingTimeout: 60000,
-  pingInterval: 25000,
-  allowEIO3: true,
-  maxHttpBufferSize: 1e8
+  pingInterval: 25000
 });
 
-// Statik dosyalar (public klasörü)
-app.use(express.static(path.join(__dirname, "public")));
+// TÜM DOSYALAR AYNI KLASÖRDE → public YOK!
+app.use(express.static(__dirname));
 
 // Ana sayfa
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Test sayfası
 app.get("/test", (req, res) => {
-  res.send("<h1 style='color:#0ff;text-align:center;margin-top:20%'>Şaşki Online Sunucusu AKTİF!</h1>");
+  res.send("<h1 style='color:#00ffff;background:#000;text-align:center;padding:15%'>ŞAŞKİ ONLINE SUNUCUSU ÇALIŞIYOR!</h1>");
 });
 
-// ===================================================================
-//                          OYUN VERİLERİ
-// ===================================================================
+// ====================== OYUN MANTIĞI ======================
+const queue = [];
+const rooms = {};
 
-const waitingQueue = [];                    // Dereceli sıra
-const activeRooms = {};                     // Tüm odalar (kodlu + dereceli)
-
-// Tahta oluşturma (Türk Daması – yeme YOK)
-function generateNewBoard() {
-  const board = Array(8).fill(null).map(() => Array(8).fill(0));
-
-  // Siyah taşlar (üstte) – 3. tip = normal siyah
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 8; col++) {
-      if ((row + col) % 2 === 1) {
-        board[row][col] = 3;
-      }
-    }
+function createBoard() {
+  const b = Array(8).fill().map(() => Array(8).fill(0));
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 3; j++) if ((i + j) % 2 === 1) b[j][i] = 3;
+    for (let j = 5; j < 8; j++) if ((i + j) % 2 === 1) b[j][i] = 1;
   }
-
-  // Beyaz taşlar (altta) – 1. tip = normal beyaz
-  for (let row = 5; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      if ((row + col) % 2 === 1) {
-        board[row][col] = 1;
-      }
-    }
-  }
-
-  return board;
+  return b;
 }
 
-// Tahtayı 180° çevir (siyah oyuncu için)
-function flipBoardForBlack(originalBoard) {
-  const flipped = Array(8).fill(null).map(() => Array(8).fill(0));
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      flipped[7 - y][7 - x] = originalBoard[y][x];
-    }
-  }
-  return flipped;
+function flipBoard(b) {
+  const f = Array(8).fill().map(() => Array(8).fill(0));
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) f[7 - y][7 - x] = b[y][x];
+  return f;
 }
-
-// ===================================================================
-//                          SOCKET EVENTS
-// ===================================================================
 
 io.on("connection", (socket) => {
-  console.log(`YENİ BAĞLANTI → ${socket.id}`);
+  console.log("YENİ OYUNCU →", socket.id);
 
-  // Dereceli maç bul
   socket.on("findMatch", () => {
-    console.log(`${socket.id} dereceli sıraya girdi`);
+    if (queue.length > 0) {
+      const opp = queue.shift();
+      const room = "r_" + Date.now();
+      rooms[room] = { board: createBoard(), turn: "white", players: [socket.id, opp.id] };
 
-    if (waitingQueue.length > 0) {
-      const opponent = waitingQueue.shift();
-      const roomId = `ranked_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      socket.join(room); opp.join(room);
 
-      const newBoard = generateNewBoard();
-
-      activeRooms[roomId] = {
-        board: newBoard,
-        turn: "white",
-        players: [socket.id, opponent.id],
-        createdAt: Date.now()
-      };
-
-      socket.join(roomId);
-      opponent.join(roomId);
-
-      // Beyaz oyuncu (ilk giren)
-      socket.emit("gameStart", {
-        color: "white",
-        board: newBoard,
-        turn: "white",
-        flipped: false,
-        roomId: roomId
-      });
-
-      // Siyah oyuncu
-      opponent.emit("gameStart", {
-        color: "black",
-        board: flipBoardForBlack(newBoard),
-        turn: "white",
-        flipped: true,
-        roomId: roomId
-      });
-
-      console.log(`EŞLEŞME TAMAMLANDI → ${roomId}`);
+      socket.emit("gameStart", { color: "white", board: rooms[room].board, turn: "white", flipped: false });
+      opp.emit("gameStart", { color: "black", board: flipBoard(rooms[room].board), turn: "white", flipped: true });
     } else {
-      waitingQueue.push(socket);
+      queue.push(socket);
       socket.emit("searching");
-      console.log(`Sıraya eklendi → Toplam: ${waitingQueue.length}`);
     }
   });
 
-  // Özel oda oluştur
   socket.on("createRoom", () => {
-    const roomCode = String(Math.floor(1000 + Math.random() * 9000));
-    const newBoard = generateNewBoard();
-
-    activeRooms[roomCode] = {
-      board: newBoard,
-      turn: "white",
-      players: [socket.id],
-      createdAt: Date.now()
-    };
-
-    socket.join(roomCode);
-    socket.emit("roomCreated", roomCode);
-    console.log(`ODA OLUŞTURULDU → ${roomCode}`);
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    rooms[code] = { board: createBoard(), turn: "white", players: [socket.id] };
+    socket.join(code);
+    socket.emit("roomCreated", code);
   });
 
-  // Koda göre odaya katıl
   socket.on("joinRoom", (code) => {
     code = code.trim();
-    if (activeRooms[code] && activeRooms[code].players.length === 1) {
-      activeRooms[code].players.push(socket.id);
+    if (rooms[code] && rooms[code].players.length === 1) {
+      rooms[code].players.push(socket.id);
       socket.join(code);
-
-      const boardData = activeRooms[code].board;
-
-      // Oda sahibi (beyaz)
-      io.to(activeRooms[code].players[0]).emit("gameStart", {
-        color: "white",
-        board: boardData,
-        turn: "white",
-        flipped: false,
-        roomId: code
-      });
-
-      // Katılan (siyah)
-      socket.emit("gameStart", {
-        color: "black",
-        board: flipBoardForBlack(boardData),
-        turn: "white",
-        flipped: true,
-        roomId: code
-      });
-
-      console.log(`Oyuncu odaya katıldı → ${code}`);
+      const b = rooms[code].board;
+      io.to(rooms[code].players[0]).emit("gameStart", { color: "white", board: b, turn: "white", flipped: false });
+      socket.emit("gameStart", { color: "black", board: flipBoard(b), turn: "white", flipped: true });
     } else {
       socket.emit("errorMsg", "Oda dolu veya geçersiz!");
     }
   });
 
-  // Hamle yap
   socket.on("move", ({ from, to }) => {
-    const roomId = [...socket.rooms].find(r => r !== socket.id);
-    if (!roomId || !activeRooms[roomId]) return;
+    const room = [...socket.rooms].find(r => r !== socket.id);
+    if (!room || !rooms[room]) return;
 
-    const game = activeRooms[roomId];
+    const game = rooms[room];
     const piece = game.board[from.y][from.x];
     if (!piece) return;
 
-    const isWhitePiece = piece === 1 || piece === 2;
-    if ((game.turn === "white") !== isWhitePiece) return;
+    const isWhite = piece === 1 || piece === 2;
+    if ((game.turn === "white") !== isWhite) return;
 
     const dx = Math.abs(to.x - from.x);
     const dy = Math.abs(to.y - from.y);
+    if (dx !== 1 || dy !== 1 || game.board[to.y][to.x] !== 0) return;
 
-    if (dx === 1 && dy === 1 && game.board[to.y][to.x] === 0) {
-      // Geçerli hamle
-      game.board[to.y][to.x] = piece;
-      game.board[from.y][from.x] = 0;
+    game.board[to.y][to.x] = piece;
+    game.board[from.y][from.x] = 0;
+    if (piece === 1 && to.y === 0) game.board[to.y][to.x] = 2;
+    if (piece === 3 && to.y === 7) game.board[to.y][to.x] = 4;
 
-      // Kral kontrolü
-      if (piece === 1 && to.y === 0) game.board[to.y][to.x] = 2;  // Beyaz kral
-      if (piece === 3 && to.y === 7) game.board[to.y][to.x] = 4;  // Siyah kral
+    game.turn = game.turn === "white" ? "black" : "white";
+    const sendBoard = game.turn === "black" ? flipBoard(game.board) : game.board;
 
-      // Sıra değiştir
-      game.turn = game.turn === "white" ? "black" : "white";
-
-      const boardToSend = game.turn === "black" ? flipBoardForBlack(game.board) : game.board;
-
-      io.to(roomId).emit("boardUpdate", {
-        board: boardToSend,
-        turn: game.turn,
-        flipped: game.turn === "black"
-      });
-    }
+    io.to(room).emit("boardUpdate", { board: sendBoard, turn: game.turn, flipped: game.turn === "black" });
   });
 
-  // Sırayı iptal et
-  socket.on("cancelMatch", () => {
-    const index = waitingQueue.indexOf(socket);
-    if (index > -1) waitingQueue.splice(index, 1);
-  });
-
-  // Bağlantı kesildi
   socket.on("disconnect", () => {
-    console.log(`Bağlantı koptu → ${socket.id}`);
-    const index = waitingQueue.indexOf(socket);
-    if (index > -1) waitingQueue.splice(index, 1);
+    console.log("Ayrıldı →", socket.id);
+    const i = queue.indexOf(socket);
+    if (i > -1) queue.splice(i, 1);
   });
 });
 
-// ===================================================================
-//                          SUNUCUYU BAŞLAT
-// ===================================================================
-
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, "0.0.0.0", () => {
-  console.log("=".repeat(60));
-  console.log("   ŞAŞKİ ONLINE SUNUCUSU BAŞARIYLA ÇALIŞIYOR!   ");
-  console.log(`   PORT: ${PORT}`);
-  console.log(`   URL: https://your-app.onrender.com`);
-  console.log("=".repeat(60));
+  console.log("=".repeat(70));
+  console.log("   ŞAŞKİ ONLINE SUNUCUSU ÇALIŞIYOR!");
+  console.log("   URL: https://mario-io-1.onrender.com");
+  console.log("=".repeat(70));
 });
