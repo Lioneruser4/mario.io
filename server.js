@@ -1,27 +1,37 @@
-// server.js - Dama Motoru İçin Temel Sınıflar ve Mantık
+// server.js (Node.js/Express/Socket.io - Profesyonel Dama Uygulaması)
+
+const express = require('express');
+const http = require = require('http');
+const { Server } = require('socket.io');
+
+const PORT = process.env.PORT || 3000;
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
+
+const rooms = {}; 
+let matchmakingQueue = [];
+
+// =================================================================
+// ♟️ DOMAIN: AMERİKAN DAMASI (CHECKERS) MOTORU - (CheckerBoard Class)
+// =================================================================
 
 class CheckerBoard {
     constructor() {
-        // 8x8 tahta, 'E' (Boş), 'R' (Kırmızı), 'B' (Siyah), 'RK' (Kırmızı Kral), 'BK' (Siyah Kral)
         this.board = Array(8).fill(null).map(() => Array(8).fill('E'));
         this.initializeBoard();
     }
 
     initializeBoard() {
-        // Kırmızı (Red) taşlar (Üstte)
-        for (let r = 0; r < 3; r++) {
+        // Kırmızı (R) ve Siyah (B) taşları tahtaya yerleştirme
+        for (let r = 0; r < 3; r++) { // Kırmızı (Üst 3 sıra)
             for (let c = 0; c < 8; c++) {
-                if ((r + c) % 2 !== 0) { // Sadece siyah karelere (r+c tek olanlar)
-                    this.board[r][c] = 'R';
-                }
+                if ((r + c) % 2 !== 0) this.board[r][c] = 'R';
             }
         }
-        // Siyah (Black) taşlar (Altta)
-        for (let r = 5; r < 8; r++) {
+        for (let r = 5; r < 8; r++) { // Siyah (Alt 3 sıra)
             for (let c = 0; c < 8; c++) {
-                if ((r + c) % 2 !== 0) {
-                    this.board[r][c] = 'B';
-                }
+                if ((r + c) % 2 !== 0) this.board[r][c] = 'B';
             }
         }
     }
@@ -30,13 +40,12 @@ class CheckerBoard {
         if (r < 0 || r >= 8 || c < 0 || c >= 8) return null;
         return this.board[r][c];
     }
-
-    // Taş hareketini ve yeme zorunluluğunu kontrol eden ana fonksiyon
+    
+    // Yeme zorunluluğunu kontrol ederek geçerli hamleleri döndürür
     getValidMoves(playerColor) {
         const moves = [];
-        let forceJump = false; // Yeme zorunluluğu
+        let forceJump = false; 
 
-        // Önce yeme hamlelerini kontrol et (Amerikan Dama kuralı)
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const piece = this.getPiece(r, c);
@@ -50,12 +59,9 @@ class CheckerBoard {
             }
         }
 
-        // Yeme zorunluluğu varsa, sadece yeme hamlelerini döndür
-        if (forceJump) {
-            return moves;
-        }
+        if (forceJump) return moves; // Yeme zorunluluğu varsa sadece yemeleri döndür
 
-        // Yeme zorunluluğu yoksa, normal hareketleri ekle
+        // Yeme zorunluluğu yoksa normal hareketleri döndür
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const piece = this.getPiece(r, c);
@@ -67,13 +73,13 @@ class CheckerBoard {
         return moves;
     }
 
-    // Normal (1 kare) hareketleri hesapla
+    // Normal hamleleri hesapla
     getNormalMovesFrom(r, c) {
         const piece = this.getPiece(r, c);
         const moves = [];
         const isKing = piece.endsWith('K');
         const isRed = piece.startsWith('R');
-        const direction = isRed ? 1 : -1; // Kırmızı aşağı (+1), Siyah yukarı (-1)
+        const direction = isRed ? 1 : -1;
 
         const checkMove = (nextR, nextC) => {
             if (nextR >= 0 && nextR < 8 && nextC >= 0 && nextC < 8 && this.getPiece(nextR, nextC) === 'E') {
@@ -81,22 +87,15 @@ class CheckerBoard {
             }
         };
 
-        // Standart yönler
-        if (isKing || isRed) {
-            checkMove(r + direction, c - 1);
-            checkMove(r + direction, c + 1);
-        }
-        // Geriye hareket (Sadece Kral için veya Siyah için)
+        // İleriye hareket
+        checkMove(r + direction, c - 1);
+        checkMove(r + direction, c + 1);
+
+        // Kral ise geriye hareket de mümkün
         if (isKing) {
             checkMove(r - direction, c - 1);
             checkMove(r - direction, c + 1);
         }
-        // Kral taşların geriye hareketi
-        if (isKing && !isRed) { // Siyah Kral
-             checkMove(r + 1, c - 1);
-             checkMove(r + 1, c + 1);
-        }
-
         return moves;
     }
 
@@ -105,11 +104,17 @@ class CheckerBoard {
         const piece = this.getPiece(r, c);
         const jumps = [];
         const isKing = piece.endsWith('K');
-        const isRed = piece.startsWith('R');
         const player = piece.charAt(0);
         const opponent = player === 'R' ? 'B' : 'R';
 
-        const checkJump = (dirR, dirC) => {
+        const directions = [[1, 1], [1, -1], [-1, 1], [-1, -1]]; // Tüm 4 çapraz yön
+
+        for (const [dirR, dirC] of directions) {
+            // Yön kontrolü: Sadece Kral, ileri ve geri gidebilir. Normal taşlar sadece ileri gidebilir.
+            const isForward = (player === 'R' && dirR > 0) || (player === 'B' && dirR < 0);
+
+            if (!isKing && !isForward) continue; // Normal taşlar geriye yiyemez
+
             const jumpedR = r + dirR;
             const jumpedC = c + dirC;
             const landR = r + 2 * dirR;
@@ -118,8 +123,6 @@ class CheckerBoard {
             const jumpedPiece = this.getPiece(jumpedR, jumpedC);
             const landSquare = this.getPiece(landR, landC);
 
-            // 1. Atlanan karede rakip taşı olmalı
-            // 2. İniş karesi boş olmalı
             if (jumpedPiece && jumpedPiece.startsWith(opponent) && landSquare === 'E') {
                 jumps.push({ 
                     from: { r, c }, 
@@ -128,63 +131,52 @@ class CheckerBoard {
                     captured: { r: jumpedR, c: jumpedC }
                 });
             }
-        };
-
-        const forward = isRed ? 1 : -1;
-        
-        // İleriye doğru atlamalar (Her zaman)
-        checkJump(forward, -1);
-        checkJump(forward, 1);
-
-        // Geriye doğru atlamalar (Sadece Kral için)
-        if (isKing) {
-            checkJump(-forward, -1);
-            checkJump(-forward, 1);
         }
-
         return jumps;
     }
 
-    // Hamleyi gerçekleştir
-    makeMove(move, playerId) {
-        const { from, to, type, captured } = move;
+    // Hamleyi gerçekleştirir ve çoklu yeme zorunluluğu olup olmadığını döndürür
+    makeMove(move) {
+        const { from, to, captured } = move;
         const piece = this.getPiece(from.r, from.c);
 
-        // Taşı yeni konuma taşı
         this.board[to.r][to.c] = piece;
         this.board[from.r][from.c] = 'E';
 
-        // Yeme işlemi
-        if (type === 'jump' && captured) {
-            this.board[captured.r][captured.c] = 'E';
-            // Çoklu yeme kontrolü (Amerikan Dama kuralı)
+        if (captured) {
+            this.board[captured.r][captured.c] = 'E'; // Rakip taşı sil
+            // Vezir yükselince çoklu yeme yapamaz kuralı (Bazı varyantlarda geçerlidir, burada varsayılanı uyguluyoruz)
+            if ((piece === 'R' && to.r === 7) || (piece === 'B' && to.r === 0)) {
+                 this.board[to.r][to.c] = piece.charAt(0) + 'K'; // Kral yap
+                 return { multiJump: false }; // Kral olunca sıranın geçmesi yaygındır
+            }
+
+            // Çoklu yeme kontrolü
             if (this.getJumpsFrom(to.r, to.c).length > 0) {
-                // Eğer çoklu yeme varsa, sıra aynı oyuncuda kalır.
                 return { multiJump: true };
             }
         }
 
-        // Vezir (King) yükseltmesi
-        if (piece === 'R' && to.r === 7) {
-            this.board[to.r][to.c] = 'RK';
-        } else if (piece === 'B' && to.r === 0) {
-            this.board[to.r][to.c] = 'BK';
-        }
+        // Vezir (King) yükseltmesi (Yeme dışındaki hareketlerde)
+        if (piece === 'R' && to.r === 7) this.board[to.r][to.c] = 'RK';
+        else if (piece === 'B' && to.r === 0) this.board[to.r][to.c] = 'BK';
 
         return { multiJump: false };
     }
 }
 
-// Global Dama Oyunu Yönetimi (server.js'in ana kısmında kullanılacak)
+// =================================================================
+// 🕹️ OYUN YÖNETİCİSİ VE AKIŞI (DamaGameManager Class)
+// =================================================================
+
 class DamaGameManager {
     constructor(players, roomCode) {
         this.board = new CheckerBoard();
         this.players = players; // [RedId, BlackId]
         this.playerColors = { [players[0]]: 'R', [players[1]]: 'B' };
-        this.currentPlayerId = players[0]; // Kırmızı başlar (Üstten)
+        this.currentPlayerId = players[0]; // Kırmızı başlar
         this.roomCode = roomCode;
         this.gameState = 'playing';
-        // Diğer veriler (skor, oyun sonu kontrolü vb.) buraya gelir.
     }
 
     getGameState() {
@@ -192,7 +184,126 @@ class DamaGameManager {
             board: this.board.board,
             turnId: this.currentPlayerId,
             playerColors: this.playerColors,
-            gameState: this.gameState
+            gameState: this.gameState,
+            redPieces: this.countPieces('R'),
+            blackPieces: this.countPieces('B')
         };
     }
+    
+    // Oyun Sonu Kontrolü (Rakibin taşı kalmadıysa veya hareket edemiyorsa)
+    countPieces(color) {
+        let count = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                if (this.board.board[r][c].startsWith(color)) count++;
+            }
+        }
+        return count;
+    }
+    
+    checkGameEnd() {
+        const redMoves = this.board.getValidMoves('R').length;
+        const blackMoves = this.board.getValidMoves('B').length;
+        
+        if (this.countPieces('B') === 0 || blackMoves === 0) {
+            this.gameState = 'finished';
+            return { winner: this.players[0] }; // Kırmızı Kazanır
+        }
+        if (this.countPieces('R') === 0 || redMoves === 0) {
+            this.gameState = 'finished';
+            return { winner: this.players[1] }; // Siyah Kazanır
+        }
+        return null;
+    }
 }
+
+
+// =================================================================
+// 🌐 SOCKET.IO GERÇEK ZAMANLI İLETİŞİM
+// =================================================================
+
+io.on('connection', (socket) => {
+    socket.emit('connection:success', { message: '✅ Sunucuya Başarıyla Bağlanıldı!' });
+
+    // --- LOBİ MANTIĞI ---
+    socket.on('matchmaking:start', () => {
+        // ... (Matchmaking mantığı önceki Domino projesindeki gibi kalır) ...
+        // Eşleşme bulunduğunda yeni DamaGameManager başlatır
+    });
+    
+    socket.on('create:room', () => {
+        // ... (Oda kurma mantığı önceki Domino projesindeki gibi kalır) ...
+    });
+    
+    socket.on('join:room', (data) => {
+        // ... (Odaya katılma mantığı önceki Domino projesindeki gibi kalır) ...
+        // 2. oyuncu katıldığında DamaGameManager başlatır ve oyunu başlatır.
+    });
+
+
+    // --- OYUN İÇİ AKIŞ ---
+
+    socket.on('request:piece_moves', (data) => {
+        const { roomCode, piece } = data;
+        const room = rooms[roomCode];
+        if (!room) return;
+
+        const playerColor = room.game.playerColors[socket.id];
+        const allValidMoves = room.game.board.getValidMoves(playerColor);
+
+        // Sadece seçilen taşa ait hamleleri filtrele
+        const pieceMoves = allValidMoves.filter(m => m.from.r === piece.r && m.from.c === piece.c);
+
+        socket.emit('valid_moves:response', { moves: pieceMoves, requestedPiece: piece });
+    });
+
+    socket.on('game:play', (data) => {
+        const { roomCode, move } = data;
+        const room = rooms[roomCode];
+        if (!room || room.game.currentPlayerId !== socket.id) {
+            return socket.emit('play:error', { message: 'Sıra sizde değil veya geçersiz oda.' });
+        }
+
+        const playerColor = room.game.playerColors[socket.id];
+        const validMoves = room.game.board.getValidMoves(playerColor);
+
+        // Güvenlik kontrolü: İstemcinin gönderdiği hamle sunucunun geçerli hamle listesinde var mı?
+        const isValid = validMoves.some(m => 
+            m.from.r === move.from.r && m.from.c === move.from.c &&
+            m.to.r === move.to.r && m.to.c === move.to.c
+        );
+        
+        if (isValid) {
+            const { multiJump } = room.game.board.makeMove(move);
+
+            // Oyun Sonu Kontrolü
+            const gameEndResult = room.game.checkGameEnd();
+            if (gameEndResult) {
+                io.to(roomCode).emit('game:over', gameEndResult);
+            }
+            
+            if (!multiJump) {
+                // Sırayı değiştir
+                const currentIndex = room.game.players.indexOf(socket.id);
+                room.game.currentPlayerId = room.game.players[(currentIndex + 1) % room.game.players.length];
+            } else {
+                // Çoklu yeme varsa, sıra aynı oyuncuda kalır ve istemciye bilgi gönderilir
+                socket.emit('multi_jump_required', { from: move.to });
+            }
+
+            // Tahta durumunu ve sırayı güncelle
+            io.to(roomCode).emit('game:update', room.game.getGameState());
+            
+        } else {
+            socket.emit('play:error', { message: 'Geçersiz hamle! Kural ihlali.' });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        // ... (Ayrılma mantığı) ...
+    });
+});
+
+server.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
+});
