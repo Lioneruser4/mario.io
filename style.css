@@ -1,155 +1,168 @@
 /* style.css */
+
 :root {
-    --primary-color: #ff00ff; /* Neon Pembe/Mor */
-    --secondary-color: #00ffff; /* Neon Mavi */
-    --accent-color: #00ff00; /* Neon Yeşil */
-    --danger-color: #ff3333;
-    --bg-color: #111;
-    --text-color: #eee;
-    --board-light: #f0c080; 
-    --board-dark: #804000; 
-    --red-piece: #ff4444;
-    --black-piece: #333333;
+    --primary-color: #3f51b5; /* İndigo */
+    --accent-color: #ff9800;  /* Turuncu */
+    --text-color: #ffffff;
+    --background-color: #212121; /* Koyu Gri */
+    --glow-color-competitive: #4caf50; /* Yeşil (Dereceli) */
+    --glow-color-turn: #ffff00; /* Sarı (Sıra) */
 }
 
-/* Genel ve Mobil Ayarlar */
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* --- Temel ve Mobil Uyumluluk --- */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-}
-
-#app-container {
-    width: 100%;
-    max-width: 600px; 
-    padding: 10px;
-}
-
-.screen {
-    padding: 20px;
-    border: 1px solid #333;
-    border-radius: 12px;
-    background: #1e1e1e;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-.hidden { display: none !important; }
-.active { display: flex; flex-direction: column; gap: 15px; }
-
-/* TİTLE VE BAĞLANTI DURUMU */
-.neon-title {
-    text-align: center;
-    font-size: 2.5em;
-    font-weight: bold;
-    color: #fff;
-    text-shadow: 0 0 7px var(--primary-color), 0 0 10px var(--primary-color), 0 0 21px var(--primary-color);
-    animation: flicker 1.5s infinite alternate;
-}
-.status-indicator { padding: 8px; text-align: center; border-radius: 5px; font-weight: bold; transition: all 0.5s; }
-.status-indicator.waiting { background: #444; color: #aaa; }
-.status-indicator.success { background: var(--accent-color); box-shadow: 0 0 5px var(--accent-color); color: var(--bg-color); }
-
-/* BUTONLAR VE GLOW EFEKTİ */
-.lobby-buttons button, .join-area button {
-    width: 100%; padding: 15px; margin-bottom: 10px; font-size: 1.1em;
-    font-weight: bold; border: none; border-radius: 8px; cursor: pointer;
-    transition: all 0.3s ease; text-transform: uppercase; display: flex;
-    align-items: center; justify-content: center;
-}
-.glowing-btn:hover { transform: translateY(-2px); }
-.glowing-btn.primary-btn { background: var(--primary-color); box-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color); color: var(--bg-color); }
-.glowing-btn.secondary-btn { background: var(--secondary-color); box-shadow: 0 0 8px var(--secondary-color); color: var(--bg-color); }
-.glowing-btn.accent-btn { background: var(--accent-color); box-shadow: 0 0 8px var(--accent-color); color: var(--bg-color); }
-.glowing-btn.danger-btn { background: var(--danger-color); box-shadow: 0 0 8px var(--danger-color); color: white; }
-.icon { margin-right: 10px; animation: pulse 1s infinite alternate; }
-
-.join-area { display: flex; gap: 10px; }
-.join-area input {
-    flex-grow: 1; padding: 10px; border-radius: 8px; border: 2px solid var(--secondary-color);
-    background: #2a2a2a; color: var(--text-color); font-size: 1em; text-align: center;
-}
-
-/* OYUN ALANI (Dama Tahtası) */
-#board-container {
-    width: 100%;
-    padding-top: 100%; 
-    position: relative;
-    margin: 20px auto;
-    max-width: 400px;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
-}
-
-#board {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(8, 1fr);
-    border: 5px solid #444;
-}
-
-.square {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: background-color 0.2s;
-}
-
-.light { background-color: var(--board-light); }
-.dark { background-color: var(--board-dark); }
-
-.highlight-move {
-    background-color: var(--accent-color) !important;
-    cursor: pointer;
-    animation: highlightPulse 0.8s infinite alternate; 
-}
-
-/* Taşlar */
-.piece {
-    width: 80%; height: 80%; border-radius: 50%;
-    display: flex; justify-content: center; align-items: center;
-    font-size: 0.8em; font-weight: bold; cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6);
-    transition: transform 0.2s, box-shadow 0.3s;
-}
-
-.piece-red { background-color: var(--red-piece); border: 3px solid #f00; }
-.piece-black { background-color: var(--black-piece); border: 3px solid #000; }
-
-.selected-piece {
-    transform: scale(1.1) translateY(-5px);
-    box-shadow: 0 0 15px white, 0 8px 10px rgba(0, 0, 0, 0.8);
-    z-index: 10;
-}
-.piece.king { font-size: 1.5em; line-height: 1; } /* Taç (King) */
-
-/* SIRA GÖSTERGESİ (Işıklı) */
-.turn-red #current-player-color {
-    color: var(--red-piece);
-    text-shadow: 0 0 5px var(--red-piece), 0 0 10px var(--red-piece);
-    animation: glowingTurn 1s infinite alternate var(--red-piece);
-}
-
-.turn-black #current-player-color {
+    background-color: var(--background-color);
     color: var(--text-color);
-    text-shadow: 0 0 5px var(--text-color), 0 0 10px var(--text-color);
-    animation: glowingTurn 1s infinite alternate #fff;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Üstten başlasın */
+    min-height: 100vh;
+    padding: 20px;
 }
 
+.container {
+    width: 100%;
+    max-width: 450px; /* Mobil odaklı max genişlik */
+    background: #333;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
 
-/* ANİMASYONLAR */
-@keyframes flicker { 0%, 18%, 22%, 25%, 53%, 57%, 100% { text-shadow: 0 0 4px var(--primary-color), 0 0 11px var(--primary-color), 0 0 19px var(--primary-color), 0 0 40px var(--primary-color); } 20%, 24%, 55% { text-shadow: none; } }
-@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
-@keyframes highlightPulse { from { box-shadow: 0 0 5px var(--accent-color); } to { box-shadow: 0 0 15px var(--accent-color); } }
-@keyframes glowingTurn { from { opacity: 0.7; } to { opacity: 1; } }
+header h1 {
+    color: var(--accent-color);
+    margin-bottom: 5px;
+}
+
+/* --- Lobi Stilleri --- */
+#lobby-view {
+    margin-top: 20px;
+}
+
+h2 {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+#input-room-code {
+    flex-grow: 1;
+    padding: 10px;
+    border: 2px solid var(--primary-color);
+    border-radius: 8px;
+    background: #444;
+    color: var(--text-color);
+    text-align: center;
+    font-size: 1.1em;
+}
+
+/* --- Buton Animasyonları (Işıklı) --- */
+.animated-btn {
+    padding: 15px 20px;
+    font-size: 1.2em;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.animated-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+}
+
+/* Özel Buton Renkleri ve Parlaması */
+.competitive {
+    background-color: var(--glow-color-competitive);
+    color: var(--background-color);
+}
+.competitive:hover {
+    box-shadow: 0 0 15px var(--glow-color-competitive);
+}
+
+.private {
+    background-color: #03a9f4; /* Mavi */
+    color: var(--text-color);
+}
+.private:hover {
+    box-shadow: 0 0 15px #03a9f4;
+}
+
+.join {
+    background-color: var(--accent-color);
+    color: var(--background-color);
+    padding: 10px 15px; /* Daha küçük */
+    font-size: 1.1em;
+}
+.join:hover {
+    box-shadow: 0 0 15px var(--accent-color);
+}
+
+/* --- Durum Göstergesi (Bildirim) --- */
+#status-display {
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    background-color: #444;
+    color: var(--text-color);
+    transition: background-color 0.5s ease;
+}
+
+/* --- Oyun İçi Stilleri (Gizli Başlangıç) --- */
+.hidden {
+    display: none !important;
+}
+
+#game-view {
+    margin-top: 30px;
+    border-top: 1px solid #555;
+    padding-top: 20px;
+}
+
+/* Işıklı Sıra Göstergesi */
+@keyframes turn-glow {
+    0%, 100% { box-shadow: 0 0 5px var(--glow-color-turn), 0 0 15px var(--glow-color-turn); }
+    50% { box-shadow: 0 0 10px var(--glow-color-turn), 0 0 30px var(--glow-color-turn); }
+}
+
+#turn-indicator.is-my-turn {
+    color: var(--glow-color-turn);
+    animation: turn-glow 2s infinite alternate;
+    border-radius: 5px;
+    padding: 5px;
+    display: inline-block;
+}
+
+/* --- Mobil Optimizasyonu (Gerektiğinde) --- */
+@media (max-width: 400px) {
+    .container {
+        padding: 10px;
+    }
+    .animated-btn {
+        padding: 12px 15px;
+        font-size: 1em;
+    }
+}
