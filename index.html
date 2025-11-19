@@ -9,36 +9,22 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     
     <style>
-        /* SADECE ZAMANLAYICI VE OYUNCU İSİMLERİ İÇİN EK STİLLER */
-        
-        .header {
-            /* Zamanlayıcılar için yeterli alan sağlamak amacıyla genişliği artır */
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .p {
-            display: flex;
-            align-items: center;
+        /* Merkezi zamanlayıcı için basit stil */
+        #centralTimer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5em; /* Büyük ve ortada */
             font-weight: bold;
-        }
-
-        .timer-display {
-            /* Zamanlayıcıyı daha belirgin yap */
-            margin-left: 10px;
-            margin-right: 10px;
-            font-weight: 900;
             color: #f44336; /* Kırmızı renk */
-            min-width: 40px; /* Sabit genişlik */
-            text-align: center;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 15px;
+            border-radius: 10px;
+            z-index: 100; /* Tahtanın üzerinde görünmesi için */
+            pointer-events: none; /* Tıklamaları engellememesi için */
         }
-        
-        /* Rakip tarafındaki (p2) göstergelerin sırasını ayarlamak için */
-        #p2 {
-            flex-direction: row-reverse; /* Işık ve Zamanlayıcının sağa geçmesi için */
-        }
+        /* Diğer stil kurallarınızı buraya ekleyin... */
     </style>
 </head>
 <body>
@@ -73,17 +59,14 @@
 
 <div id="game" class="screen">
   <div class="header">
-            <div class="p" id="p1">
-            <div class="light" id="l1"></div> 
-            <span id="player1Name">Sen (Beyaz)</span> 
-            <span id="timer1" class="timer-display">0:20</span> </div>
+    <div class="p" id="p1"><div class="light" id="l1"></div> Sen</div>
     <div class="vs">VS</div>
-            <div class="p" id="p2">
-            <span id="timer2" class="timer-display">0:20</span> <span id="player2Name">Rakip (Siyah)</span> 
-            <div class="light" id="l2"></div>
-        </div>
+    <div class="p" id="p2">Rakip <div class="light" id="l2"></div></div>
   </div>
-  <canvas id="board"></canvas>
+    <div style="position: relative;">
+        <span id="centralTimer">0:20</span>
+        <canvas id="board"></canvas>
+    </div>
   <button id="leave" class="btn red">Çık</button>
 </div>
 
