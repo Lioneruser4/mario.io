@@ -1,5 +1,6 @@
 // main.js
 
+// KONTROL EDİLEN SUNUCU ADRESİ
 const SERVER_URL = "https://mario-io-1.onrender.com"; 
 const socket = io(SERVER_URL);
 
@@ -11,14 +12,14 @@ const connStatus = $('connection-status');
 const notificationArea = $('notification-area');
 const boardContainer = $('board-container');
 const turnIndicator = $('turn-indicator');
-// ... [Diğer DOM elemanları] ...
+const rankedBtn = $('ranked-btn');
+const cancelMatchBtn = $('cancel-match-btn');
 
 let currentRoom = null;
 let myColor = null; 
 let isMyTurn = false;
 let selectedPiece = null; 
 
-// Global Dama Tahtası Durumu (Client tarafında kopyası tutulur)
 let boardState = initializeBoard(); 
 
 // --- DAMA KURALLARI (Vurgulama Amaçlı) ---
@@ -38,9 +39,8 @@ function initializeBoard() {
     return initial;
 }
 
-// Yeme Hamlelerini Bulma (Vurgulama için)
+// Yeme Hamlelerini Bulma (Zincirleme kontrolü için)
 function findJumps(r, c, isRed, isKing, board, opponentPieces) {
-    // Sunucu kodundaki mantığın aynısı
     const jumps = [];
     const checkDirections = [isRed ? 1 : -1];
     if (isKing) checkDirections.push(isRed ? -1 : 1);
@@ -69,24 +69,25 @@ function findJumps(r, c, isRed, isKing, board, opponentPieces) {
     return jumps;
 }
 
-// Geçerli Hamleleri Hesaplama (Vurgulama için)
 function getValidMoves(squareId, board) {
     const moves = [];
     const r = parseInt(squareId[0]);
     const c = parseInt(squareId[1]);
     const pieceType = board[squareId];
+    if (!pieceType) return moves; // Taş yoksa hamle yok
+
     const isKing = pieceType.includes('K');
     const isRed = pieceType.includes('R');
     const opponentPieces = isRed ? ['B', 'BK'] : ['R', 'RK'];
     const direction = isRed ? 1 : -1;
     
-    // Yeme Hamleleri
     const jumpMoves = findJumps(r, c, isRed, isKing, board, opponentPieces);
     if (jumpMoves.length > 0) {
+        // Yeme varsa sadece yeme hamleleri geçerlidir
         return jumpMoves; 
     }
 
-    // Normal Hamleler (Yeme yoksa)
+    // Normal hareketler
     const possibleDirections = [direction];
     if (isKing) possibleDirections.push(-direction);
 
@@ -121,8 +122,8 @@ function createBoard(state) {
     boardContainer.innerHTML = '<div id="board"></div>';
     const board = $('board');
     
-    const rowRange = myColor === 'Black' ? Array.from({ length: 8 }, (_, i) => 7 - i) : Array.from({ length: 8 }, (_, i) => i);
-    
+    const isBlackPlayer = myColor === 'Black';
+
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const squareId = `${r}${c}`;
@@ -133,10 +134,13 @@ function createBoard(state) {
             square.classList.add((r + c) % 2 === 0 ? 'light' : 'dark');
             square.dataset.id = squareId; 
 
-            // Tahtanın kendi tarafı altta olacak şekilde grid'e yerleştirme
-            const displayR = myColor === 'Black' ? 7 - r : r;
-            square.style.gridRow = displayR + 1;
-            square.style.gridColumn = c + 1;
+            // Tahtanın kendi tarafı altta olacak şekilde grid'e yerleştirme (DÜZELTİLDİ)
+            // Siyah oyuncu ise satır 0 (en üst) görünürde 8. satır (en alt) olur.
+            const displayR = isBlackPlayer ? (8 - r) : (r + 1); 
+            const displayC = c + 1;
+
+            square.style.gridRow = displayR;
+            square.style.gridColumn = displayC;
 
             if (isDarkSquare) {
                 square.addEventListener('click', handleBoardClick);
@@ -173,35 +177,36 @@ function handleBoardClick(event) {
     const pieceElement = square.querySelector('.piece');
     const squareId = square.dataset.id;
     
-    // 1. TAŞ SEÇİMİ (Taşa dokundukda nereye gitmeli ise işaretlesin)
-    if (pieceElement) {
+    // 1. TAŞ SEÇİMİ (Taşa dokunma)
+    if (pieceElement && squareId in boardState) {
         const pieceType = boardState[squareId];
+        
         if ((myColor === 'Red' && pieceType.includes('R')) || 
             (myColor === 'Black' && pieceType.includes('B'))) {
             
-            clearHighlights();
-            document.querySelectorAll('.selected-piece').forEach(p => p.classList.remove('selected-piece'));
+            clearHighlights(); // Önceki vurguları ve seçimi temizle
 
+            // Seçimi ayarla ve görselleştir
             pieceElement.classList.add('selected-piece');
             selectedPiece = squareId;
             
-            // Geçerli hamleleri hesapla ve vurgula
             const validMoves = getValidMoves(squareId, boardState);
             highlightMoves(validMoves);
-
+            
+            return; 
         }
     } 
-    // 2. HAMLE YAPMA (Taşa dokunup kutuya dokundukda oraya gitsin)
-    else if (selectedPiece && square.classList.contains('highlight-move')) {
+    
+    // 2. HAMLE YAPMA (Vurgulanan kareye tıklama)
+    if (selectedPiece && square.classList.contains('highlight-move')) {
         const from = selectedPiece;
         const to = squareId;
 
-        // Hamleyi sunucuya gönder
+        // Hamleyi sunucuya gönder (Sunucu kuralı kontrol edecek)
         socket.emit('hareketYap', { roomCode: currentRoom, from, to });
         
-        // Yerel durumu temizle (Sunucudan gelen güncel durumu bekleyeceğiz)
+        // Yerel durumu temizle
         clearHighlights();
-        document.querySelectorAll('.selected-piece').forEach(p => p.classList.remove('selected-piece'));
         selectedPiece = null;
     }
 }
@@ -217,6 +222,7 @@ function highlightMoves(moves) {
 
 function clearHighlights() {
     document.querySelectorAll('.highlight-move').forEach(s => s.classList.remove('highlight-move'));
+    document.querySelectorAll('.selected-piece').forEach(p => p.classList.remove('selected-piece'));
 }
 
 function updateTurnIndicator(isTurn) {
@@ -228,7 +234,7 @@ function updateTurnIndicator(isTurn) {
     turnIndicator.classList.add(color === 'Red' ? 'turn-red' : 'turn-black');
     
     if (isTurn) {
-        showNotification('SIRA SİZDE! Hamlenizi yapın.', 'success');
+        // Zaten showNotification ile bildiriliyor
     }
 }
 
@@ -243,9 +249,21 @@ socket.on('connectionSuccess', (data) => {
 });
 
 socket.on('connect_error', (err) => {
-    connStatus.textContent = '❌ Bağlantı Hatası: Sunucu Kapalı veya Erişilemiyor.';
+    connStatus.textContent = `❌ Bağlantı Hatası: Sunucu Kapalı veya Erişilemiyor.`;
     connStatus.classList.remove('success');
     connStatus.classList.add('waiting');
+});
+
+socket.on('eslesmeBekle', (data) => {
+    rankedBtn.classList.add('hidden');
+    cancelMatchBtn.classList.remove('hidden');
+    showNotification(data.text, 'info');
+});
+
+socket.on('eslesmeIptalBasarili', () => {
+    rankedBtn.classList.remove('hidden');
+    cancelMatchBtn.classList.add('hidden');
+    showNotification('Eşleşme araması iptal edildi.', 'info');
 });
 
 socket.on('eslesmeBulundu', (data) => startGame(data));
@@ -261,14 +279,13 @@ function startGame(data) {
     $('display-room-code').textContent = currentRoom;
     $('my-color-display').textContent = myColor;
     
-    const isStartingTurn = myColor === 'Red'; // Kırmızı başlar
+    const isStartingTurn = myColor === 'Red'; 
     updateTurnIndicator(isStartingTurn);
 
     showNotification(`Oyun başladı! Sen: ${myColor}`, 'success');
 }
 
 socket.on('oyunDurumuGuncelle', (data) => {
-    // Taşın hareket etmesini sağlayan ana mekanizma
     boardState = data.newBoard; 
     createBoard(boardState); 
 
@@ -278,11 +295,11 @@ socket.on('oyunDurumuGuncelle', (data) => {
 
 socket.on('continousJump', (data) => {
     showNotification('Zorunlu Zincirleme Yeme! Sıra sizde devam ediyor.', 'warning');
-    // Tahta güncellendi, şimdi oyuncu yeni taşı tekrar seçip yemeğe devam etmeli.
+    // Tahta güncellenir, oyuncu tekrar tıklama yapmalıdır.
 });
 
 socket.on('odaOlusturuldu', (data) => {
-    showNotification(`${data.message} Kod: ${data.code}`, 'success');
+    showNotification(`${data.message} Kod: ${data.code}. Rakibinizi bekleyin.`, 'success');
 });
 
 socket.on('hata', (data) => {
@@ -290,19 +307,53 @@ socket.on('hata', (data) => {
 });
 
 
-// --- BUTON OLAY DİNLEYİCİLERİ ---
-$('ranked-btn').addEventListener('click', () => { socket.emit('eslesmeBaslat'); });
-$('cancel-match-btn').addEventListener('click', () => { socket.emit('eslesmeIptal'); });
-$('friend-btn').addEventListener('click', () => { socket.emit('odaKur'); });
+// --- BUTON OLAY DİNLEYİCİLERİ (HATA DÜZELTİLDİ) ---
+
+rankedBtn.addEventListener('click', () => { 
+    if (socket.connected) {
+        socket.emit('eslesmeBaslat'); 
+    } else {
+        showNotification('Sunucuya bağlı değil!', 'danger');
+    }
+});
+
+cancelMatchBtn.addEventListener('click', () => { 
+    if (socket.connected) {
+        socket.emit('eslesmeIptal'); 
+        rankedBtn.classList.remove('hidden');
+        cancelMatchBtn.classList.add('hidden');
+        showNotification('Eşleşme araması iptal edildi.', 'info');
+    }
+});
+
+$('friend-btn').addEventListener('click', () => { 
+    if (socket.connected) {
+        socket.emit('odaKur'); 
+    }
+});
+
 $('join-btn').addEventListener('click', () => {
     const code = $('room-code-input').value.trim();
-    if (code.length === 4) {
+    if (code.length === 4 && socket.connected) {
         socket.emit('odayaBaglan', { code });
+    } else if (!socket.connected) {
+         showNotification('Sunucuya bağlı değil!', 'danger');
     } else {
         showNotification('Lütfen 4 haneli oda kodu girin.', 'danger');
     }
 });
 
-// Başlangıçta tahtayı çiz ve lobi ekranını göster
+// Oyundan çıkma butonu
+$('quit-game-btn').addEventListener('click', () => {
+    socket.emit('oyunTerket', { roomCode: currentRoom });
+    currentRoom = null;
+    myColor = null;
+    isMyTurn = false;
+    boardState = initializeBoard();
+    switchScreen(lobbyScreen);
+    showNotification('Oyundan çıkıldı. Lobiye yönlendirildiniz.', 'info');
+});
+
+// Başlangıç
 createBoard(boardState); 
 switchScreen(lobbyScreen);
