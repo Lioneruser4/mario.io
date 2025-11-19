@@ -1,174 +1,158 @@
-
-// server.js (Render.com Sunucunuzda Çalışacak Dosya)
-
-const WebSocket = require('ws');
+// server.js
+const express = require('express');
 const http = require('http');
+const { Server } = require('socket.io');
 
-// Basit bir HTTP sunucusu
-const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Checkers WebSocket Server Running.');
+const app = express();
+const server = http.createServer(app);
+
+// CORS ayarı önemlidir, aksi takdirde GitHub Pages istemcisi bağlanamaz.
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Güvenlik için daha sonra sadece github.io adresinizle değiştirmelisiniz.
+        methods: ["GET", "POST"]
+    }
 });
 
-const wss = new WebSocket.Server({ server });
+const PORT = process.env.PORT || 3000;
 
-// Sunucu Durumları
-const games = {}; 
-const waitingForMatch = []; 
-const roomLobbies = {}; 
+// --- Oda ve Eşleşme Veritabanı (Basit Obje) ---
+const rooms = {}; // Örn: { "1234": { player1: socket.id, player2: null, board: initialBoard } }
+let waitingPlayer = null; // Dereceli eşleşme bekleyen tek oyuncu
 
-// Yardımcı Fonksiyon: Oyunculara mesaj gönder
-function broadcastGameUpdate(gameId, type, payload) {
-    const game = games[gameId];
-    if (!game) return;
-    const message = JSON.stringify({ type, ...payload });
-    game.players.forEach(p => {
-        if (p.readyState === WebSocket.OPEN) {
-            p.send(message);
-        }
-    });
+/**
+ * 4 haneli benzersiz bir oda kodu oluşturur.
+ * @returns {string} Oda kodu
+ */
+function generateRoomCode() {
+    let code;
+    do {
+        code = Math.floor(1000 + Math.random() * 9000).toString();
+    } while (rooms[code]);
+    return code;
 }
 
-// Amerikan Daması (Checkers) Başlangıç Tahtası
-function initializeBoard() {
-    const board = {};
-    // Siyah: 6, 7, 8. Satırlar (Üstte) | Kırmızı: 1, 2, 3. Satırlar (Altta)
-    const initialRows = { 'red': [1, 2, 3], 'black': [6, 7, 8] }; 
-
-    for (const color in initialRows) {
-        for (const r of initialRows[color]) {
-            for (let c = 1; c <= 8; c++) {
-                // Sadece koyu (dark) karelere taş konur: (Satır + Sütun) tek olmalı
-                if ((r + c) % 2 !== 0) { 
-                    const pos = String.fromCharCode(64 + c) + r;
-                    board[pos] = { color, isKing: false };
-                }
-            }
-        }
-    }
-    return board;
-}
-
-// Amerikan Daması Basit Kural Kontrolü Simülasyonu
-// **GERÇEK OYUN İÇİN BU FONKSİYONUN TAMAMLANMASI GEREKİR**
-function getLegalMoves(gameId, pos, color) {
-    // Gerçek Amerikan Daması mantığı burada çalışır (çapraz hareket, yeme zorunluluğu)
+io.on('connection', (socket) => {
+    console.log(`[👤 BAĞLANDI] Yeni oyuncu: ${socket.id}`);
     
-    // Şimdilik sadece simülasyon amaçlı rastgele hareket döndürülür:
-    if (pos === 'A3') return ['B4'];
-    if (pos === 'F6') return ['E5', 'G5']; 
-    if (pos === 'C1') return ['D2'];
+    // Sunucuya bağlantı başarılı bildirimini gönder
+    socket.emit('connectionSuccess', { message: '✅ Sunucuya Bağlantı Başarılı!', socketId: socket.id });
 
-    return [];
-}
+    // --- LOBİ MANTIĞI ---
 
+    // 🏆 DERECE: Eşleşme Ara
+    socket.on('eslesmeBaslat', () => {
+        if (waitingPlayer && waitingPlayer !== socket.id) {
+            // Eşleşme bulundu!
+            const roomCode = generateRoomCode();
+            rooms[roomCode] = { player1: waitingPlayer, player2: socket.id, turn: waitingPlayer };
+            
+            // Her iki oyuncuyu da odaya dahil et
+            io.sockets.sockets.get(waitingPlayer).join(roomCode);
+            socket.join(roomCode);
 
-// ==========================================================
-// WEBSOCKET BAĞLANTI VE EYLEM İŞLEYİCİ
-// ==========================================================
+            // Oyunculara eşleşme bildirimi gönder
+            io.to(waitingPlayer).emit('eslesmeBulundu', { room: roomCode, opponentId: socket.id, color: 'Red' });
+            io.to(socket.id).emit('eslesmeBulundu', { room: roomCode, opponentId: waitingPlayer, color: 'Black' });
 
-wss.on('connection', (ws) => {
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            handleClientAction(ws, data);
-        } catch (e) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Geçersiz JSON formatı.' }));
+            waitingPlayer = null; // Bekleyen oyuncuyu temizle
+            console.log(`[⚔️ EŞLEŞTİ] Oda: ${roomCode}. Oyuncular: ${rooms[roomCode].player1} vs ${rooms[roomCode].player2}`);
+
+        } else if (waitingPlayer === socket.id) {
+            // Zaten bekliyorsa bir şey yapma
+            socket.emit('mesaj', { text: 'Zaten eşleşme arıyorsunuz.' });
+        } else {
+            // Oyuncu beklemeye başlar
+            waitingPlayer = socket.id;
+            socket.emit('eslesmeBekle', { text: 'Eşleşme aranıyor... Lütfen bekleyin.', allowCancel: true });
+            console.log(`[⏳ BEKLİYOR] ${socket.id} eşleşme bekliyor.`);
         }
     });
 
-    ws.on('close', () => {
-        const index = waitingForMatch.indexOf(ws);
-        if (index > -1) waitingForMatch.splice(index, 1);
-        // İstemci disconnect olduğunda oyun temizleme mantığı buraya gelir
+    socket.on('eslesmeIptal', () => {
+        if (waitingPlayer === socket.id) {
+            waitingPlayer = null;
+            socket.emit('mesaj', { text: 'Eşleşme arama iptal edildi.' });
+            console.log(`[🚫 İPTAL] ${socket.id} eşleşme arama iptal edildi.`);
+        }
+    });
+
+    // 🤝 ARKADAŞLA OYNA: Oda Kur
+    socket.on('odaKur', () => {
+        const roomCode = generateRoomCode();
+        rooms[roomCode] = { player1: socket.id, player2: null, turn: socket.id };
+        socket.join(roomCode);
+        socket.emit('odaOlusturuldu', { code: roomCode, message: `Oda kuruldu: ${roomCode}. Bir arkadaşının bağlanmasını bekle.` });
+        console.log(`[🏠 ODA KUR] ${socket.id} odayı kurdu: ${roomCode}`);
+    });
+
+    // 🚪 KODLA BAĞLAN: Odaya Bağlan
+    socket.on('odayaBaglan', ({ code }) => {
+        const room = rooms[code];
+        if (room && !room.player2) {
+            // Oda var ve ikinci oyuncuyu bekliyor
+            socket.join(code);
+            room.player2 = socket.id;
+            
+            // Odaya katılan oyuncuya ve odadaki diğer oyuncuya haber ver
+            socket.emit('oyunBaslat', { room: code, color: 'Black', opponentId: room.player1 });
+            io.to(room.player1).emit('oyunBaslat', { room: code, color: 'Red', opponentId: socket.id });
+
+            console.log(`[🔗 BAĞLANDI] ${socket.id} odaya bağlandı: ${code}`);
+
+        } else if (room && room.player2) {
+            socket.emit('hata', { message: 'Oda dolu veya oyun başladı.' });
+        } else {
+            socket.emit('hata', { message: 'Geçersiz veya bulunamayan oda kodu.' });
+        }
+    });
+
+    // --- OYUN MANTIĞI ---
+    socket.on('hareketYap', (data) => {
+        const { roomCode, from, to } = data;
+        const room = rooms[roomCode];
+
+        if (room && (room.player1 === socket.id || room.player2 === socket.id) && room.turn === socket.id) {
+            // Burada gerçek dama kurallarını kontrol eden fonksiyon çalışmalı
+            // const isValid = checkDamaRules(room.board, from, to); 
+            
+            // Basitleştirilmiş: Hamle yapıldı ve geçerli kabul edildi
+            // if (isValid) {
+            
+            // Oyun tahtası durumunu güncelle
+            // room.board = updateBoardState(room.board, from, to); 
+
+            // Sırayı değiştir
+            room.turn = room.player1 === socket.id ? room.player2 : room.player1;
+            
+            // Diğer oyuncuya ve odaya güncel durumu broadcast et
+            io.to(roomCode).emit('oyunDurumuGuncelle', { 
+                newBoard: /* room.board */ "Yeni Tahta Durumu",
+                lastMove: { from, to },
+                turn: room.turn 
+            });
+            console.log(`[♟️ HAREKET] Oda: ${roomCode}. Hamleyi yapan: ${socket.id}`);
+
+            // } else {
+            //     socket.emit('hata', { message: 'Geçersiz hamle.' });
+            // }
+
+        } else {
+            socket.emit('hata', { message: 'Sıra sizde değil veya odaya ait değilsiniz.' });
+        }
+    });
+
+    // Bağlantı kesildiğinde
+    socket.on('disconnect', () => {
+        console.log(`[❌ KESİLDİ] Oyuncu ayrıldı: ${socket.id}`);
+        // Tüm odalarda bu oyuncuyu kontrol et ve odaları temizle/diğer oyuncuya haber ver.
+        // (Gerçek bir uygulamada bu kısım çok önemlidir ve odaların silinmesini içerir.)
+        if (waitingPlayer === socket.id) {
+            waitingPlayer = null; // Bekleyen oyuncu ise listeden çıkar
+        }
     });
 });
 
-function handleClientAction(ws, data) {
-    switch (data.type) {
-        case 'FIND_MATCH':
-            if (waitingForMatch.length > 0) {
-                const opponentWs = waitingForMatch.shift();
-                startNewGame(ws, opponentWs);
-            } else {
-                waitingForMatch.push(ws);
-            }
-            break;
-            
-        case 'CANCEL_SEARCH':
-            const index = waitingForMatch.indexOf(ws);
-            if (index > -1) waitingForMatch.splice(index, 1);
-            break;
-            
-        case 'CREATE_ROOM':
-            const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
-            roomLobbies[roomCode] = { host: ws, guest: null, hostColor: 'red' };
-            ws.send(JSON.stringify({ type: 'ROOM_CREATED', roomCode }));
-            break;
-
-        case 'JOIN_ROOM':
-            const room = roomLobbies[data.roomCode];
-            if (room && !room.guest) {
-                room.guest = ws;
-                startNewGame(room.host, room.guest);
-                delete roomLobbies[data.roomCode]; 
-            } else {
-                ws.send(JSON.stringify({ type: 'ERROR', message: 'Oda bulunamadı veya dolu.' }));
-            }
-            break;
-
-        case 'GET_LEGAL_MOVES':
-            const game = games[data.gameId];
-            if (!game || ws !== game.playerData[game.turn]) return; // Sıra kontrolü
-            
-            const legalMoves = getLegalMoves(data.gameId, data.pos, game.turn);
-            ws.send(JSON.stringify({ type: 'LEGAL_MOVES', moves: legalMoves }));
-            break;
-
-        case 'MAKE_MOVE':
-            // Gerçek tahta hareketini uygula ve kural kontrolü yap
-            // Eğer legal ve başarılıysa:
-            // const newBoard = applyMove(data.gameId, data.from, data.to); 
-            // games[data.gameId].turn = (games[data.gameId].turn === 'red' ? 'black' : 'red');
-            
-            // Simülasyon: Oyunu güncelle
-            const simGame = games[data.gameId];
-            const nextTurn = simGame.turn === 'red' ? 'black' : 'red';
-
-            // Burası tamamen sunucu mantığına bağlıdır. Başarılı bir hareket olduğunu varsayıyoruz:
-            const newBoardState = simGame.boardState; // Tahtayı burada güncelle
-            
-            broadcastGameUpdate(data.gameId, 'GAME_UPDATE', { boardState: newBoardState, turn: nextTurn });
-            break;
-            
-    }
-}
-
-function startNewGame(player1, player2) {
-    const gameId = Date.now().toString();
-    const boardState = initializeBoard();
-    
-    // Rastgele renk atama: Kırmızı ve Siyah
-    const p1Color = Math.random() < 0.5 ? 'red' : 'black';
-    const p2Color = p1Color === 'red' ? 'black' : 'red';
-    const firstTurn = 'red'; // Kırmızı (Altta olan) başlar
-
-    games[gameId] = {
-        players: [player1, player2],
-        boardState: boardState,
-        turn: firstTurn,
-        playerData: { [p1Color]: player1, [p2Color]: player2 }
-    };
-
-    // Oyunculara oyunu başlatma emri gönder
-    player1.send(JSON.stringify({ type: 'MATCH_FOUND', gameId, color: p1Color, boardState, turn: firstTurn }));
-    player2.send(JSON.stringify({ type: 'MATCH_FOUND', gameId, color: p2Color, boardState, turn: firstTurn }));
-}
-
-
-// SUNUCU DİNLEME PORTU
-const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-    console.log(`WebSocket sunucusu ${PORT} portunda çalışıyor.`);
+    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
-
