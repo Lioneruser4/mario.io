@@ -1,145 +1,198 @@
-// server.js (Node.js/Express/Socket.io)
+// server.js - Dama Motoru İçin Temel Sınıflar ve Mantık
 
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-
-// Render.com genellikle PORT'u ortam değişkeni olarak sağlar
-const PORT = process.env.PORT || 3000;
-const app = express();
-const server = http.createServer(app);
-
-// Socket.io Sunucusu
-// CORS ayarları: Mobil uyumluluk ve farklı alan adlarından bağlantı için önemlidir.
-const io = new Server(server, {
-    cors: {
-        origin: "*", // Tüm alan adlarından bağlantıya izin ver (Güvenlik için üretimde kısıtlanmalıdır!)
-        methods: ["GET", "POST"]
+class CheckerBoard {
+    constructor() {
+        // 8x8 tahta, 'E' (Boş), 'R' (Kırmızı), 'B' (Siyah), 'RK' (Kırmızı Kral), 'BK' (Siyah Kral)
+        this.board = Array(8).fill(null).map(() => Array(8).fill('E'));
+        this.initializeBoard();
     }
-});
 
-// Oyun Durumu Yönetimi için basit depolama
-const rooms = {}; // { roomCode: { players: [], gameData: {} } }
-let matchmakingQueue = [];
-
-io.on('connection', (socket) => {
-    console.log('Yeni bir kullanıcı bağlandı:', socket.id);
-    
-    // Bağlantı Bildirimi (İstemciye başarıyla bağlandığını bildir)
-    socket.emit('connection:success', { message: '✅ Sunucuya Başarıyla Bağlanıldı!' });
-
-    // --- Lobi İşlemleri ---
-    
-    // 🏆 Dereceli Oyna (Eşleştirme)
-    socket.on('matchmaking:start', () => {
-        console.log(`Oyuncu ${socket.id} eşleşme sırasına girdi.`);
-        
-        // Zaten sırada değilse ekle
-        if (!matchmakingQueue.includes(socket.id)) {
-            matchmakingQueue.push(socket.id);
-        }
-
-        // 2 oyuncu varsa eşleştir
-        if (matchmakingQueue.length >= 2) {
-            const player1Id = matchmakingQueue.shift();
-            const player2Id = matchmakingQueue.shift();
-            
-            // Oda Kodu oluştur
-            const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-            
-            // Odaları kur
-            const player1Socket = io.sockets.sockets.get(player1Id);
-            const player2Socket = io.sockets.sockets.get(player2Id);
-            
-            if (player1Socket && player2Socket) {
-                player1Socket.join(roomCode);
-                player2Socket.join(roomCode);
-
-                rooms[roomCode] = {
-                    players: [player1Id, player2Id],
-                    // Buraya domino oyun mantığı (taşlar, sıra, skor) eklenecek
-                    gameData: { turn: player1Id, status: 'playing' } 
-                };
-                
-                // İstemcilere oyunu başlattığını bildir
-                io.to(roomCode).emit('matchmaking:found', { roomCode, players: rooms[roomCode].players });
-                console.log(`Eşleşme bulundu. Oda: ${roomCode}`);
-            }
-        } else {
-            // Sırada beklediğini bildir
-            socket.emit('matchmaking:waiting', { message: 'Eşleşme aranıyor...' });
-        }
-    });
-
-    // 🤝 Arkadaşla Oyna (Oda Kurma)
-    socket.on('create:room', () => {
-        const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-        socket.join(roomCode);
-
-        rooms[roomCode] = {
-            players: [socket.id],
-            gameData: { status: 'waiting' }
-        };
-
-        socket.emit('room:created', { roomCode, playerId: socket.id });
-        console.log(`Oda kuruldu: ${roomCode} - Kurucu: ${socket.id}`);
-    });
-
-    // 🔑 Koda Bağlan (Odaya Katılma)
-    socket.on('join:room', (data) => {
-        const { roomCode } = data;
-        const room = rooms[roomCode];
-
-        if (room && room.players.length < 4) { // Max 4 oyuncu
-            socket.join(roomCode);
-            room.players.push(socket.id);
-            
-            socket.emit('player:joined', { roomCode, message: 'Odaya katıldınız.' });
-            // Odadaki herkese yeni oyuncunun katıldığını bildir
-            io.to(roomCode).emit('room:update', { players: room.players });
-
-            if (room.players.length === 2) { // 2 oyuncu ile hemen başlatılabilir
-                // Gerçek Domino oyun başlatma mantığı buraya eklenecek
-                room.gameData.status = 'playing';
-                io.to(roomCode).emit('game:start', { message: 'Oyun Başlıyor!' });
-            }
-        } else {
-            socket.emit('join:error', { message: 'Oda bulunamadı veya dolu.' });
-        }
-    });
-
-    // --- Oyun İçi İşlemler (Temel Yer Tutucular) ---
-    socket.on('game:play', (data) => {
-        // Hamle mantığı ve doğrulama buraya gelecek
-        // Eğer geçerliyse, oyun durumunu güncelle ve tüm odaya yayınla
-        // io.to(data.roomCode).emit('game:update', updatedGameData);
-    });
-
-    // --- Bağlantı Kesilmesi ---
-    socket.on('disconnect', () => {
-        console.log('Kullanıcı ayrıldı:', socket.id);
-
-        // Eşleşme kuyruğundan çıkar
-        matchmakingQueue = matchmakingQueue.filter(id => id !== socket.id);
-
-        // Odalardan çıkar ve odayı temizle
-        for (const code in rooms) {
-            const index = rooms[code].players.indexOf(socket.id);
-            if (index > -1) {
-                rooms[code].players.splice(index, 1);
-                
-                // Odadaki diğer oyunculara bilgi ver
-                io.to(code).emit('player:left', { playerId: socket.id, message: 'Bir oyuncu oyundan ayrıldı.' });
-                
-                // Eğer oda boşalırsa sil
-                if (rooms[code].players.length === 0) {
-                    delete rooms[code];
+    initializeBoard() {
+        // Kırmızı (Red) taşlar (Üstte)
+        for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 8; c++) {
+                if ((r + c) % 2 !== 0) { // Sadece siyah karelere (r+c tek olanlar)
+                    this.board[r][c] = 'R';
                 }
             }
         }
-    });
-});
+        // Siyah (Black) taşlar (Altta)
+        for (let r = 5; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                if ((r + c) % 2 !== 0) {
+                    this.board[r][c] = 'B';
+                }
+            }
+        }
+    }
 
-server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
-});
+    getPiece(r, c) {
+        if (r < 0 || r >= 8 || c < 0 || c >= 8) return null;
+        return this.board[r][c];
+    }
+
+    // Taş hareketini ve yeme zorunluluğunu kontrol eden ana fonksiyon
+    getValidMoves(playerColor) {
+        const moves = [];
+        let forceJump = false; // Yeme zorunluluğu
+
+        // Önce yeme hamlelerini kontrol et (Amerikan Dama kuralı)
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = this.getPiece(r, c);
+                if (piece !== 'E' && piece.startsWith(playerColor)) {
+                    const jumpMoves = this.getJumpsFrom(r, c);
+                    if (jumpMoves.length > 0) {
+                        moves.push(...jumpMoves);
+                        forceJump = true;
+                    }
+                }
+            }
+        }
+
+        // Yeme zorunluluğu varsa, sadece yeme hamlelerini döndür
+        if (forceJump) {
+            return moves;
+        }
+
+        // Yeme zorunluluğu yoksa, normal hareketleri ekle
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = this.getPiece(r, c);
+                if (piece !== 'E' && piece.startsWith(playerColor)) {
+                    moves.push(...this.getNormalMovesFrom(r, c));
+                }
+            }
+        }
+        return moves;
+    }
+
+    // Normal (1 kare) hareketleri hesapla
+    getNormalMovesFrom(r, c) {
+        const piece = this.getPiece(r, c);
+        const moves = [];
+        const isKing = piece.endsWith('K');
+        const isRed = piece.startsWith('R');
+        const direction = isRed ? 1 : -1; // Kırmızı aşağı (+1), Siyah yukarı (-1)
+
+        const checkMove = (nextR, nextC) => {
+            if (nextR >= 0 && nextR < 8 && nextC >= 0 && nextC < 8 && this.getPiece(nextR, nextC) === 'E') {
+                moves.push({ from: { r, c }, to: { r: nextR, c: nextC }, type: 'move' });
+            }
+        };
+
+        // Standart yönler
+        if (isKing || isRed) {
+            checkMove(r + direction, c - 1);
+            checkMove(r + direction, c + 1);
+        }
+        // Geriye hareket (Sadece Kral için veya Siyah için)
+        if (isKing) {
+            checkMove(r - direction, c - 1);
+            checkMove(r - direction, c + 1);
+        }
+        // Kral taşların geriye hareketi
+        if (isKing && !isRed) { // Siyah Kral
+             checkMove(r + 1, c - 1);
+             checkMove(r + 1, c + 1);
+        }
+
+        return moves;
+    }
+
+    // Yeme (Jump) hamlelerini hesapla
+    getJumpsFrom(r, c) {
+        const piece = this.getPiece(r, c);
+        const jumps = [];
+        const isKing = piece.endsWith('K');
+        const isRed = piece.startsWith('R');
+        const player = piece.charAt(0);
+        const opponent = player === 'R' ? 'B' : 'R';
+
+        const checkJump = (dirR, dirC) => {
+            const jumpedR = r + dirR;
+            const jumpedC = c + dirC;
+            const landR = r + 2 * dirR;
+            const landC = c + 2 * dirC;
+
+            const jumpedPiece = this.getPiece(jumpedR, jumpedC);
+            const landSquare = this.getPiece(landR, landC);
+
+            // 1. Atlanan karede rakip taşı olmalı
+            // 2. İniş karesi boş olmalı
+            if (jumpedPiece && jumpedPiece.startsWith(opponent) && landSquare === 'E') {
+                jumps.push({ 
+                    from: { r, c }, 
+                    to: { r: landR, c: landC }, 
+                    type: 'jump',
+                    captured: { r: jumpedR, c: jumpedC }
+                });
+            }
+        };
+
+        const forward = isRed ? 1 : -1;
+        
+        // İleriye doğru atlamalar (Her zaman)
+        checkJump(forward, -1);
+        checkJump(forward, 1);
+
+        // Geriye doğru atlamalar (Sadece Kral için)
+        if (isKing) {
+            checkJump(-forward, -1);
+            checkJump(-forward, 1);
+        }
+
+        return jumps;
+    }
+
+    // Hamleyi gerçekleştir
+    makeMove(move, playerId) {
+        const { from, to, type, captured } = move;
+        const piece = this.getPiece(from.r, from.c);
+
+        // Taşı yeni konuma taşı
+        this.board[to.r][to.c] = piece;
+        this.board[from.r][from.c] = 'E';
+
+        // Yeme işlemi
+        if (type === 'jump' && captured) {
+            this.board[captured.r][captured.c] = 'E';
+            // Çoklu yeme kontrolü (Amerikan Dama kuralı)
+            if (this.getJumpsFrom(to.r, to.c).length > 0) {
+                // Eğer çoklu yeme varsa, sıra aynı oyuncuda kalır.
+                return { multiJump: true };
+            }
+        }
+
+        // Vezir (King) yükseltmesi
+        if (piece === 'R' && to.r === 7) {
+            this.board[to.r][to.c] = 'RK';
+        } else if (piece === 'B' && to.r === 0) {
+            this.board[to.r][to.c] = 'BK';
+        }
+
+        return { multiJump: false };
+    }
+}
+
+// Global Dama Oyunu Yönetimi (server.js'in ana kısmında kullanılacak)
+class DamaGameManager {
+    constructor(players, roomCode) {
+        this.board = new CheckerBoard();
+        this.players = players; // [RedId, BlackId]
+        this.playerColors = { [players[0]]: 'R', [players[1]]: 'B' };
+        this.currentPlayerId = players[0]; // Kırmızı başlar (Üstten)
+        this.roomCode = roomCode;
+        this.gameState = 'playing';
+        // Diğer veriler (skor, oyun sonu kontrolü vb.) buraya gelir.
+    }
+
+    getGameState() {
+        return {
+            board: this.board.board,
+            turnId: this.currentPlayerId,
+            playerColors: this.playerColors,
+            gameState: this.gameState
+        };
+    }
+}
