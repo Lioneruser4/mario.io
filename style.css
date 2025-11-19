@@ -1,168 +1,90 @@
-/* style.css */
+/* style.css - Dama Tahtası Stilleri */
 
-:root {
-    --primary-color: #3f51b5; /* İndigo */
-    --accent-color: #ff9800;  /* Turuncu */
-    --text-color: #ffffff;
-    --background-color: #212121; /* Koyu Gri */
-    --glow-color-competitive: #4caf50; /* Yeşil (Dereceli) */
-    --glow-color-turn: #ffff00; /* Sarı (Sıra) */
+/* ... (Önceki genel stiller ve animasyon keyframeleri) ... */
+
+/* --- Dama Tahtası Düzeni --- */
+#game-board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: 100%;
+    max-width: 400px; /* Kare tahta için */
+    margin: 20px auto;
+    border: 5px solid var(--primary-color);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
-/* --- Temel ve Mobil Uyumluluk --- */
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+.checker-tile {
+    width: 100%;
+    /* 1:1 oran sağlamak için padding hilesi */
+    padding-bottom: 100%; 
+    position: relative;
+    cursor: pointer;
 }
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: var(--background-color);
-    color: var(--text-color);
+.black-square {
+    background-color: #555; /* Oynanabilir alan */
+}
+
+.white-square {
+    background-color: #f0d9b5; /* Oynanamaz alan */
+}
+
+/* --- Taş Stilleri --- */
+.piece {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.7);
+    transition: transform 0.2s, box-shadow 0.2s;
     display: flex;
     justify-content: center;
-    align-items: flex-start; /* Üstten başlasın */
-    min-height: 100vh;
-    padding: 20px;
-}
-
-.container {
-    width: 100%;
-    max-width: 450px; /* Mobil odaklı max genişlik */
-    background: #333;
-    border-radius: 15px;
-    padding: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    text-align: center;
-}
-
-header h1 {
-    color: var(--accent-color);
-    margin-bottom: 5px;
-}
-
-/* --- Lobi Stilleri --- */
-#lobby-view {
-    margin-top: 20px;
-}
-
-h2 {
-    color: var(--primary-color);
-    margin-bottom: 20px;
-}
-
-.button-group {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    margin-bottom: 25px;
-}
-
-.input-area {
-    display: flex;
-    gap: 10px;
-    margin-top: 15px;
-}
-
-#input-room-code {
-    flex-grow: 1;
-    padding: 10px;
-    border: 2px solid var(--primary-color);
-    border-radius: 8px;
-    background: #444;
-    color: var(--text-color);
-    text-align: center;
-    font-size: 1.1em;
-}
-
-/* --- Buton Animasyonları (Işıklı) --- */
-.animated-btn {
-    padding: 15px 20px;
+    align-items: center;
     font-size: 1.2em;
-    font-weight: bold;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
-.animated-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+.r {
+    background-color: #D32F2F; /* Kırmızı */
+    border: 3px solid #FFCDD2;
 }
 
-/* Özel Buton Renkleri ve Parlaması */
-.competitive {
-    background-color: var(--glow-color-competitive);
-    color: var(--background-color);
-}
-.competitive:hover {
-    box-shadow: 0 0 15px var(--glow-color-competitive);
+.b {
+    background-color: #333; /* Siyah */
+    border: 3px solid #616161;
 }
 
-.private {
-    background-color: #03a9f4; /* Mavi */
-    color: var(--text-color);
-}
-.private:hover {
-    box-shadow: 0 0 15px #03a9f4;
-}
-
-.join {
-    background-color: var(--accent-color);
-    color: var(--background-color);
-    padding: 10px 15px; /* Daha küçük */
-    font-size: 1.1em;
-}
-.join:hover {
-    box-shadow: 0 0 15px var(--accent-color);
+.is-king {
+    font-size: 1.5em;
+    color: var(--glow-color-turn); /* Sarı Kral tacı */
+    /* Katmanlı Görünüm */
+    box-shadow: 0 0 10px var(--glow-color-turn); 
 }
 
-/* --- Durum Göstergesi (Bildirim) --- */
-#status-display {
-    padding: 10px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    font-weight: bold;
-    background-color: #444;
-    color: var(--text-color);
-    transition: background-color 0.5s ease;
+/* --- Etkileşim ve Vurgu --- */
+.selected-piece .piece {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 0 15px var(--accent-color); /* Seçilen taş için turuncu vurgu */
 }
 
-/* --- Oyun İçi Stilleri (Gizli Başlangıç) --- */
-.hidden {
-    display: none !important;
+/* 💡 Müşteri İsteği: Geçerli Hamle Vurgusu (Renkle Gösterme) */
+.highlight-valid {
+    background-color: rgba(76, 175, 80, 0.4); /* Yeşil ile hafif şeffaf vurgu */
+    animation: pulse-valid 1s infinite alternate;
 }
 
-#game-view {
-    margin-top: 30px;
-    border-top: 1px solid #555;
-    padding-top: 20px;
+@keyframes pulse-valid {
+    0% { box-shadow: inset 0 0 0 0 rgba(76, 175, 80, 0.8); }
+    100% { box-shadow: inset 0 0 10px 5px rgba(76, 175, 80, 0.8); }
 }
 
-/* Işıklı Sıra Göstergesi */
-@keyframes turn-glow {
-    0%, 100% { box-shadow: 0 0 5px var(--glow-color-turn), 0 0 15px var(--glow-color-turn); }
-    50% { box-shadow: 0 0 10px var(--glow-color-turn), 0 0 30px var(--glow-color-turn); }
-}
-
-#turn-indicator.is-my-turn {
-    color: var(--glow-color-turn);
-    animation: turn-glow 2s infinite alternate;
-    border-radius: 5px;
-    padding: 5px;
-    display: inline-block;
-}
-
-/* --- Mobil Optimizasyonu (Gerektiğinde) --- */
-@media (max-width: 400px) {
-    .container {
-        padding: 10px;
-    }
-    .animated-btn {
-        padding: 12px 15px;
-        font-size: 1em;
+/* --- Mobil Optimizasyon (Tahta boyutu) --- */
+@media (max-width: 450px) {
+    #game-board {
+        width: 100%;
+        max-width: 350px;
     }
 }
