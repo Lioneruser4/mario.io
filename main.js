@@ -1,423 +1,244 @@
-// main.js - Amerikan Daması İstemci Mantığı (Frontend)
+// main.js
+// SERVER URL'NİZİ BURAYA YAZIN
+const SERVER_URL = "https://mario-io-1.onrender.com"; 
+const socket = io(SERVER_URL);
 
-// Sunucu URL'leri (öncelik sırasına göre denenecek)
-const SERVER_URLS = [
-    "wss://mario-io-1.onrender.com/",  // Ana sunucu adresi
-    "wss://mario-io-1.onrender.com"   // Alternatif yazım
-];
-let currentServerIndex = 0;
-let socket = null;
-let gameState = {
-    gameId: null,
-    myColor: null, // "red" veya "black"
-    isMyTurn: false,
-    selectedPiecePos: null // Tıklanan taşın pozisyonu
-};
+// --- DOM ELEMANLARI ---
+const $ = (id) => document.getElementById(id);
 
-// DOM Elementleri
-const dom = {
-    connStatusEl: document.getElementById('connection-status'),
-    lobbyContainer: document.getElementById('lobby-container'),
-    gameContainer: document.getElementById('game-container'),
-    btnRanked: document.getElementById('btn-ranked'),
-    rankedText: document.getElementById('ranked-text'),
-    btnCreateRoom: document.getElementById('btn-create-room'),
-    roomCodeInput: document.getElementById('room-code-input'),
-    btnConnectRoom: document.getElementById('btn-connect-room'),
-    btnCopyCode: document.getElementById('btn-copy-code'),
-    playerTurnStatus: document.getElementById('player-turn-status'),
-    gameBoard: document.getElementById('game-board')
-};
+const lobbyScreen = $('lobby-screen');
+const gameScreen = $('game-screen');
+const connStatus = $('connection-status');
+const notificationArea = $('notification-area');
+const rankedBtn = $('ranked-btn');
+const cancelMatchBtn = $('cancel-match-btn');
+const friendBtn = $('friend-btn');
+const joinBtn = $('join-btn');
+const roomCodeInput = $('room-code-input');
+const boardContainer = $('board-container');
+const turnIndicator = $('turn-indicator');
+const currentPlayerColorSpan = $('current-player-color');
+const displayRoomCode = $('display-room-code');
+const myColorDisplay = $('my-color-display');
 
-// ==========================================================
-// 1. SUNUCU İLETİŞİMİ
-// ==========================================================
+// --- OYUN DURUMU ---
+let currentRoom = null;
+let myColor = null; // 'Red' veya 'Black'
+let isMyTurn = false;
+let selectedPiece = null; // Tıklanan taşın ID'si
 
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
-let reconnectTimeout;
+// --- FONKSİYONLAR ---
 
-function updateStatus(message, type = 'connecting') {
-    const statusEl = document.getElementById('connection-status');
-    if (!statusEl) return;
-    
-    statusEl.className = `status-box ${type}`;
-    statusEl.innerHTML = `
-        <i class="fas fa-${type === 'connected' ? 'check-circle' : type === 'disconnected' ? 'times-circle' : 'sync-alt fa-spin'}"></i>
-        <span>${message}</span>
-    `;
+// Ekran değiştirme fonksiyonu
+function switchScreen(activeScreen) {
+    lobbyScreen.classList.add('hidden');
+    gameScreen.classList.add('hidden');
+    activeScreen.classList.remove('hidden');
+    activeScreen.classList.add('active');
 }
 
-function connect() {
-    // Önceki bağlantıyı temizle
-    if (socket) {
-        socket.onopen = null;
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.onmessage = null;
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.close();
-        }
-    }
-
-    const currentServer = SERVER_URLS[currentServerIndex];
-    const displayUrl = currentServer.replace('wss://', '').replace('/ws', '');
-    updateStatus(`Sunucuya bağlanılıyor: ${displayUrl}...`, 'connecting');
-    
-    try {
-        console.log('Bağlantı kuruluyor:', currentServer);
-        socket = new WebSocket(currentServer);
-
-        socket.onopen = () => {
-            console.log('WebSocket bağlantısı açıldı');
-            reconnectAttempts = 0;
-            updateStatus('✅ Sunucuya bağlandı. Oyun yükleniyor...', 'connected');
-            document.querySelectorAll('button').forEach(btn => btn.disabled = false);
-            
-            // Sunucuya bağlandıktan sonra bir ping gönder
-            if (socket.readyState === WebSocket.OPEN) {
-                console.log('Ping gönderiliyor...');
-                socket.send(JSON.stringify({ type: 'PING' }));
-            }
-        };
-        
-        socket.onclose = (event) => {
-            console.log('WebSocket bağlantısı kapandı:', event);
-            clearTimeout(reconnectTimeout);
-            
-            // Sunucu değiştir
-            currentServerIndex = (currentServerIndex + 1) % SERVER_URLS.length;
-            
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS * SERVER_URLS.length) {
-                reconnectAttempts++;
-                const delay = Math.min(1000 * Math.pow(2, Math.floor(reconnectAttempts / SERVER_URLS.length)), 30000);
-                
-                updateStatus(
-                    `❌ Bağlantı kesildi. Tekrar deneniyor (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS * SERVER_URLS.length})...`,
-                    'disconnected'
-                );
-                
-                document.querySelectorAll('button').forEach(btn => btn.disabled = true);
-                reconnectTimeout = setTimeout(connect, delay);
-            } else {
-                updateStatus(
-                    '❌ Tüm sunuculara bağlanılamadı. Lütfen internet bağlantınızı kontrol edip sayfayı yenileyin.',
-                    'disconnected'
-                );
-            }
-        };
-        
-        socket.onerror = (error) => {
-            console.error('WebSocket hatası:', error);
-            updateStatus('❌ Bağlantı hatası oluştu. Tekrar deneniyor...', 'disconnected');
-            
-            // Hata durumunda hemen yeniden bağlanmayı dene
-            currentServerIndex = (currentServerIndex + 1) % SERVER_URLS.length;
-            reconnectTimeout = setTimeout(connect, 2000);
-        };
-        
-        socket.onmessage = (event) => {
-            try {
-                console.log('Sunucudan gelen ham veri:', event.data);
-                const data = JSON.parse(event.data);
-                console.log('Ayrıştırılmış veri:', data);
-                
-                // Ping yanıtı kontrolü
-                if (data.type === 'PONG') {
-                    console.log('✅ Sunucudan ping yanıtı alındı');
-                    updateStatus('✅ Sunucuya bağlandı. Oyun hazır!', 'connected');
-                    return;
-                }
-                
-                handleServerMessage(data);
-            } catch (e) { 
-                console.error('Geçersiz sunucu verisi:', event.data, e);
-            }
-        };
-    } catch (error) {
-        console.error('WebSocket bağlantı hatası:', error);
-        updateStatus('❌ Bağlantı hatası: ' + (error.message || 'Bilinmeyen hata'), 'disconnected');
-        
-        // Hata durumunda diğer sunucuya geç
-        currentServerIndex = (currentServerIndex + 1) % SERVER_URLS.length;
-        reconnectTimeout = setTimeout(connect, 2000);
-    }
+// Bildirim gösterme (Lobi için)
+function showNotification(message, type = 'info') {
+    notificationArea.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+    // Basit bir süre sonra temizleme mekanizması
+    setTimeout(() => notificationArea.innerHTML = '', 5000);
 }
 
-function sendMessage(type, payload = {}) {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type, ...payload }));
-        return true;
-    }
-    console.warn("Sunucuya bağlı değil. Mesaj gönderilemedi.");
-    return false;
-}
+// Dama Tahtasını Oluşturma (8x8)
+function createBoard() {
+    boardContainer.innerHTML = '<div id="board"></div>';
+    const board = $('board');
+    for (let i = 0; i < 64; i++) {
+        const row = Math.floor(i / 8);
+        const col = i % 8;
+        const square = document.createElement('div');
+        square.classList.add('square');
+        // Tahta rengi
+        square.classList.add((row + col) % 2 === 0 ? 'light' : 'dark');
+        square.dataset.id = `${row}${col}`; // Tahta koordinatı (Örn: '00', '77')
+        square.addEventListener('click', handleBoardClick);
 
-function handleServerMessage(data) {
-    switch (data.type) {
-        case 'MATCH_FOUND':
-        case 'ROOM_JOINED':
-            startGame(data.gameId, data.color, data.boardState, data.turn);
-            break;
-        case 'ROOM_CREATED':
-            dom.roomCodeInput.value = data.roomCode;
-            dom.btnCopyCode.classList.remove('hidden');
-            alert(`Oda Kodu: ${data.roomCode}. Arkadaşına gönder.`);
-            break;
-        case 'GAME_UPDATE':
-            // Tahta ve sıra güncellendi
-            updateBoard(data.boardState);
-            updateTurn(data.turn);
-            break;
-        case 'LEGAL_MOVES':
-            // Sunucudan gelen yasal hamleleri renklendir
-            highlightLegalMoves(data.moves); 
-            break;
-        case 'ERROR':
-            alert(`Sunucu Hatası: ${data.message}`);
-            stopSearching();
-            break;
-    }
-}
-
-// ==========================================================
-// 2. LOBİ ETKİLEŞİMLERİ (3 Buton)
-// ==========================================================
-
-dom.btnRanked.addEventListener('click', () => {
-    if (!dom.btnRanked.classList.contains('searching')) {
-        if (sendMessage('FIND_MATCH')) {
-            dom.btnRanked.classList.add('searching');
-            dom.rankedText.textContent = 'Eşleşme Aranıyor... (İptal Et)';
-            dom.btnCreateRoom.disabled = true;
-            dom.btnConnectRoom.disabled = true;
-        }
-    } else {
-        if (sendMessage('CANCEL_SEARCH')) {
-            stopSearching();
-        }
-    }
-});
-
-function stopSearching() {
-    dom.btnRanked.classList.remove('searching');
-    dom.rankedText.textContent = 'Dereceli Oyna (Eşleşme Bul)';
-    dom.btnCreateRoom.disabled = false;
-    dom.btnConnectRoom.disabled = false;
-}
-
-dom.btnCreateRoom.addEventListener('click', () => sendMessage('CREATE_ROOM'));
-
-dom.btnConnectRoom.addEventListener('click', () => {
-    const code = dom.roomCodeInput.value.trim();
-    if (code.length === 4) {
-        sendMessage('JOIN_ROOM', { roomCode: code });
-    } else {
-        alert('Lütfen 4 haneli kodu giriniz.');
-    }
-});
-
-dom.btnCopyCode.addEventListener('click', () => {
-    navigator.clipboard.writeText(dom.roomCodeInput.value);
-    dom.btnCopyCode.textContent = "Kopyalandı!";
-    setTimeout(() => dom.btnCopyCode.textContent = "Kodu Kopyala", 1500);
-});
-
-// ==========================================================
-// 3. OYUN KURULUM VE MANTIĞI
-// ==========================================================
-
-function startGame(gameId, color, boardState, turn) {
-    gameState.gameId = gameId;
-    gameState.myColor = color;
-    drawBoard();
-    updateBoard(boardState);
-    updateTurn(turn);
-    
-    dom.lobbyContainer.classList.add('hidden');
-    dom.gameContainer.classList.remove('hidden');
-}
-
-function drawBoard() {
-    dom.gameBoard.innerHTML = '';
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const cell = document.createElement('div');
-            // Tahta koordinatını (A1'den H8'e) belirle
-            const pos = String.fromCharCode(65 + c) + (8 - r);
-            cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
-            cell.dataset.pos = pos;
-            cell.addEventListener('click', handleCellClick);
-            dom.gameBoard.appendChild(cell);
-        }
-    }
-    // Kırmızı oyuncu altta olacak şekilde tahtayı döndür (Mobil uyumluluk için önemli)
-    dom.gameBoard.style.transform = gameState.myColor === 'red' ? 'rotate(180deg)' : 'rotate(0deg)';
-}
-
-function updateBoard(boardState) {
-    // Tüm taşları kaldır
-    document.querySelectorAll('.piece').forEach(p => p.remove());
-    
-    // Tahtayı güncelle
-    for (const pos in boardState) {
-        const { color, isKing } = boardState[pos];
-        const cell = document.querySelector(`[data-pos="${pos}"]`);
-        if (cell) {
+        // Başlangıç taşları (Şaşki dama kuralına göre ilk 3 sıra)
+        if (row < 3 && (row + col) % 2 !== 0) {
             const piece = document.createElement('div');
-            piece.classList.add('piece', color);
-            if (isKing) piece.classList.add('king');
-            
-            // Taşlara tıklanabilirlik ekle
-            piece.style.cursor = 'pointer';
-            
-            // Mobil dokunmatik olayları için
-            piece.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleCellClick({ currentTarget: cell });
-            });
-            
-            // Kral taşlarına özel işaret ekle
-            if (isKing) {
-                const crown = document.createElement('div');
-                crown.className = 'crown';
-                piece.appendChild(crown);
-            }
-            
-            cell.appendChild(piece);
+            piece.classList.add('piece', 'piece-red');
+            // piece.textContent = 'R'; // İsteğe bağlı
+            square.appendChild(piece);
+        } else if (row > 4 && (row + col) % 2 !== 0) {
+            const piece = document.createElement('div');
+            piece.classList.add('piece', 'piece-black');
+            // piece.textContent = 'B'; // İsteğe bağlı
+            square.appendChild(piece);
         }
+
+        board.appendChild(square);
     }
 }
 
-function updateTurn(turnColor) {
-    gameState.isMyTurn = (turnColor === gameState.myColor);
-    dom.playerTurnStatus.textContent = gameState.isMyTurn 
-        ? `🔥 SIRA SENDE (${gameState.myColor.toUpperCase()})`
-        : `⌛ RAKİP OYNUYOR (${turnColor.toUpperCase()})`;
-
-    // Işıklı sıra gösterimi
-    dom.playerTurnStatus.classList.remove('my-turn-light', 'opponent-turn-light');
-    dom.playerTurnStatus.classList.add(gameState.isMyTurn ? 'my-turn-light' : 'opponent-turn-light');
-}
-
-function handleCellClick(event) {
-    // Oyun başlamamışsa veya sıra bende değilse işlem yapma
-    if (!gameState.gameId || !gameState.isMyTurn) {
-        console.log('Sıra sizde değil veya oyun başlamamış');
-        return;
-    }
-
-    const cell = event.currentTarget;
-    const pos = cell.dataset.pos;
-    const piece = cell.querySelector('.piece');
-    const isMyPiece = piece && piece.classList.contains(gameState.myColor);
+// Tahta Tıklama İşleyicisi
+function handleBoardClick(event) {
+    const square = event.currentTarget;
+    const piece = square.querySelector('.piece');
+    const squareId = square.dataset.id;
     
-    // Eğer yasal bir hamle kutusuna tıklandıysa
-    if (cell.classList.contains('legal-move')) {
-        const fromPos = gameState.selectedPiecePos;
-        const toPos = pos;
-        const isCapture = cell.classList.contains('capture-move');
-        
-        console.log(`Hamle yapılıyor: ${fromPos} -> ${toPos}${isCapture ? ' (taş alarak)' : ''}`);
-        
-        // Hamle yap
-        const moveResult = sendMessage('MAKE_MOVE', { 
-            from: fromPos, 
-            to: toPos,
-            isCapture: isCapture,
-            gameId: gameState.gameId
-        });
-        
-        if (moveResult) {
-            // Hemen arayüzü güncelle
-            cell.classList.add('move-animation');
-            setTimeout(() => cell.classList.remove('move-animation'), 500);
-            
-            // Seçimleri temizle
-            clearHighlights();
-            gameState.selectedPiecePos = null;
-            
-            // Sırayı değiştir
-            gameState.isMyTurn = false;
-            updateTurn(gameState.myColor === 'red' ? 'black' : 'red');
-        }
+    if (!currentRoom || !isMyTurn) {
+        showNotification('Sıra sizde değil!', 'warning');
         return;
     }
 
-    // Eğer kendi taşımıza tıklandıysa
-    if (isMyPiece) {
-        // Aynı taşa tekrar tıklandıysa seçimi kaldır
-        if (gameState.selectedPiecePos === pos) {
-            clearHighlights();
-            gameState.selectedPiecePos = null;
-        } else {
-            // Yeni taş seç
-            console.log(`Taş seçildi: ${pos}`);
-            clearHighlights();
-            gameState.selectedPiecePos = pos;
-            cell.classList.add('selected');
-            
-            // Yasal hamleleri al
-            sendMessage('GET_LEGAL_MOVES', { 
-                position: pos,
-                gameId: gameState.gameId
-            });
-        }
-    } else if (gameState.selectedPiecePos) {
-        // Eğer başka bir yere tıklandıysa seçimi kaldır
-        console.log('Geçersiz hamle, seçim kaldırılıyor');
+    // 1. TAŞ SEÇİMİ
+    if (piece && (myColor === 'Red' && piece.classList.contains('piece-red')) || 
+                 (myColor === 'Black' && piece.classList.contains('piece-black'))) {
+        
+        // Önceki vurgulamaları temizle
         clearHighlights();
-        gameState.selectedPiecePos = null;
-    }
-}
+        document.querySelectorAll('.selected-piece').forEach(p => p.classList.remove('selected-piece'));
+
+        piece.classList.add('selected-piece');
+        selectedPiece = squareId;
+        
+        // **PROFESYONEL: Burada tahta motoru çalışmalı ve geçerli hamleleri hesaplamalı**
+        // Örneğin: const validMoves = calculateValidMoves(squareId);
+        // Bu hamleleri renkle vurgulamak için:
+        // highlightMoves(validMoves); 
+        
+        // Şimdilik sadece bir örnek hedef vurgulayalım (Gerçek kural değil)
+        if (squareId === '50') $('41').classList.add('highlight-move');
+        
+    } 
+    // 2. HAMLE YAPMA
+    else if (selectedPiece && square.classList.contains('highlight-move')) {
+        const from = selectedPiece;
+        const to = squareId;
+
+        // Hamleyi sunucuya gönder
+        socket.emit('hareketYap', { roomCode: currentRoom, from, to });
+        
+        // Hamle yapıldıktan sonra yerel durumları temizle
+        clearHighlights();
+        document.querySelectorAll('.selected-piece').forEach(p => p.classList.remove('selected-piece'));
+        selectedPiece = null;
+        
     }
 }
 
-function highlightLegalMoves(moves) {
-    clearHighlights();
-    
-    // Seçili taşı vurgula
-    if (gameState.selectedPiecePos) {
-        const selectedCell = document.querySelector(`[data-pos="${gameState.selectedPiecePos}"]`);
-        if (selectedCell) {
-            selectedCell.classList.add('selected');
-        }
-    }
-    
-    // Yasal hamleleri işaretle
-    moves.forEach(move => {
-        const cell = document.querySelector(`[data-pos="${move.to}"]`);
-        if (cell) {
-            cell.classList.add('legal-move');
-            if (move.isCapture) {
-                cell.classList.add('capture-move');
-                
-                // Yenecek taşın pozisyonunu bul ve işaretle
-                const fromRow = gameState.selectedPiecePos.charCodeAt(0) - 'A'.charCodeAt(0);
-                const fromCol = 8 - parseInt(gameState.selectedPiecePos[1]);
-                const toRow = move.to.charCodeAt(0) - 'A'.charCodeAt(0);
-                const toCol = 8 - parseInt(move.to[1]);
-                
-                const capturedRow = fromRow + (toRow > fromRow ? 1 : -1);
-                const capturedCol = fromCol + (toCol > fromCol ? 1 : -1);
-                const capturedPos = String.fromCharCode(65 + capturedRow) + (8 - capturedCol);
-                
-                const capturedCell = document.querySelector(`[data-pos="${capturedPos}"]`);
-                if (capturedCell) {
-                    capturedCell.classList.add('will-be-captured');
-                }
-            }
-        }
-    });
-}
-
+// Vurgulamaları Temizle
 function clearHighlights() {
-    // Tüm vurgulamaları temizle
-    document.querySelectorAll('.selected, .legal-move, .capture-move, .will-be-captured').forEach(el => {
-        el.classList.remove('selected', 'legal-move', 'capture-move', 'will-be-captured');
-    });
-    gameState.selectedPiecePos = null;
+    document.querySelectorAll('.highlight-move').forEach(s => s.classList.remove('highlight-move'));
 }
 
-// 🚀 Uygulama Başlangıcı
-connect();
+// Sıra göstergesini güncelleme
+function updateTurnIndicator(isTurn) {
+    isMyTurn = isTurn;
+    const color = isMyTurn ? myColor : (myColor === 'Red' ? 'Black' : 'Red');
+    
+    currentPlayerColorSpan.textContent = color;
+    turnIndicator.classList.remove('turn-red', 'turn-black');
+    turnIndicator.classList.add(color === 'Red' ? 'turn-red' : 'turn-black');
+    showNotification(isMyTurn ? 'SIRA SİZDE! Hamlenizi yapın.' : 'Rakibinizin hamlesini bekleyin.', isMyTurn ? 'success' : 'info');
+}
+
+
+// --- SOCKET.IO OLAY DİNLEYİCİLERİ ---
+
+// BAĞLANTI: Sunucuya başarılı bağlandığında
+socket.on('connectionSuccess', (data) => {
+    connStatus.textContent = data.message;
+    connStatus.classList.remove('waiting');
+    connStatus.classList.add('success');
+    showNotification(data.message);
+});
+
+// BAĞLANTI HATASI
+socket.on('connect_error', (err) => {
+    connStatus.textContent = '❌ Bağlantı Hatası: Sunucu Kapalı veya Erişilemiyor.';
+    connStatus.classList.remove('success');
+    connStatus.classList.add('waiting');
+    console.error('Bağlantı Hatası:', err);
+});
+
+// DERECE: Eşleşme Aranıyor
+socket.on('eslesmeBekle', (data) => {
+    showNotification(data.text, 'info');
+    rankedBtn.classList.add('hidden');
+    cancelMatchBtn.classList.remove('hidden');
+});
+
+// DERECE: Eşleşme Bulundu / OYUN BAŞLAT
+socket.on('eslesmeBulundu', (data) => startGame(data));
+socket.on('oyunBaslat', (data) => startGame(data));
+
+function startGame(data) {
+    currentRoom = data.room;
+    myColor = data.color;
+    
+    // UI Güncelleme
+    switchScreen(gameScreen);
+    createBoard();
+    displayRoomCode.textContent = currentRoom;
+    myColorDisplay.textContent = myColor;
+    
+    // Kırmızı her zaman ilk başlar, bu yüzden ilk sırayı ayarla
+    const isStartingTurn = myColor === 'Red';
+    updateTurnIndicator(isStartingTurn);
+
+    showNotification(`Oyun başladı! Oda: ${currentRoom}. Rakip: ${data.opponentId}. Sen: ${myColor}`, 'success');
+}
+
+// ODA KURULDU
+socket.on('odaOlusturuldu', (data) => {
+    showNotification(`${data.message} Kod: ${data.code}`, 'success');
+    // Kopyalama butonunun mantığı burada olmalı
+});
+
+// OYUN DURUMU GÜNCEL
+socket.on('oyunDurumuGuncelle', (data) => {
+    // Tahtayı güncelleyen kod burada olmalı (data.newBoard kullanarak)
+    // updateBoard(data.newBoard); 
+    
+    // Sıra kontrolü
+    const isTurn = data.turn === socket.id;
+    updateTurnIndicator(isTurn);
+    
+    // Hamle animasyonu (data.lastMove kullanarak)
+    // animateMove(data.lastMove);
+});
+
+socket.on('hata', (data) => {
+    showNotification(`HATA: ${data.message}`, 'danger');
+});
+
+
+// --- BUTON OLAY DİNLEYİCİLERİ ---
+
+// Dereceli Oyna
+rankedBtn.addEventListener('click', () => {
+    socket.emit('eslesmeBaslat');
+});
+
+// Eşleşme İptal
+cancelMatchBtn.addEventListener('click', () => {
+    socket.emit('eslesmeIptal');
+    rankedBtn.classList.remove('hidden');
+    cancelMatchBtn.classList.add('hidden');
+    showNotification('Eşleşme arama iptal edildi.', 'info');
+});
+
+// Arkadaşla Oyna (Oda Kur)
+friendBtn.addEventListener('click', () => {
+    socket.emit('odaKur');
+});
+
+// Odaya Bağlan
+joinBtn.addEventListener('click', () => {
+    const code = roomCodeInput.value.trim();
+    if (code.length === 4) {
+        socket.emit('odayaBaglan', { code });
+    } else {
+        showNotification('Lütfen 4 haneli oda kodu girin.', 'danger');
+    }
+});
+
+// Sayfa yüklendiğinde tahtayı çiz ve lobi ekranını göster
+createBoard(); 
+switchScreen(lobbyScreen);
