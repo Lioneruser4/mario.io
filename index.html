@@ -2,75 +2,63 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Şaşki Online - Neon Dama</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Şaşki Online</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- LOBİ EKRANI -->
-    <div id="lobby" class="screen active">
-      <h1 class="title neon-text">ŞAŞKİ ONLINE</h1>
-      <p class="subtitle">Türk Daması - Neon Edition</p>
+  <div id="lobby" class="screen active">
+    <div class="lobby-content">
+      <h1 class="title">ŞAŞKİ ONLINE</h1>
+      <p class="subtitle">Türk Daması</p>
 
-      <div class="buttons">
-        <button class="btn ranked" id="rankedBtn">
-          <span>⚔️ Dereceli Maç</span>
-          <div class="glow"></div>
-        </button>
-
-        <button class="btn custom" id="createRoomBtn">
-          <span>👥 Arkadaşla Oyna</span>
-          <div class="glow"></div>
-        </button>
-
-        <div class="join-room" id="joinRoomSection" style="display:none;">
-          <input type="text" id="roomCode" placeholder="Oda Kodu Gir" maxlength="4"/>
-          <button class="btn join" id="joinBtn">Katıl</button>
-        </div>
-
-        <button class="btn msg" id="msgCodeBtn">Mesajla Kod Gönder</button>
+      <div class="btn-group">
+        <button id="rankedBtn" class="btn neon-btn cyan">Dereceli Maç</button>
+        <button id="createRoomBtn" class="btn neon-btn pink">Arkadaşla Oyna</button>
+        <button id="toggleJoin" class="btn neon-btn green">Oda Kodu ile Katıl</button>
       </div>
 
-      <div id="searching" class="searching" style="display:none;">
-        <div class="loader"></div>
-        <p>Eşleşme aranıyor...</p>
-        <button class="btn cancel" id="cancelSearch">İptal Et</button>
+      <div id="joinSection" class="input-group" style="display:none;">
+        <input type="text" id="roomInput" placeholder="4 haneli kod" maxlength="4"/>
+        <button id="joinBtn" class="btn neon-btn purple">Katıl</button>
       </div>
 
-      <div id="roomInfo" class="room-info" style="display:none;">
-        <p>Oda Kodu: <span id="codeDisplay">1234</span></p>
-        <button class="btn copy" id="copyCode">Kopyala</button>
+      <div id="roomDisplay" style="display:none;">
+        <p>Oda Kodu: <strong id="roomCode">0000</strong></p>
+        <button id="copyBtn" class="btn neon-btn yellow">Kopyala</button>
         <p class="waiting">Rakip bekleniyor...</p>
       </div>
 
-      <div class="status" id="status">Sunucuya bağlanılıyor...</div>
-    </div>
-
-    <!-- OYUN EKRANI -->
-    <div id="game" class="screen">
-      <div class="game-header">
-        <div class="player-info" id="player1">
-          <span class="name">Sen</span>
-          <div class="indicator" id="p1Indicator"></div>
-        </div>
-        <div class="vs">VS</div>
-        <div class="player-info" id="player2">
-          <div class="indicator" id="p2Indicator"></div>
-          <span class="name">Rakip</span>
-        </div>
+      <div id="searching" style="display:none;">
+        <div class="loader"></div>
+        <p>Eşleşme aranıyor...</p>
+        <button id="cancelBtn" class="btn neon-btn red">İptal</button>
       </div>
 
-      <div class="board-container">
-        <canvas id="board" width="800" height="800"></canvas>
-      </div>
-
-      <button class="btn back" id="backToLobby">Çık</button>
+      <div id="status">Sunucuya bağlanılıyor...</div>
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <div id="game" class="screen">
+    <div class="header">
+      <div class="player" id="p1">
+        <div class="turn-light" id="light1"></div>
+        <span>Sen (Alt)</span>
+      </div>
+      <div class="vs">VS</div>
+      <div class="player" id="p2">
+        <div class="turn-light" id="light2"></div>
+        <span>Rakip (Üst)</span>
+      </div>
+    </div>
+
+    <canvas id="board" width="800" height="800"></canvas>
+
+    <button id="leaveGame" class="btn neon-btn red">Lobiye Dön</button>
+  </div>
+
+  <script src="main.js"></script>
 </body>
 </html>
