@@ -1,72 +1,101 @@
-const socket = io("https://mario-io-1.onrender.com");
-let board = null;
-let selected = null;
-let playerColor = null;
-let myTurn = false;
+const socket = io("https://mario-io-1.onrender.com", {
+  transports: ['websocket'],
+  timeout: 20000
+});
 
-const canvas = document.getElementById("board");
-const ctx = canvas.getContext("2d");
-const cellSize = 100;
+let gameState = {
+  board: null,
+  selected: null,
+  myColor: null,
+  myTurn: false,
+  roomId: null
+};
 
+const canvas = document.getElementById('gameBoard');
+const ctx = canvas.getContext('2d');
+let cellSize = 80;
+
+// DOM Elements
+const statusEl = document.getElementById('status');
+const lobbyEl = document.getElementById('lobby');
+const gameScreenEl = document.getElementById('gameScreen');
+const turn1El = document.getElementById('turn1');
+const turn2El = document.getElementById('turn2');
+
+// Canvas Resize
 function resizeCanvas() {
-  const size = Math.min(window.innerWidth * 0.95, window.innerHeight * 0.75);
+  const size = Math.min(window.innerWidth * 0.95, window.innerHeight * 0.65);
   canvas.width = canvas.height = size;
   cellSize = size / 8;
   drawBoard();
 }
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// Board Drawing
 function drawBoard() {
-  if (!board) return;
+  if (!gameState.board) return;
+  
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
+      // Tahta kareleri
       const isLight = (x + y) % 2 === 0;
-      ctx.fillStyle = isLight ? "#f0d9b5" : "#b58863";
+      ctx.fillStyle = isLight ? '#f4e4bc' : '#d8b589';
       ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-
-      if (selected && selected.x === x && selected.y === y) {
-        ctx.strokeStyle = "#00ff00";
-        ctx.lineWidth = 6;
-        ctx.strokeRect(x * cellSize + 5, y * cellSize + 5, cellSize - 10, cellSize - 10);
+      
+      // Seçili kare
+      if (gameState.selected && gameState.selected.x === x && gameState.selected.y === y) {
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(x * cellSize + 4, y * cellSize + 4, cellSize - 8, cellSize - 8);
       }
-
-      const piece = board[y][x];
+      
+      // Taş çiz
+      const piece = gameState.board[y][x];
       if (piece !== 0) {
         const isWhite = piece === 1 || piece === 2;
         const isKing = piece === 2 || piece === 4;
-
-        ctx.fillStyle = isWhite ? "#ffffff" : "#222222";
+        
+        // Taş gövdesi
+        ctx.fillStyle = isWhite ? '#ffffff' : '#2d1b14';
         ctx.beginPath();
-        ctx.arc(x * cellSize + cellSize/2, y * cellSize + cellSize/2, cellSize*0.38, 0, Math.PI*2);
+        ctx.arc(
+          x * cellSize + cellSize / 2,
+          y * cellSize + cellSize / 2,
+          cellSize * 0.4,
+          0, Math.PI * 2
+        );
         ctx.fill();
-        ctx.strokeStyle = isWhite ? "#000" : "#fff";
+        ctx.strokeStyle = isWhite ? '#333' : '#fff';
         ctx.lineWidth = 4;
         ctx.stroke();
-
+        
+        // Vazi işareti
         if (isKing) {
-          ctx.fillStyle = "#ffff00";
-          ctx.font = "bold " + cellSize*0.4 + "px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText("K", x * cellSize + cellSize/2, y * cellSize + cellSize/1.5);
-        }
-
-        if (selected && selected.x === x && selected.y === y) {
-          ctx.strokeStyle = "#00ffff";
-702          ctx.lineWidth = 8;
-          ctx.stroke();
+          ctx.fillStyle = '#ffd700';
+          ctx.font = `${cellSize * 0.35}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('👑', x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
         }
       }
     }
   }
-
-  if (selected && myTurn) {
-    const moves = getValidMoves(selected.x, selected.y);
-    moves.forEach(m => {
-      ctx.fillStyle = "rgba(0, 255, 255, 0.4)";
+  
+  // Geçerli hamleler
+  if (gameState.selected && gameState.myTurn) {
+    const moves = getValidMoves(gameState.selected.x, gameState.selected.y);
+    moves.forEach(move => {
+      ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
       ctx.beginPath();
-      ctx.arc(m.x * cellSize + cellSize/2, m.y * cellSize + cellSize/2, cellSize*0.25, 0, Math.PI*2);
+      ctx.arc(
+        move.x * cellSize + cellSize / 2,
+        move.y * cellSize + cellSize / 2,
+        cellSize * 0.25,
+        0, Math.PI * 2
+      );
       ctx.fill();
     });
   }
@@ -74,119 +103,149 @@ function drawBoard() {
 
 function getValidMoves(x, y) {
   const moves = [];
-  const piece = board[y][x];
+  const piece = gameState.board[y][x];
   if (!piece) return moves;
+  
   const isWhite = piece === 1 || piece === 2;
-  const dir = isWhite ? -1 : 1;
-  const king = piece > 2;
-
-  const dirs = king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[dir,-1],[dir,1]];
-  dirs.forEach(([dy,dx]) => {
+  const dir = isWhite ? 1 : -1; // Beyaz aşağı, siyah yukarı
+  const isKing = piece === 2 || piece === 4;
+  
+  const directions = isKing ? [[1,1],[1,-1],[-1,1],[-1,-1]] : [[dir,1],[dir,-1]];
+  
+  directions.forEach(([dy, dx]) => {
     const nx = x + dx, ny = y + dy;
-    if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
-      moves.push({x:nx, y:ny, capture:false});
+    if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && gameState.board[ny][nx] === 0) {
+      moves.push({x: nx, y: ny});
     }
   });
-
-  // Zorunlu yeme kontrolü sonra eklenebilir (tam profesyonel)
+  
   return moves;
 }
 
-canvas.addEventListener("click", e => {
-  if (!myTurn) return;
+// Touch/Mouse Handler
+function getBoardPos(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / cellSize);
-  const y = Math.floor((e.clientY - rect.top) / cellSize);
-  if (x < 0 || x > 7 || y < 0 || y > 7) return;
+  return {
+    x: Math.floor((clientX - rect.left) / cellSize),
+    y: Math.floor((clientY - rect.top) / cellSize)
+  };
+}
 
-  const piece = board[y][x];
-  const isMyPiece = (playerColor === "white" && (piece === 1 || piece === 2)) ||
-                    (playerColor === "black" && (piece === 3 || piece === 4));
-
-  if (selected && selected.x === x && selected.y === y) {
-    selected = null;
-  } else if (isMyPiece) {
-    selected = {x, y};
-  } else if (selected) {
-    const moves = getValidMoves(selected.x, selected.y);
-    const valid = moves.find(m => m.x === x && m.y === y);
-    if (valid) {
-      socket.emit("move", { from: selected, to: {x,y} });
-      selected = null;
+['click', 'touchend'].forEach(event => {
+  canvas.addEventListener(event, e => {
+    e.preventDefault();
+    if (!gameState.myTurn) return;
+    
+    const pos = getBoardPos(
+      e.touches?.[0]?.clientX || e.clientX,
+      e.touches?.[0]?.clientY || e.clientY
+    );
+    
+    if (pos.x < 0 || pos.x > 7 || pos.y < 0 || pos.y > 7) return;
+    
+    const piece = gameState.board[pos.y][pos.x];
+    const isMyPiece = (gameState.myColor === 'white' && (piece === 1 || piece === 2)) ||
+                     (gameState.myColor === 'black' && (piece === 3 || piece === 4));
+    
+    if (gameState.selected && gameState.selected.x === pos.x && gameState.selected.y === pos.y) {
+      gameState.selected = null;
+    } else if (isMyPiece) {
+      gameState.selected = pos;
+    } else if (gameState.selected) {
+      const moves = getValidMoves(gameState.selected.x, gameState.selected.y);
+      const validMove = moves.find(m => m.x === pos.x && m.y === pos.y);
+      if (validMove) {
+        socket.emit('move', { from: gameState.selected, to: pos });
+        gameState.selected = null;
+      }
     }
-  }
-  drawBoard();
+    
+    drawBoard();
+  });
 });
 
 // Socket Events
-socket.on("connect", () => {
-  document.getElementById("status").textContent = "Bağlandı ✓";
+socket.on('connect', () => {
+  statusEl.textContent = '✅ Bağlandı!';
+  statusEl.style.background = 'rgba(0,255,136,0.3)';
+  statusEl.style.borderColor = '#00ff88';
 });
 
-socket.on("roomCreated", data => {
-  document.getElementById("roomCode").textContent = data.room;
-  document.getElementById("roomDisplay").style.display = "block";
+socket.on('connect_error', (err) => {
+  statusEl.textContent = '❌ Bağlantı Hatası!';
+  statusEl.style.background = 'rgba(255,0,85,0.3)';
 });
 
-socket.on("joinedRoom", data => {
-  hideAll();
-  document.getElementById("game").classList.add("active");
-  playerColor = data.color;
-  board = data.board;
-  myTurn = data.turn === playerColor;
-  updateTurnLight();
+socket.on('roomCreated', (data) => {
+  document.getElementById('displayCode').textContent = data.room;
+  document.getElementById('roomCreated').classList.remove('hidden');
+  document.getElementById('searching').classList.add('hidden');
+});
+
+socket.on('roomError', (msg) => {
+  alert(msg);
+  location.reload();
+});
+
+socket.on('startGame', (data) => {
+  gameState.myColor = data.color;
+  gameState.board = data.board;
+  gameState.myTurn = data.turn === data.color;
+  gameState.roomId = data.room;
+  
+  lobbyEl.classList.add('hidden');
+  gameScreenEl.classList.remove('hidden');
+  
+  document.getElementById('player1').querySelector('span').textContent = 
+    gameState.myColor === 'white' ? 'Sen (Alt)' : 'Sen (Üst)';
+  
+  updateTurnIndicators();
   drawBoard();
 });
 
-socket.on("updateBoard", data => {
-  board = data.board;
-  myTurn = data.turn === playerColor;
-  updateTurnLight();
+socket.on('updateBoard', (data) => {
+  gameState.board = data.board;
+  gameState.myTurn = data.turn === gameState.myColor;
+  updateTurnIndicators();
   drawBoard();
 });
 
-socket.on("gameOver", winner => {
-  confetti({ particleCount: 200, spread: 70, origin: { y: 0.6 } });
-  alert(winner === playerColor ? "Kazandın!" : "Kaybettin :(");
-});
-
-// Lobi Butonları
-document.getElementById("rankedBtn").onclick = () => {
-  hideAll();
-  document.getElementById("searching").style.display = "block";
-  socket.emit("findMatch");
+// UI Events
+document.getElementById('rankedBtn').onclick = () => {
+  document.getElementById('searching').classList.remove('hidden');
+  socket.emit('findMatch');
 };
 
-document.getElementById("createRoomBtn").onclick = () => socket.emit("createRoom");
-
-document.getElementById("toggleJoin").onclick = () => {
-  document.getElementById("joinSection").style.display = 
-    document.getElementById("joinSection").style.display === "none" ? "flex" : "none";
+document.getElementById('createBtn').onclick = () => {
+  socket.emit('createRoom');
 };
 
-document.getElementById("joinBtn").onclick = () => {
-  const code = document.getElementById("roomInput").value.trim();
-  if (code.length === 4) socket.emit("joinRoom", code);
+document.getElementById('joinToggle').onclick = () => {
+  document.getElementById('joinForm').classList.toggle('hidden');
 };
 
-document.getElementById("copyBtn").onclick = () => {
-  navigator.clipboard.writeText(document.getElementById("roomCode").textContent);
-  alert("Kopyalandı!");
+document.getElementById('joinBtn').onclick = () => {
+  const code = document.getElementById('roomCode').value.trim().toUpperCase();
+  if (code.length === 4) {
+    socket.emit('joinRoom', code);
+  }
 };
 
-document.getElementById("cancelBtn").onclick = () => {
-  socket.emit("cancelMatch");
+document.getElementById('copyBtn').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('displayCode').textContent);
+  alert('✅ Kodu kopyaladın!');
+};
+
+document.getElementById('cancelBtn').onclick = () => {
+  socket.emit('cancelMatch');
   location.reload();
 };
 
-document.getElementById("leaveGame").onclick = () => location.reload();
+document.getElementById('leaveBtn').onclick = () => {
+  location.reload();
+};
 
-function hideAll() {
-  document.querySelectorAll(".screen > div").forEach(d => d.style.display = "none");
-  document.getElementById("lobby").classList.remove("active");
-}
-
-function updateTurnLight() {
-  document.getElementById("light1").classList.toggle("active", myTurn && playerColor === "white");
-  document.getElementById("light2").classList.toggle("active", myTurn && playerColor === "black");
+function updateTurnIndicators() {
+  turn1El.classList.toggle('active', gameState.myTurn && gameState.myColor === 'white');
+  turn2El.classList.toggle('active', gameState.myTurn && gameState.myColor === 'black');
 }
