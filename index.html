@@ -1,52 +1,24 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="az">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Şaşki Dama | Online Checkers</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Mario IO Render Serveri</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f4; }
+        h1 { color: #333; }
+        .container { background: white; padding: 20px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .render-link { color: #007bff; text-decoration: none; font-weight: bold; }
+    </style>
 </head>
 <body>
-
-    <div id="app-container">
-        
-        <div id="lobby-screen" class="screen active">
-            <h1 class="neon-title">Online Şaşki </h1>
-            
-            <div id="connection-status" class="status-indicator waiting">Bağlanıyor...</div>
-
-            <div class="lobby-buttons">
-                
-                <button id="ranked-btn" class="glowing-btn primary-btn"><span class="icon">🏆</span>Dereceli Oyna (Eşleştir)</button>
-                <button id="cancel-match-btn" class="glowing-btn secondary-btn hidden">İptal</button>
-
-                <button id="friend-btn" class="glowing-btn secondary-btn"><span class="icon">🤝</span>Arkadaşla Oyna (Oda Kur)</button>
-                
-                <hr>
-                
-                <div class="join-area">
-                    <input type="text" id="room-code-input" placeholder="Oda Kodu (4 Rakam)" maxlength="4">
-                    <button id="join-btn" class="glowing-btn accent-btn"><span class="icon">🔗</span>Odaya Bağlan</button>
-                </div>
-            </div>
-            
-            <div id="notification-area"></div>
-        </div>
-
-        <div id="game-screen" class="screen hidden">
-            <h2 id="turn-indicator">Sıra: <span id="current-player-color">...</span></h2>
-            <div id="board-container">
-                </div>
-            <div class="game-info">
-                <p>Oda Kodu: <span id="display-room-code"></span></p>
-                <p>Senin Rengin: <span id="my-color-display"></span></p>
-                <button id="quit-game-btn" class="glowing-btn danger-btn">Oyundan Çık</button>
-            </div>
-        </div>
-        
+    <div class="container">
+        <h1>👋 Server Uğurla İşləyir!</h1>
+        <p>Bu səhifə Render serveriniz tərəfindən servis edilir.</p>
+        <p>Bağlantı ünvanınız:</p>
+        <a class="render-link" href="https://mario-io-1.onrender.com" target="_blank">https://mario-io-1.onrender.com</a>
+        <hr>
+        <p>Əlavə: Əgər oyun kodu burada olsa, brauzer API istəkləri etmədən birbaşa bu link üzərindən işləyəcək.</p>
     </div>
-
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <script src="main.js"></script>
 </body>
 </html>
