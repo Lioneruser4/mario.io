@@ -1,84 +1,80 @@
 const socket = io("https://mario-io-1.onrender.com", { transports: ["websocket"] });
 
-let board = null, selected = null, myColor = null, myTurn = false, animating = false;
+let board = null, selected = null, myColor = null, myTurn = false, flipped = false;
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
-let cell = 80;
+let cellSize;
 
 function resize() {
-  const size = Math.min(innerWidth * 0.95, innerHeight * 0.7);
+  const size = Math.min(innerWidth * 0.95, innerHeight * 0.75);
   canvas.width = canvas.height = size;
-  cell = size / 8;
-  if (board) draw();
+  cellSize = size / 8;
+  draw();
 }
-addEventListener("resize", resize); resize();
+window.addEventListener("resize", resize);
+resize();
 
-// Animasyonlu çizim
+function realToScreen(x, y) { return flipped ? { x: 7 - x, y: 7 - y } : { x, y }; }
+function screenToReal(x, y) { return flipped ? { x: 7 - x, y: 7 - y } : { x, y }; }
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
-      // Kareler
-      ctx.fillStyle = (x + y) % 2 ? "#b58863" : "#f0d9b5";
-      ctx.fillRect(x * cell, y * cell, cell, cell);
-      
-      // Seçili kare
+      const s = realToScreen(x, y);
+      ctx.fillStyle = (x + y) % 2 === 0 ? "#f0d9b5" : "#b58863";
+      ctx.fillRect(s.x * cellSize, s.y * cellSize, cellSize, cellSize);
+
       if (selected && selected.x === x && selected.y === y) {
-        ctx.shadowColor = "#00ff00";
-        ctx.shadowBlur = 20;
-        ctx.strokeStyle = "#00ff88";
+        ctx.strokeStyle = "#00ff00";
         ctx.lineWidth = 8;
-        ctx.strokeRect(x * cell + 4, y * cell + 4, cell - 8, cell - 8);
-        ctx.shadowBlur = 0;
+        ctx.strokeRect(s.x * cellSize + 6, s.y * cellSize + 6, cellSize - 12, cellSize - 12);
       }
-      
-      // Taş
-      const p = board[y][x];
-      if (p) {
-        const white = p === 1 || p === 2;
-        const king = p === 2 || p === 4;
-        
-        ctx.fillStyle = white ? "#fff" : "#2d1b14";
-        ctx.beginPath();
-        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = white ? "#333" : "#ddd";
-        ctx.lineWidth = 5;
-        ctx.stroke();
-        
-        // Kral tacı
-        if (king) {
-          ctx.fillStyle = "#ffd700";
-          ctx.shadowColor = "#ffd700";
-          ctx.shadowBlur = 15;
-          ctx.font = `bold ${cell * 0.35}px Arial`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("👑", x * cell + cell / 2, y * cell + cell / 2);
-          ctx.shadowBlur = 0;
-        }
+
+      const piece = board[y][x];
+      if (!piece) continue;
+
+      const isWhite = piece === 1 || piece === 2;
+      const isKing = piece === 2 || piece === 4;
+
+      ctx.fillStyle = isWhite ? "#ffffff" : "#1a1a1a";
+      ctx.beginPath();
+      ctx.arc(s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2, cellSize * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = isWhite ? "#000" : "#fff";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+
+      if (isKing) {
+        ctx.fillStyle = "#ffd700";
+        ctx.shadowColor = "#ffd700";
+        ctx.shadowBlur = 20;
+        ctx.font = `bold ${cellSize * 0.4}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("K", s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2 + 5);
+        ctx.shadowBlur = 0;
       }
     }
   }
-  
-  // Hamle gösterimi
-  if (selected && myTurn && !animating) {
-    const moves = getBestMoves(selected.x, selected.y);
+
+  if (selected && myTurn) {
+    const moves = getValidMoves(selected.x, selected.y);
     moves.forEach(m => {
-      ctx.fillStyle = m.captures?.length ? "rgba(255,0,0,0.5)" : "rgba(0,255,136,0.5)";
+      const s = realToScreen(m.x, m.y);
+      ctx.fillStyle = m.captures?.length > 0 ? "rgba(255,0,0,0.5)" : "rgba(0,255,255,0.5)";
       ctx.beginPath();
-      ctx.arc(m.x * cell + cell / 2, m.y * cell + cell / 2, cell * 0.3, 0, Math.PI * 2);
+      ctx.arc(s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2, cellSize * 0.3, 0, Math.PI * 2);
       ctx.fill();
-      
-      // Yeme yolu
-      if (m.captures?.length) {
+
+      if (m.captures?.length > 0) {
+        const fromS = realToScreen(selected.x, selected.y);
         ctx.strokeStyle = "#ff0000";
-        ctx.lineWidth = 4;
-        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 6;
+        ctx.setLineDash([10, 10]);
         ctx.beginPath();
-        ctx.moveTo(selected.x * cell + cell / 2, selected.y * cell + cell / 2);
-        ctx.lineTo(m.x * cell + cell / 2, m.y * cell + cell / 2);
+        ctx.moveTo(fromS.x * cellSize + cellSize/2, fromS.y * cellSize + cellSize/2);
+        ctx.lineTo(s.x * cellSize + cellSize/2, s.y * cellSize + cellSize/2);
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -86,72 +82,61 @@ function draw() {
   }
 }
 
-function getBestMoves(sx, sy) {
-  // Sunucudan gelen mantıkla client-side validasyon
+function getValidMoves(x, y) {
   const moves = [];
-  const piece = board[sy][sx];
-  if (!piece) return moves;
-  
-  const white = piece === 1 || piece === 2;
-  const isKing = piece === 2 || piece === 4;
-  const dirs = isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : 
-    (white ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
-  
-  // Önce YEME優先 (zorunlu)
-  dirs.forEach(([dy, dx]) => {
-    const mx = sx + dx, my = sy + dy;
-    const tx = sx + dx * 2, ty = sy + dy * 2;
-    if (mx >= 0 && mx < 8 && my >= 0 && my < 8 &&
-        tx >= 0 && tx < 8 && ty >= 0 && ty < 8 &&
-        board[my][mx] !== 0 && board[my][mx] !== piece &&
+  const p = board[y][x];
+  if (!p) return moves;
+  const white = p === 1 || p === 2;
+  const king = p === 2 || p === 4;
+  const dirs = king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (white ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
+
+  // Zorunlu yeme
+  for (const [dy, dx] of dirs) {
+    const mx = x + dx, my = y + dy;
+    const tx = x + dx*2, ty = y + dy*2;
+    if (tx >= 0 && tx < 8 && ty >= 0 && ty < 8 &&
+        board[my] && board[my][mx] && (board[my][mx] === 3 || board[my][mx] === 4 ? white : !white) &&
         board[ty][tx] === 0) {
       moves.push({ x: tx, y: ty, captures: [{x: mx, y: my}] });
     }
-  });
-  
-  // Yeme yoksa normal hareket
-  if (moves.length === 0) {
-    dirs.forEach(([dy, dx]) => {
-      const nx = sx + dx, ny = sy + dy;
-      if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
-        moves.push({ x: nx, y: ny, captures: [] });
-      }
-    });
   }
-  
+  if (moves.length > 0) return moves;
+
+  // Normal hareket
+  for (const [dy, dx] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
+      moves.push({ x: nx, y: ny, captures: [] });
+    }
+  }
   return moves;
 }
 
-// Touch + Mouse (MASADÜSTÜ ÇÖZÜLDÜ!)
-function getPos(e) {
+function getClickPos(e) {
   const rect = canvas.getBoundingClientRect();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  return {
-    x: Math.floor((clientX - rect.left) / cell),
-    y: Math.floor((clientY - rect.top) / cell)
-  };
+  const sx = Math.floor((clientX - rect.left) / cellSize);
+  const sy = Math.floor((clientY - rect.top) / cellSize);
+  return screenToReal(sx, sy);
 }
 
-["touchstart", "mousedown"].forEach(ev => {
+["click", "touchend"].forEach(ev => {
   canvas.addEventListener(ev, e => {
-    e.preventDefault();
-    if (!myTurn || animating) return;
-    
-    const pos = getPos(e);
+    if (!myTurn) return;
+    const pos = getClickPos(e);
     if (pos.x < 0 || pos.x > 7 || pos.y < 0 || pos.y > 7) return;
-    
+
     const piece = board[pos.y][pos.x];
-    const mine = (myColor === "white" && (piece === 1 || piece === 2)) ||
-                 (myColor === "black" && (piece === 3 || piece === 4));
-    
-    if (mine) {
+    const isMine = (myColor === "white" && (piece === 1 || piece === 2)) ||
+                   (myColor === "black" && (piece === 3 || piece === 4));
+
+    if (isMine) {
       selected = pos;
     } else if (selected) {
-      const moves = getBestMoves(selected.x, selected.y);
+      const moves = getValidMoves(selected.x, selected.y);
       const valid = moves.find(m => m.x === pos.x && m.y === pos.y);
       if (valid) {
-        animating = true;
         socket.emit("move", { from: selected, to: pos });
         selected = null;
       } else {
@@ -161,44 +146,54 @@ function getPos(e) {
       selected = null;
     }
     draw();
-  }, { passive: false });
+  });
 });
 
-// Socket Events
-socket.on("connect", () => document.getElementById("status").textContent = "✅ Bağlandı!");
+// Socket
+socket.on("connect", () => document.getElementById("status").textContent = "Bağlandı!");
 socket.on("searching", () => document.getElementById("searching").classList.remove("hidden"));
 socket.on("roomCreated", code => {
   document.getElementById("roomCode").textContent = code;
-  document.getElementById("roomInfo").classList.remove("hidden");
+  document.getElementById("roomCreated").classList.remove("hidden");
 });
-socket.on("errorMsg", alert);
+socket.on("errorMsg", msg => alert(msg));
+
 socket.on("gameStart", data => {
-  board = data.board; myColor = data.color; myTurn = data.turn === data.color;
+  board = data.board;
+  myColor = data.color;
+  myTurn = data.turn === data.color;
+  flipped = data.flipped || false;
   document.getElementById("lobby").classList.remove("active");
-  document.getElementById("game").classList.add("active");
+  document.getElementById("gameScreen").classList.add("active");
   updateLights();
   draw();
 });
+
 socket.on("boardUpdate", data => {
-  board = data.board; myTurn = data.turn === myColor;
-  animating = false;
+  board = data.board;
+  myTurn = data.turn === myColor;
+  flipped = data.flipped || false;
   updateLights();
   draw();
 });
 
 function updateLights() {
-  document.getElementById("l1").classList.toggle("active", myColor === "white" && myTurn);
-  document.getElementById("l2").classList.toggle("active", myColor === "black" && myTurn);
+  const myActive = myTurn;
+  document.getElementById("myLight").classList.toggle("active", myActive);
+  document.getElementById("oppLight").classList.toggle("active", !myActive);
 }
 
-// Butonlar (aynı)
-document.getElementById("ranked").onclick = () => socket.emit("findMatch");
-document.getElementById("create").onclick = () => socket.emit("createRoom");
-document.getElementById("joinToggle").onclick = () => 
-  document.getElementById("joinBox").classList.toggle("hidden");
-document.getElementById("joinBtn").onclick = () => 
-  socket.emit("joinRoom", document.getElementById("codeInput").value);
-document.getElementById("copyBtn").onclick = () => 
+// Butonlar
+document.getElementById("rankedBtn").onclick = () => socket.emit("findMatch");
+document.getElementById("createRoomBtn").onclick = () => socket.emit("createRoom");
+document.getElementById("joinToggle").onclick = () => document.getElementById("joinSection").classList.toggle("hidden");
+document.getElementById("joinBtn").onclick = () => {
+  const code = document.getElementById("roomInput").value.trim();
+  if (code.length === 4) socket.emit("joinRoom", code);
+};
+document.getElementById("copyBtn").onclick = () => {
   navigator.clipboard.writeText(document.getElementById("roomCode").textContent);
-document.getElementById("cancel").onclick = () => { socket.emit("cancelMatch"); location.reload(); }
-document.getElementById("leave").onclick = () => location.reload();
+  alert("Kod kopyalandı!");
+};
+document.getElementById("cancelBtn").onclick = () => location.reload();
+document.getElementById("leaveGame").onclick = () => location.reload();
