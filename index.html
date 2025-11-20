@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saski Checkers Online</title>
-    <!-- Tailwind CSS CDN (Stil için) -->
+    <title>Saski Dama Online</title>
+    <!-- Tailwind CSS CDN'i (Stil için) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons CDN (Buton ikonları) -->
+    <!-- Lucide Icons CDN'i (Buton ikonları) -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         
-        /* Tema ve Genel Stil */
+        /* Genel Tema ve Font */
         body {
             font-family: 'Inter', sans-serif;
             background-color: #1a1a2e; /* Koyu Mavi Arka Plan */
             color: #e5e5e5; /* Açık Gri Metin */
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -25,8 +26,8 @@
             padding: 1rem;
             box-sizing: border-box;
         }
-        
-        /* Buton Stili - Dikey düzen için tam genişlik */
+
+        /* Lobi Butonları */
         .game-button {
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             box-shadow: 0 8px 15px rgba(0,0,0,0.4), 0 4px 5px rgba(0,0,0,0.2);
@@ -36,79 +37,190 @@
             transform: translateY(-3px);
             box-shadow: 0 12px 20px rgba(0,0,0,0.5), 0 8px 8px rgba(0,0,0,0.3);
         }
+
+        /* Dama Tahtası Stili */
+        #game-board-container {
+            display: none; /* Başlangıçta gizli */
+            width: 100%;
+            max-width: 448px;
+            aspect-ratio: 1 / 1; /* Kare olmasını sağlar */
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.7);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #2c2c54; /* Tahta çevresi */
+        }
+        #checkerboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            height: 100%;
+        }
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.1s;
+            cursor: pointer;
+            user-select: none;
+        }
+        .light { background-color: #e5c9a7; } /* Açık Kare (Bej) */
+        .dark { background-color: #794f3e; }  /* Koyu Kare (Kahverengi) */
+
+        /* Taş Stilleri */
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: 900;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.6);
+            cursor: grab;
+            transition: transform 0.1s;
+        }
+        .piece.black { 
+            background: radial-gradient(circle at 30% 30%, #444, #111);
+            color: #ccc;
+            border: 2px solid #555;
+        }
+        .piece.white { 
+            background: radial-gradient(circle at 30% 30%, #eee, #aaa);
+            color: #333;
+            border: 2px solid #ddd;
+        }
+        .king::before {
+            content: "\u265B"; /* Kraliçe/Dam iconu (Basit emoji) */
+            font-size: 1.8rem;
+            line-height: 1;
+        }
+
+        /* Aktif ve Seçim Stilleri */
+        .selected {
+            background-color: #38bdf8 !important; /* Seçilen kare için Açık Mavi */
+        }
+        .movable {
+            box-shadow: inset 0 0 0 5px #fde047; /* Sarı kenarlık */
+        }
+        .selectable {
+            box-shadow: 0 0 10px 5px rgba(253, 224, 71, 0.7); /* Parlayan sarı gölge */
+            cursor: pointer;
+        }
+        
+        /* Durum Çubuğu Stili */
+        #game-info {
+            min-height: 40px;
+        }
     </style>
 </head>
 <body class="p-4">
 
-    <!-- Ana Konteyner - Maksimum 448px genişliğinde, mobil cihazlara uyumlu -->
-    <div id="app-container" class="w-full max-w-sm bg-[#0f0f1d] p-8 rounded-xl shadow-2xl text-center">
-        
-        <!-- Başlık -->
-        <h1 class="text-4xl font-extrabold mb-10 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
-            Saski Checkers Online
-        </h1>
-        
-        <!-- Yükleme/Durum Mesajı -->
-        <p id="status-message" class="mb-6 h-6 text-yellow-400 text-sm"></p>
-        
-        <!-- Butonlar Konteyneri (Alt Alta) -->
-        <div class="flex flex-col space-y-6">
+    <!-- Ana Uygulama Konteyneri -->
+    <div id="main-app-container" class="w-full flex flex-col items-center">
+
+        <!-- LOBİ EKRANI -->
+        <div id="lobby-screen" class="w-full max-w-sm bg-[#0f0f1d] p-8 rounded-xl shadow-2xl text-center">
             
-            <!-- 1. Dereceli Oyna Butonu -->
-            <button id="ranked-play-btn" 
-                    class="game-button py-4 px-6 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold rounded-xl text-lg uppercase tracking-wider focus:outline-none focus:ring-4 focus:ring-red-500 focus:ring-opacity-50 disabled:opacity-50"
-                    onclick="handleRankedPlay()">
-                <span class="flex items-center justify-center">
-                    <i data-lucide="trophy" class="mr-3 w-6 h-6"></i>
-                    Dereceli Oyna
-                </span>
-            </button>
+            <h1 class="text-4xl font-extrabold mb-10 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
+                Saski Dama Online
+            </h1>
             
-            <!-- 2. Dostunla Oyna Butonu -->
-            <button id="friend-play-btn" 
-                    class="game-button py-4 px-6 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-bold rounded-xl text-lg uppercase tracking-wider focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50"
-                    onclick="handleFriendPlay()">
-                <span class="flex items-center justify-center">
-                    <i data-lucide="users" class="mr-3 w-6 h-6"></i>
-                    Dostunla Oyna
-                </span>
-            </button>
+            <p id="status-message" class="mb-6 h-6 text-yellow-400 text-sm"></p>
+            <p id="user-id-display" class="mb-4 text-xs text-gray-500 truncate">ID: Yükleniyor...</p>
+            
+            <div class="flex flex-col space-y-6">
+                <button id="ranked-play-btn" 
+                        class="game-button py-4 px-6 bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold rounded-xl text-lg uppercase tracking-wider disabled:opacity-50"
+                        onclick="handleRankedPlay()">
+                    <span class="flex items-center justify-center">
+                        <i data-lucide="trophy" class="mr-3 w-6 h-6"></i>
+                        Dereceli Oyna
+                    </span>
+                </button>
+                
+                <button id="friend-play-btn" 
+                        class="game-button py-4 px-6 bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 text-white font-bold rounded-xl text-lg uppercase tracking-wider disabled:opacity-50"
+                        onclick="handleFriendPlay()">
+                    <span class="flex items-center justify-center">
+                        <i data-lucide="users" class="mr-3 w-6 h-6"></i>
+                        Dostunla Oyna
+                    </span>
+                </button>
+            </div>
+            
+            <div id="lobby-code-area" class="mt-8 p-4 bg-[#2c2c54] rounded-lg hidden">
+                <p class="text-gray-300">Lobi Kodu:</p>
+                <h2 id="lobby-code-display" class="text-3xl font-bold text-green-400 mt-1 mb-3"></h2>
+                <input type="text" id="join-code-input" placeholder="Katılmak için kodu girin" class="w-full p-2 rounded bg-[#1a1a2e] text-white text-center mb-3">
+                <button id="join-lobby-btn" class="w-full py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg">Lobine Katıl</button>
+            </div>
         </div>
-        
+        <!-- LOBİ EKRANI SONU -->
+
+        <!-- OYUN EKRANI -->
+        <div id="game-screen" class="hidden w-full max-w-sm flex flex-col items-center">
+            
+            <h2 id="game-info" class="text-xl font-bold mb-4 text-center">Oyun Yükleniyor...</h2>
+            
+            <div id="game-board-container">
+                <div id="checkerboard">
+                    <!-- Kareler JavaScript ile doldurulacak -->
+                </div>
+            </div>
+
+            <div class="mt-6 flex space-x-4">
+                <button id="restart-btn" class="py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg hidden" onclick="game.restartGame()">
+                    Yeni Oyun Başlat
+                </button>
+                <button id="exit-btn" class="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg" onclick="location.reload()">
+                    Lobiye Dön
+                </button>
+            </div>
+        </div>
+        <!-- OYUN EKRANI SONU -->
+
     </div>
 
     <!-- JavaScript ve Firebase Modülleri -->
     <script type="module">
-        // Gerekli Firebase kütüphanelerini import et
+        // ====================================================================================
+        // FIREBASE MODÜLLERİ VE BAĞLANTI AYARLARI
+        // ====================================================================================
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, addDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, addDoc, serverTimestamp, setLogLevel, onSnapshot, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // Uygulama global değişkenleri
         let db;
         let auth;
         let userId = null;
-        const statusMessage = document.getElementById('status-message');
-        
-        // Butonlar
-        const rankedBtn = document.getElementById('ranked-play-btn');
-        const friendBtn = document.getElementById('friend-play-btn');
+        let unsubscribeMatchmaking = null;
+        let unsubscribeLobby = null;
 
-        // Butonları başlangıçta devre dışı bırak, Firebase bağlantısını bekleyecekler
-        rankedBtn.disabled = true;
-        friendBtn.disabled = true;
-
-        // Platformdan sağlanan zorunlu global değişkenleri al
+        // Zorunlu global değişkenler
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // DOM Elementleri
+        const statusMessage = document.getElementById('status-message');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const lobbyCodeArea = document.getElementById('lobby-code-area');
+        const lobbyCodeDisplay = document.getElementById('lobby-code-display');
+        const joinCodeInput = document.getElementById('join-code-input');
+        const joinLobbyBtn = document.getElementById('join-lobby-btn');
+
+        const rankedBtn = document.getElementById('ranked-play-btn');
+        const friendBtn = document.getElementById('friend-play-btn');
 
         /**
          * Durum mesajını günceller.
          */
         const updateStatus = (message, type = 'info') => {
             statusMessage.textContent = message;
-            // Renkleri Tailwind sınıfları ile ayarla
             statusMessage.className = 'mb-6 h-6 text-sm';
             if (type === 'error') {
                 statusMessage.classList.add('text-red-400');
@@ -123,7 +235,7 @@
          * Firebase'i başlatır ve kullanıcı kimlik doğrulamasını yapar.
          */
         async function initializeFirebase() {
-            updateStatus('Bağlanıyor...');
+            updateStatus('Bağlanılıyor...');
 
             if (!firebaseConfig) {
                 updateStatus('HATA: Firebase konfigurasiyası bulunamadı.', 'error');
@@ -132,23 +244,19 @@
             }
 
             try {
-                // Hata ayıklama seviyesini Debug yap (konsolda detaylı log görmek için)
                 setLogLevel('Debug');
                 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
 
-                // Kimlik doğrulama işlemi
                 await new Promise((resolve) => {
-                    // onAuthStateChanged ile Auth durumunu izle ve resolve et
                     const unsubscribe = onAuthStateChanged(auth, async (user) => {
                         unsubscribe(); 
                         if (user) {
                             userId = user.uid;
                             resolve();
                         } else {
-                            // Custom Token varsa onunla giriş yap, yoksa anonim giriş yap
                             if (initialAuthToken) {
                                 await signInWithCustomToken(auth, initialAuthToken);
                             } else {
@@ -165,11 +273,11 @@
                 
                 if (userId) {
                     updateStatus('Hazır. Bir oyun modu seçin.', 'success');
-                    // Kullanıcı Kimliği alındıktan sonra butonları etkinleştir
+                    userIdDisplay.textContent = `ID: ${userId}`;
                     rankedBtn.disabled = false;
                     friendBtn.disabled = false;
-                    
-                    // Kullanıcı profil bilgisini Firestore'a kaydet (isteğe bağlı)
+                    joinLobbyBtn.disabled = false;
+
                     const userRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, 'data');
                     await setDoc(userRef, { lastLogin: serverTimestamp(), userId: userId }, { merge: true });
 
@@ -184,78 +292,559 @@
         }
 
         /**
-         * Dereceli Oyna butonuna tıklandığında çalışır.
-         * Eşleştirme lobisine kullanıcıyı ekler ve render bağlantısını simüle eder.
+         * Lobi/Eşleştirme işlemleri için görünümü yönetir.
          */
+        function joinGame(lobbyId, isHost, players) {
+            // Lobi ekranını gizle, oyun ekranını göster
+            lobbyScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+
+            // Oyunu başlat
+            game.init(lobbyId, isHost ? 'white' : 'black', isHost, players);
+        }
+
+        // ====================================================================================
+        // LOBİ İŞLEVLERİ
+        // ====================================================================================
+
         window.handleRankedPlay = async () => {
-            if (!userId || !db) {
-                updateStatus('Bağlantı bekleniyor.', 'error');
-                return;
-            }
+            if (!userId || !db) return;
 
             updateStatus('Eşleşme aranıyor...', 'info');
             rankedBtn.disabled = true;
+            friendBtn.disabled = true;
 
             try {
-                // Public Eşleştirme Koleksiyonuna ekle
                 const matchmakingRef = collection(db, `artifacts/${appId}/public/data/matchmaking`);
                 
-                const newMatchRequest = {
-                    userId: userId,
-                    timestamp: serverTimestamp(),
-                    status: 'searching',
-                    gameType: 'ranked'
-                };
+                // Rakip arama sorgusu (eşleşme bekleyen ilk kişiyi bul)
+                const q = query(matchmakingRef, where("status", "==", "searching"));
+                const querySnapshot = await getDocs(q);
+                
+                let foundMatch = false;
 
-                await addDoc(matchmakingRef, newMatchRequest);
-                updateStatus(`Eşleşme aranıyor... (ID: ${userId})`, 'info');
-                
-                // Render URL'sine yönlendirme simülasyonu
-                console.log("Oyun sunucusuna (Render) bağlanılıyor: https://mario-io-1.onrender.com");
-                
+                // Eğer eşleşme bulunursa (mevcut bir arama isteği)
+                if (!querySnapshot.empty) {
+                    const matchDoc = querySnapshot.docs[0];
+                    const hostId = matchDoc.data().userId;
+
+                    if (hostId !== userId) {
+                        // Lobi oluştur (Rastgele ID)
+                        const lobbyId = Math.random().toString(36).substring(2, 12);
+                        const lobbyRef = doc(db, `artifacts/${appId}/public/data/lobbies`, lobbyId);
+                        
+                        await setDoc(lobbyRef, {
+                            player1: hostId, // Beyaz (İlk oyuncu)
+                            player2: userId, // Siyah (İkinci oyuncu)
+                            status: 'playing',
+                            turn: 'white',
+                            boardState: JSON.stringify(game.initialBoard()),
+                            lastMove: null
+                        });
+                        
+                        // Eşleşme isteğini sil
+                        await deleteDoc(matchDoc.ref); 
+                        
+                        updateStatus(`Eşleşme bulundu. Oyun başlıyor!`, 'success');
+                        joinGame(lobbyId, false, [hostId, userId]); // Katılımcı
+                        foundMatch = true;
+                    }
+                }
+
+                // Eşleşme bulunamazsa, kendisi arama isteği oluşturur
+                if (!foundMatch) {
+                    const newMatchRequest = {
+                        userId: userId,
+                        timestamp: serverTimestamp(),
+                        status: 'searching',
+                        gameType: 'ranked'
+                    };
+                    const docRef = await addDoc(matchmakingRef, newMatchRequest);
+                    updateStatus(`Eşleşme aranıyor... Lütfen bekleyin.`, 'info');
+                    
+                    // Kendi eşleşme isteğini dinle
+                    unsubscribeMatchmaking = onSnapshot(doc(db, matchmakingRef.path, docRef.id), (docSnapshot) => {
+                        if (!docSnapshot.exists()) {
+                            // Belge silindiyse (eşleşme bulundu demektir)
+                            if (unsubscribeMatchmaking) unsubscribeMatchmaking();
+                            // Başka bir fonksiyon ile lobiye yönlendirilmesi beklenir
+                        }
+                    });
+                }
+
             } catch (error) {
                 console.error("Dereceli Oyna Hatası:", error);
                 updateStatus(`Başlatılamadı: ${error.message}`, 'error');
                 rankedBtn.disabled = false;
+                friendBtn.disabled = false;
             }
         };
 
-        /**
-         * Dostunla Oyna butonuna tıklandığında çalışır.
-         * Yeni bir özel lobi oluşturur ve lobi kodunu gösterir.
-         */
-        window.handleFriendPlay = async () => {
-            if (!userId || !db) {
-                updateStatus('Bağlantı bekleniyor.', 'error');
-                return;
-            }
+        window.handleFriendPlay = () => {
+            if (!userId) return;
             
-            try {
-                // Rastgele bir lobi kodu oluştur (6 karakter)
-                const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-                // Public Lobiler Koleksiyonunda yeni bir doküman oluştur
-                const lobbiesRef = doc(db, `artifacts/${appId}/public/data/lobbies`, lobbyId);
+            lobbyCodeArea.classList.remove('hidden');
+            // Host fonksiyonunu çağır
+            createLobby();
+        };
 
-                await setDoc(lobbiesRef, {
-                    hostId: userId,
-                    createdAt: serverTimestamp(),
-                    status: 'waiting',
-                    players: [userId]
-                });
-
-                updateStatus(`Lobi Kodu: ${lobbyId}. Arkadaşına gönder!`, 'success');
-
-            } catch (error) {
-                console.error("Dostunla Oyna Hatası:", error);
-                updateStatus(`Başlatılamadı: ${error.message}`, 'error');
+        joinLobbyBtn.onclick = () => {
+            const code = joinCodeInput.value.trim().toUpperCase();
+            if (code.length === 6) {
+                joinExistingLobby(code);
+            } else {
+                updateStatus('Lobi kodu 6 karakter olmalıdır.', 'error');
             }
         };
         
-        // Sayfa yüklendiğinde
+        async function createLobby() {
+            if (!userId || !db) return;
+            try {
+                const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const lobbyRef = doc(db, `artifacts/${appId}/public/data/lobbies`, lobbyId);
+
+                await setDoc(lobbyRef, {
+                    player1: userId, // Host (Beyaz)
+                    player2: null,
+                    status: 'waiting',
+                    turn: 'white',
+                    boardState: JSON.stringify(game.initialBoard()),
+                    createdAt: serverTimestamp()
+                });
+
+                lobbyCodeDisplay.textContent = lobbyId;
+                updateStatus(`Lobi Kodu Oluşturuldu. Bekleniyor... (ID: ${userId})`, 'info');
+
+                // Lobiyi dinle (rakip gelene kadar)
+                unsubscribeLobby = onSnapshot(lobbyRef, (docSnapshot) => {
+                    const data = docSnapshot.data();
+                    if (data && data.status === 'playing' && data.player2) {
+                        if (unsubscribeLobby) unsubscribeLobby();
+                        updateStatus('Rakip bulundu! Oyun başlıyor.', 'success');
+                        joinGame(lobbyId, true, [data.player1, data.player2]); // Host
+                    }
+                });
+
+            } catch (error) {
+                console.error("Lobi Oluşturma Hatası:", error);
+                updateStatus(`Lobi oluşturulamadı: ${error.message}`, 'error');
+            }
+        }
+
+        async function joinExistingLobby(lobbyId) {
+            if (!userId || !db) return;
+            try {
+                const lobbyRef = doc(db, `artifacts/${appId}/public/data/lobbies`, lobbyId);
+                
+                await updateDoc(lobbyRef, {
+                    player2: userId,
+                    status: 'playing'
+                });
+
+                updateStatus('Lobiye katıldınız! Oyun başlıyor.', 'success');
+                
+                // Lobiyi dinle ve oyunu başlat
+                unsubscribeLobby = onSnapshot(lobbyRef, (docSnapshot) => {
+                    const data = docSnapshot.data();
+                    if (data && data.status === 'playing' && data.player2) {
+                        if (unsubscribeLobby) unsubscribeLobby();
+                        joinGame(lobbyId, false, [data.player1, data.player2]); // Katılımcı
+                    }
+                });
+
+            } catch (error) {
+                console.error("Lobiye Katılma Hatası:", error);
+                updateStatus(`Katılamadı. Kod hatalı veya lobi dolu: ${error.message}`, 'error');
+            }
+        }
+        
+        // ====================================================================================
+        // SASKİ DAMA (TÜRK DAMASI) OYUN MANTIĞI
+        // ====================================================================================
+
+        const game = {
+            board: [],
+            currentPlayer: 'white',
+            selectedPiece: null,
+            forcedCaptures: [],
+            localPlayerColor: null,
+            lobbyId: null,
+            isHost: false,
+            dbRef: null,
+
+            // Başlangıç tahtası (8x8)
+            initialBoard: () => [
+                ['', 'B', 'B', 'B', 'B', 'B', 'B', ''], // Siyah (Black) 
+                ['', 'B', 'B', 'B', 'B', 'B', 'B', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['W', 'W', 'W', 'W', 'W', 'W', 'W', 'W'], // Beyaz (White)
+                ['W', 'W', 'W', 'W', 'W', 'W', 'W', 'W']
+            ],
+
+            init(lobbyId, playerColor, isHost, players) {
+                this.lobbyId = lobbyId;
+                this.localPlayerColor = playerColor;
+                this.isHost = isHost;
+                this.dbRef = doc(db, `artifacts/${appId}/public/data/lobbies`, lobbyId);
+
+                // Tahta görünümünü hazırla
+                this.renderBoard();
+                
+                // Firestore'dan gerçek zamanlı tahta durumunu dinle
+                onSnapshot(this.dbRef, (docSnapshot) => {
+                    if (docSnapshot.exists()) {
+                        const data = docSnapshot.data();
+                        this.updateGameState(data);
+                    }
+                });
+
+                document.getElementById('game-board-container').addEventListener('click', (e) => this.handleBoardClick(e));
+            },
+
+            updateGameState(data) {
+                this.board = JSON.parse(data.boardState);
+                this.currentPlayer = data.turn;
+                this.renderBoard();
+                
+                const gameInfo = document.getElementById('game-info');
+                const isMyTurn = this.currentPlayer === this.localPlayerColor;
+
+                // Durum çubuğunu güncelle
+                gameInfo.textContent = `Sıra: ${this.currentPlayer === 'white' ? 'Beyaz' : 'Siyah'}`;
+                gameInfo.classList.remove('text-green-400', 'text-red-400', 'text-yellow-400');
+
+                if (isMyTurn) {
+                    gameInfo.textContent += ' (Sizin Sıranız)';
+                    gameInfo.classList.add('text-green-400');
+                    this.findForcedCaptures(); 
+                } else {
+                    gameInfo.textContent += ' (Rakibin Sırası)';
+                    gameInfo.classList.add('text-yellow-400');
+                    this.forcedCaptures = []; // Rakip sırasındayken zorunlu yakalama yok
+                }
+
+                if (this.checkForWin()) {
+                    gameInfo.textContent = `${this.currentPlayer === 'white' ? 'Siyah' : 'Beyaz'} Kazandı!`;
+                    gameInfo.classList.add('text-red-400');
+                }
+            },
+
+            // Tahta görünümünü DOM'a çizer
+            renderBoard() {
+                const boardElement = document.getElementById('checkerboard');
+                boardElement.innerHTML = ''; // Tahtayı temizle
+
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const square = document.createElement('div');
+                        square.className = `square ${(r + c) % 2 === 0 ? 'dark' : 'light'}`;
+                        square.dataset.row = r;
+                        square.dataset.col = c;
+                        
+                        const pieceCode = this.board[r][c];
+                        if (pieceCode) {
+                            const piece = document.createElement('div');
+                            // B: Siyah, W: Beyaz, BK: Siyah Dam, WK: Beyaz Dam
+                            const color = pieceCode.startsWith('W') ? 'white' : 'black';
+                            const isKing = pieceCode.endsWith('K');
+
+                            piece.className = `piece ${color} ${isKing ? 'king' : ''}`;
+                            square.appendChild(piece);
+                        }
+                        
+                        // Zorunlu yakalama durumunda taşları işaretle
+                        const isForced = this.forcedCaptures.some(move => 
+                            move.start[0] === r && move.start[1] === c
+                        );
+                        if (isForced) {
+                            square.classList.add('selectable');
+                        }
+
+                        // Seçili kareyi işaretle
+                        if (this.selectedPiece && this.selectedPiece.r === r && this.selectedPiece.c === c) {
+                            square.classList.add('selected');
+                        }
+
+                        boardElement.appendChild(square);
+                    }
+                }
+            },
+
+            // Tıklama olayını yönetir
+            handleBoardClick(event) {
+                const squareElement = event.target.closest('.square');
+                if (!squareElement) return;
+
+                const r = parseInt(squareElement.dataset.row);
+                const c = parseInt(squareElement.dataset.col);
+                const pieceCode = this.board[r][c];
+                const pieceColor = pieceCode.startsWith('W') ? 'white' : (pieceCode.startsWith('B') ? 'black' : null);
+                
+                const isMyTurn = this.currentPlayer === this.localPlayerColor;
+                if (!isMyTurn) return; // Sıra bende değilse hareket etme
+
+                if (this.selectedPiece) {
+                    // 1. Durum: Seçili taşı hareket ettir
+                    const moves = this.getValidMoves(this.selectedPiece.r, this.selectedPiece.c);
+                    const targetMove = moves.find(move => move.end[0] === r && move.end[1] === c);
+                    
+                    if (targetMove) {
+                        this.makeMove(targetMove);
+                        this.selectedPiece = null;
+                        this.clearHighlights();
+                        this.renderBoard();
+                    } else if (pieceColor === this.localPlayerColor) {
+                        // Kendi rengimde başka bir taşı seç
+                        this.selectPiece(r, c);
+                    } else {
+                        // Geçersiz hareket, seçimi kaldır
+                        this.selectedPiece = null;
+                        this.clearHighlights();
+                        this.renderBoard();
+                    }
+
+                } else if (pieceColor === this.localPlayerColor) {
+                    // 2. Durum: Yeni bir taş seç
+                    this.selectPiece(r, c);
+                }
+            },
+
+            // Taşı seçer ve geçerli hamleleri işaretler
+            selectPiece(r, c) {
+                const pieceCode = this.board[r][c];
+                const pieceColor = pieceCode.startsWith('W') ? 'white' : 'black';
+                
+                // Zorunlu yakalama varsa, sadece zorunlu yakalama yapabilen taşları seç
+                if (this.forcedCaptures.length > 0) {
+                    const isForcedPiece = this.forcedCaptures.some(move => 
+                        move.start[0] === r && move.start[1] === c
+                    );
+                    if (!isForcedPiece) {
+                        updateStatus('Zorunlu yakalama var. Başka bir taş seçemezsiniz.', 'info');
+                        return;
+                    }
+                }
+
+                this.selectedPiece = { r, c, code: pieceCode, color: pieceColor };
+                this.clearHighlights();
+                
+                // Seçilen kareyi işaretle
+                document.querySelector(`[data-row="${r}"][data-col="${c}"]`).classList.add('selected');
+
+                // Geçerli hamleleri işaretle
+                this.getValidMoves(r, c).forEach(move => {
+                    const { end: [tr, tc] } = move;
+                    document.querySelector(`[data-row="${tr}"][data-col="${tc}"]`).classList.add('movable');
+                });
+            },
+
+            // Tüm işaretlemeleri kaldırır
+            clearHighlights() {
+                document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+                document.querySelectorAll('.movable').forEach(el => el.classList.remove('movable'));
+                document.querySelectorAll('.selectable').forEach(el => el.classList.remove('selectable'));
+            },
+
+            // Zorunlu yakalama hamlelerini bulur
+            findForcedCaptures() {
+                this.forcedCaptures = [];
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const pieceCode = this.board[r][c];
+                        if (pieceCode && pieceCode.startsWith(this.currentPlayer.charAt(0).toUpperCase())) {
+                            const moves = this.getValidMoves(r, c);
+                            moves.filter(move => move.isCapture).forEach(move => this.forcedCaptures.push(move));
+                        }
+                    }
+                }
+            },
+
+            // Geçerli hareketleri hesaplar (Türk Daması Kuralları)
+            getValidMoves(r, c) {
+                const moves = [];
+                const pieceCode = this.board[r][c];
+                const isKing = pieceCode.endsWith('K');
+                const color = pieceCode.startsWith('W') ? 'white' : 'black';
+                const opponent = color === 'white' ? 'B' : 'W';
+                const direction = color === 'white' ? -1 : 1;
+                
+                // Eğer zorunlu yakalama varsa, sadece yakalama hamlelerini kontrol et
+                const onlyCaptures = this.forcedCaptures.length > 0;
+
+                // Kontrol edilecek yönler: İleri (normal), Yatay (her zaman), Geri (damalar için)
+                const directions = isKing 
+                    ? [[direction, 0], [-direction, 0], [0, 1], [0, -1]] // Damalar: İleri/Geri ve Yatay
+                    : [[direction, 0], [0, 1], [0, -1]]; // Normal: İleri ve Yatay
+
+                for (const [dr, dc] of directions) {
+                    let nextR = r + dr;
+                    let nextC = c + dc;
+                    
+                    // Normal taşlar sadece bir kare ilerler veya yakalar
+                    if (!isKing) {
+                        // Yakalama hareketi kontrolü
+                        const jumpR = nextR + dr;
+                        const jumpC = nextC + dc;
+
+                        if (this.isValid(nextR, nextC) && this.board[nextR][nextC].startsWith(opponent)) {
+                            // Sıçranacak yer boş mu?
+                            if (this.isValid(jumpR, jumpC) && !this.board[jumpR][jumpC]) {
+                                moves.push({ start: [r, c], end: [jumpR, jumpC], capture: [nextR, nextC], isCapture: true });
+                            }
+                        } 
+                        
+                        // Normal hareket kontrolü (Yakalamak zorunlu değilse)
+                        if (!onlyCaptures && this.isValid(nextR, nextC) && !this.board[nextR][nextC]) {
+                            // Sadece ileri ve yatay hareketler
+                            if (dr === direction || dr === 0) { 
+                                moves.push({ start: [r, c], end: [nextR, nextC], isCapture: false });
+                            }
+                        }
+
+                    } else {
+                        // Damalar: Sınırsız hareket ve yakalama
+                        while (this.isValid(nextR, nextC)) {
+                            const currentSquare = this.board[nextR][nextC];
+
+                            if (!currentSquare) {
+                                // Boş kare: Normal hareket (Eğer yakalama zorunlu değilse)
+                                if (!onlyCaptures) {
+                                    moves.push({ start: [r, c], end: [nextR, nextC], isCapture: false });
+                                }
+                            } else if (currentSquare.startsWith(opponent)) {
+                                // Rakip taş: Yakalama kontrolü
+                                let jumpR = nextR + dr;
+                                let jumpC = nextC + dc;
+                                
+                                // Rakip taştan sonraki kare boş olmalı
+                                if (this.isValid(jumpR, jumpC) && !this.board[jumpR][jumpC]) {
+                                    moves.push({ start: [r, c], end: [jumpR, jumpC], capture: [nextR, nextC], isCapture: true });
+                                }
+                                break; // Yakalasa da yakalamasa da dur
+                            } else {
+                                // Kendi taşı: Dur
+                                break;
+                            }
+                            nextR += dr;
+                            nextC += dc;
+                        }
+                    }
+                }
+                
+                // Zorunlu yakalama varsa, sadece yakalama hamlelerini döndür
+                if (onlyCaptures) {
+                    return moves.filter(move => move.isCapture);
+                }
+
+                return moves;
+            },
+
+            // Hamleyi yapar ve Firestore'a yansıtır
+            async makeMove(move) {
+                // Tahta üzerindeki hamleyi yap
+                this.board[move.end[0]][move.end[1]] = this.board[move.start[0]][move.start[1]];
+                this.board[move.start[0]][move.start[1]] = '';
+
+                let nextPlayer = this.currentPlayer;
+
+                if (move.isCapture) {
+                    // Yakalanan taşı kaldır
+                    this.board[move.capture[0]][move.capture[1]] = '';
+                    
+                    // ZORUNLU ARDIŞIK YAKALAMA KONTROLÜ
+                    this.findForcedCaptures(); // Tüm tahta için yakalamaları tekrar hesapla
+                    
+                    // Sadece bu taşın yeni konumundan devam eden yakalama var mı?
+                    const nextCaptures = this.forcedCaptures.filter(c => 
+                        c.start[0] === move.end[0] && c.start[1] === move.end[1]
+                    );
+
+                    if (nextCaptures.length > 0) {
+                        // Ardışık yakalama var, sıra aynı oyuncuda kalır
+                        this.forcedCaptures = nextCaptures; 
+                        nextPlayer = this.currentPlayer;
+                    } else {
+                        // Yakalama bitti, sırayı değiştir
+                        this.forcedCaptures = [];
+                        nextPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+                    }
+
+                } else {
+                    // Normal hareket, sırayı değiştir
+                    nextPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+                }
+
+                // Dam kontrolü
+                this.checkKing(move.end[0], move.end[1]);
+
+                // Hamleyi Firestore'a yansıt
+                await updateDoc(this.dbRef, {
+                    boardState: JSON.stringify(this.board),
+                    turn: nextPlayer,
+                    lastMove: `${move.start[0]}${move.start[1]}-${move.end[0]}${move.end[1]}`
+                });
+
+                // Not: updateGameState, onSnapshot tarafından otomatik olarak çağrılacak.
+            },
+
+            // Dam yapma kontrolü
+            checkKing(r, c) {
+                const pieceCode = this.board[r][c];
+                if (!pieceCode || pieceCode.endsWith('K')) return;
+
+                if (pieceCode === 'W' && r === 0) {
+                    this.board[r][c] = 'WK'; // Beyaz Dam
+                } else if (pieceCode === 'B' && r === 7) {
+                    this.board[r][c] = 'BK'; // Siyah Dam
+                }
+            },
+
+            // Kazanma koşulunu kontrol eder
+            checkForWin() {
+                let whitePieces = 0;
+                let blackPieces = 0;
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (this.board[r][c].startsWith('W')) whitePieces++;
+                        if (this.board[r][c].startsWith('B')) blackPieces++;
+                    }
+                }
+                
+                // Hiç taşı kalmayan veya hamle yapamayan taraf kaybeder.
+                if (whitePieces === 0) return 'black';
+                if (blackPieces === 0) return 'white';
+
+                // Hamle olup olmadığını kontrol etmek daha karmaşık olduğu için basit taş sayımı kullanıldı.
+                return null; 
+            },
+
+            isValid(r, c) {
+                return r >= 0 && r < 8 && c >= 0 && c < 8;
+            },
+            
+            // Oyun içi yeniden başlatma
+            restartGame() {
+                if (this.isHost) {
+                    updateDoc(this.dbRef, {
+                        boardState: JSON.stringify(this.initialBoard()),
+                        turn: 'white',
+                        lastMove: null,
+                        status: 'playing'
+                    });
+                } else {
+                    updateStatus('Sadece lobiyi kuran (Host) oyunu yeniden başlatabilir.', 'error');
+                }
+            }
+        };
+
+        // ====================================================================================
+        // SAYFA YÜKLEME
+        // ====================================================================================
         window.onload = () => {
-            // Lucide ikonlarını oluştur
             lucide.createIcons();
-            // Firebase'i başlat
             initializeFirebase();
         };
 
