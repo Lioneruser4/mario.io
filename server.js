@@ -89,8 +89,15 @@ io.on("connection", socket => {
   socket.on("findMatch", (data) => {
     // Eğer zaten eşleşme arıyorsa işlem yapma
     if (queue.includes(socket)) {
-      console.log('Zaten eşleşme aranıyor:', socket.username);
+      console.log('Zaten eşleşme aranıyor:', data?.name || 'Misafir');
       return;
+    }
+    
+    // Kullanıcı bilgilerini güncelle
+    if (data) {
+      socket.username = data.name || 'Misafir';
+      socket.userId = data.id || socket.id;
+      socket.isTelegram = data.isTelegram || false;
     }
 
     // Kullanıcı adını güncelle
@@ -166,24 +173,83 @@ io.on("connection", socket => {
     }
   });
 
-  socket.on("createRoom", () => {
+  socket.on("createRoom", (data) => {
     const code = String(Math.floor(1000 + Math.random() * 9000));
-    rooms[code] = { board: createBoard(), turn: "white", players: [socket.id] };
+    const player = { 
+      id: socket.id, 
+      name: data?.name || 'Misafir',
+      isTelegram: data?.isTelegram || false
+    };
+    
+    rooms[code] = { 
+      board: createBoard(), 
+      turn: "white", 
+      players: [player],
+      status: 'waiting',
+      createdAt: Date.now()
+    };
+    
+    socket.roomId = code;
     socket.join(code);
-    socket.emit("roomCreated", code);
+    socket.emit("roomCreated", { 
+      code: code,
+      playerName: player.name,
+      isHost: true
+    });
+    
+    console.log(`Oda oluşturuldu: ${code}, Oyuncu: ${player.name}`);
   });
 
-  socket.on("joinRoom", code => {
-    code = code.trim();
-    if (rooms[code] && rooms[code].players.length === 1) {
-      rooms[code].players.push(socket.id);
-      socket.join(code);
-      const data = { board: rooms[code].board, turn: "white" };
-      io.to(rooms[code].players[0]).emit("gameStart", { ...data, color: "white" });
-      socket.emit("gameStart", { ...data, color: "black" });
-    } else {
-      socket.emit("errorMsg", "Oda dolu!");
+  socket.on("joinRoom", (data) => {
+    const code = data.code.trim();
+    const room = rooms[code];
+    
+    if (!room) {
+      return socket.emit("errorMsg", "Oda bulunamadı!");
     }
+    
+    if (room.players.length >= 2) {
+      return socket.emit("errorMsg", "Oda dolu!");
+    }
+    
+    const player = {
+      id: socket.id,
+      name: data?.name || 'Misafir',
+      isTelegram: data?.isTelegram || false
+    };
+    
+    room.players.push(player);
+    room.status = 'playing';
+    socket.roomId = code;
+    socket.join(code);
+    
+    const host = room.players[0];
+    const opponent = room.players[1];
+    
+    // Oyunu başlat
+    const gameData = {
+      roomId: code,
+      board: room.board,
+      turn: "white"
+    };
+    
+    // Host'a (beyaz) bilgi gönder
+    io.to(host.id).emit("gameStart", {
+      ...gameData,
+      color: "white",
+      playerName: host.name,
+      opponentName: opponent.name
+    });
+    
+    // İkinci oyuncuya (siyah) bilgi gönder
+    socket.emit("gameStart", {
+      ...gameData,
+      color: "black",
+      playerName: opponent.name,
+      opponentName: host.name
+    });
+    
+    console.log(`Odaya katılım: ${code}, Oyuncular: ${host.name} vs ${opponent.name}`);
   });
 
   socket.on("move", ({ from, to }) => {
