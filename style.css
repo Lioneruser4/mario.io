@@ -32,6 +32,45 @@ body {
   overflow-y: auto;
 }
 
+/* Game Over Overlay */
+.game-over-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.game-over-content {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  padding: 2rem;
+  border-radius: 15px;
+  text-align: center;
+  max-width: 90%;
+  width: 400px;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  border: 2px solid #00ffff;
+}
+
+.game-over-content h2 {
+  color: #fff;
+  margin-bottom: 2rem;
+  font-size: 1.8rem;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.7);
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.hidden {
+  display: none !important;
+}
+
 /* ============== EKRANLAR ============== */
 .screen {
   display: none;
@@ -106,10 +145,24 @@ body {
 /* Make buttons easier to tap on mobile */
 @media (max-width: 768px) {
   .btn {
-    padding: 18px 24px;
-    font-size: 1.2rem;
-    min-width: 180px;
-    margin: 8px 0;
+    padding: 16px 20px;
+    font-size: 1.1rem;
+    min-width: 160px;
+    margin: 6px 0;
+  }
+  
+  .header {
+    padding: 10px 15px;
+    margin-bottom: 10px;
+  }
+  
+  .p {
+    font-size: 1.1rem;
+  }
+  
+  .light {
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -222,12 +275,13 @@ input:focus {
 }
 
 .light {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #333;
   box-shadow: 0 0 10px #000;
   transition: all 0.4s;
+  flex-shrink: 0;
 }
 
 .light.active {
@@ -247,16 +301,14 @@ input:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   width: 100%;
   max-width: 100%;
   padding: 10px;
   box-sizing: border-box;
   min-height: 100vh;
-  width: 100%;
-  padding: 10px;
-  box-sizing: border-box;
-  overflow: hidden;
+  overflow: auto;
+  position: relative;
 }
 
 .game-container {
@@ -274,29 +326,21 @@ input:focus {
 .board-container {
   position: relative;
   width: 100%;
-  max-width: 100%;
-  margin: 0 auto;
+  max-width: 400px; /* Sabit genişlik */
+  margin: 20px auto;
   touch-action: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  padding: 10px;
+  padding: 5px;
   box-sizing: border-box;
-  max-width: 100vw;
-  max-height: calc(100vh - 150px); /* Header ve diğer elementler için boşluk bırak */
-  margin: 10px 0;
-  flex-shrink: 1;
+  aspect-ratio: 1/1; /* Kare şeklinde tut */
+  flex-shrink: 0;
 }
 
 #board {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
-  height: auto;
-  max-width: 100%;
-  max-height: 90vh;
-  aspect-ratio: 1/1;
+  height: 100%;
   background: #1a1a2e;
   border-radius: 10px;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
@@ -304,6 +348,7 @@ input:focus {
   -webkit-tap-highlight-color: transparent;
   display: block;
   margin: 0 auto;
+  position: relative;
 }
 
 /* Hücre boyutlarını ayarla */
