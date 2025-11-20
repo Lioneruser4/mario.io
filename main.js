@@ -55,9 +55,14 @@ function parseTelegramUser() {
 const userInfo = parseTelegramUser();
 let myName = userInfo.name;
 let myID = userInfo.id;
+const isTelegram = window.Telegram && window.Telegram.WebApp;
 
 // Sunucuya kullanıcı bilgilerini gönder
-socket.emit('setUsername', { name: myName, id: myID });
+socket.emit('setUsername', { 
+  name: myName, 
+  id: myID, 
+  isTelegram: isTelegram 
+});
 
 // Lobi durumunu güncelle
 function updateLobbyStatus(message, isSearching = false) {
@@ -411,7 +416,13 @@ socket.on("roomCreated", code => {
 socket.on("errorMsg", alert);
 
 // Sunucuya ismi ve ID'yi gönder (Eşleştirme ve oda kurulurken kullanılması için)
-socket.on('gameStart', (data) => {
+// Rakibin ayrılması durumunda lobiye dön
+socket.on('opponentDisconnected', () => {
+    showToast('Rakip oyundan ayrıldı. Lobiye yönlendiriliyorsunuz...', 'warning');
+    setTimeout(() => location.reload(), 3000);
+});
+
+socket.on("gameStart", (data) => {
     document.getElementById('lobby').classList.remove('active');
     document.getElementById('game').classList.add('active');
     
@@ -420,8 +431,15 @@ socket.on('gameStart', (data) => {
     myTurn = data.turn === myColor;
     
     // Oyuncu isimlerini ayarla
-    p1NameEl.textContent = data.playerName || 'Misafir';
-    p2NameEl.textContent = data.opponentName || 'Misafir';
+    const player1Name = data.color === 'white' ? 
+        (isTelegram ? myName : 'Misafir') : 
+        (data.opponentName || 'Misafir');
+    const player2Name = data.color === 'black' ? 
+        (isTelegram ? myName : 'Misafir') : 
+        (data.opponentName || 'Misafir');
+    
+    p1NameEl.textContent = player1Name;
+    p2NameEl.textContent = player2Name;
     
     // Işıkları güncelle
     document.getElementById('l1').style.backgroundColor = myTurn ? '#4CAF50' : '#ccc';
@@ -517,23 +535,38 @@ document.getElementById("ranked").onclick = () => {
     searchingEl.classList.remove("hidden");
     
     // Sunucuya eşleşme isteği gönder
-    socket.emit("findMatch", { name: myName, id: myID });
+    socket.emit("findMatch", { 
+        name: myName, 
+        id: myID,
+        isTelegram: isTelegram
+    });
     
-    // 5 saniye sonra butonu tekrar aktif et
-    setTimeout(() => {
-        if (searchingEl.classList.contains("hidden") === false) {
+    // 30 saniye sonra eşleşme aramasını durdur
+    const timeout = setTimeout(() => {
+        if (!document.getElementById('game').classList.contains('active')) {
             rankedBtn.disabled = false;
             rankedBtn.textContent = 'Dereceli Maç';
             searchingEl.classList.add("hidden");
-            statusEl.textContent = 'Eşleşme bulunamadı. Tekrar deneyin.';
+            showToast('Eşleşme bulunamadı. Lütfen tekrar deneyin.', 'error');
+            socket.emit('cancelMatch');
         }
-    }, 5000);
+    }, 30000);
+    
+    // Sayfa kapatılırken temizlik yap
+    window.addEventListener('beforeunload', () => {
+        clearTimeout(timeout);
+        socket.emit('cancelMatch');
+    });
 };
 document.getElementById("create").onclick = () => {
     document.getElementById("lobby").classList.add("active");
     document.getElementById("roomInfo").classList.add("hidden");
     document.getElementById("searching").classList.add("hidden");
-    socket.emit("createRoom", { name: myName, id: myID }); // İsim/ID gönder
+    socket.emit("createRoom", { 
+        name: myName, 
+        id: myID,
+        isTelegram: isTelegram 
+    });
 };
 document.getElementById("joinToggle").onclick = () => {
     document.getElementById("joinBox").classList.toggle("hidden");
@@ -541,8 +574,18 @@ document.getElementById("joinToggle").onclick = () => {
     document.getElementById("searching").classList.add("hidden");
 };
 document.getElementById("joinBtn").onclick = () => {
+    const roomCode = document.getElementById("codeInput").value.trim();
+    if (!roomCode) {
+        showToast('Lütfen geçerli bir oda kodu girin', 'error');
+        return;
+    }
     document.getElementById("joinBox").classList.add("hidden");
-    socket.emit("joinRoom", { code: document.getElementById("codeInput").value, name: myName, id: myID }); // İsim/ID gönder
+    socket.emit("joinRoom", { 
+        code: roomCode, 
+        name: myName, 
+        id: myID,
+        isTelegram: isTelegram 
+    });
 };
 document.getElementById("copyBtn").onclick = () => {
   navigator.clipboard.writeText(document.getElementById("roomCode").textContent)
