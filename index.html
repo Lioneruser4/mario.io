@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azərbaycan Daması | Professional Edition 2.0</title>
+    <title>Çapraz Dama | Professional Edition 3.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
@@ -30,6 +30,8 @@
             align-items: center;
             transition: background-color 0.2s;
         }
+        /* Yalnız qara xanalar istifadə olunur, lakin buradakı rənglər sadəcə fon üçündür */
+        
         .piece {
             width: 85%;
             height: 85%;
@@ -84,7 +86,7 @@
 <body class="bg-primary-dark text-white font-['Inter'] min-h-screen flex flex-col items-center justify-center p-4">
 
     <header class="text-center mb-6 w-full max-w-4xl">
-        <h1 class="text-4xl font-black title-glow text-accent mb-2">AZƏRBAYCAN DAMA OYUNU</h1>
+        <h1 class="text-4xl font-black title-glow text-accent mb-2">ÇAPRAZ DAMA OYUNU</h1>
         <div id="user-info-display" class="text-xs text-gray-400">
             <span id="user-name-display">İstifadəçi: Yüklənir...</span> |
             <span id="current-user-id-display">ID: ...</span>
@@ -187,7 +189,7 @@
     <script>
         // --- Sabitlər və Global Dəyişənlər ---
         
-        // 🚀 SERVER URL Sizin Tələbinizə Əsasən Dəyişdirildi!
+        // 🚀 SERVER URL: https://mario-io-1.onrender.com
         const SERVER_URL = "https://mario-io-1.onrender.com"; 
 
         const BOARD_SIZE = 8;
@@ -287,15 +289,21 @@
 
         function isValidCell(r, c) { return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE; }
 
-        /** Daşın tək yemə hərəkətlərini tapır. (Serverdə daha detallı yoxlama aparılır) */
+        /**
+         * Daşın tək yemə hərəkətlərini tapır (Çapraz).
+         * @param {number[][]} board - Cari taxta vəziyyəti
+         * @param {number} r - Cari sıra
+         * @param {number} c - Cari sütun
+         * @param {string} player - Oyunçunun rəngi ('white' və ya 'black')
+         * @returns {{from: {r: number, c: number}, to: {r: number, c: number}, captured: {r: number, c: number}}[]}
+         */
         function findJumps(board, r, c, player) {
             const piece = board[r][c];
             const isKingPiece = piece === 3 || piece === 4;
             const jumps = [];
             
-            // Sadəcə 2 addım diaqonal (Azərbaycan damasında daş king kimi 4 tərəfə yeyə bilər)
-            const directions = isKingPiece ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] :
-                player === 'white' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]];
+            // Çapraz istiqamətlər
+            const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
             for (const [dr, dc] of directions) {
                 const capturedR = r + dr;
@@ -303,10 +311,12 @@
                 const landR = r + 2 * dr;
                 const landC = c + 2 * dc;
 
+                // 1. Düşəcək xana taxtanın içində və boş olmalıdır
                 if (isValidCell(landR, landC) && board[landR][landC] === 0) {
                     const capturedPieceValue = board[capturedR]?.[capturedC];
                     const capturedPlayer = getPiecePlayer(capturedPieceValue);
 
+                    // 2. Vurulan xana rəqibin daşı olmalıdır
                     if (capturedPlayer && capturedPlayer && capturedPlayer !== player) {
                         jumps.push({ 
                             from: { r, c }, 
@@ -334,7 +344,7 @@
                 nextBoard[jump.captured.r][jump.captured.c] = 0;
                 
                 // Yeni mövqedə zəncirə davam et
-                const newLength = findLongestJumpChain(
+                const chainLengthFromHere = findLongestJumpChain(
                     nextBoard,
                     jump.to.r,
                     jump.to.c,
@@ -342,8 +352,8 @@
                     currentLength + 1
                 );
 
-                if (newLength > maxChain) {
-                    maxChain = newLength;
+                if (chainLengthFromHere > maxChain) {
+                    maxChain = chainLengthFromHere;
                 }
             }
             return maxChain;
@@ -375,8 +385,8 @@
             
             // --- UI Mesajının Yenilənməsi ---
             document.getElementById('action-info').textContent = isMandatoryJump 
-                ? "MƏCBURİ YEMƏ VAR: Ən uzun zənciri yeməlisiniz!"
-                : "Hərəkət edin.";
+                ? "MƏCBURİ YEMƏ VAR!"
+                : "Adi hərəkət edin.";
             document.getElementById('action-info').className = `text-sm text-center p-2 rounded-lg w-full ${isMandatoryJump ? 'bg-red-500 text-white animate-pulse-fast' : 'bg-blue-600 text-white'}`;
             // ---------------------------------
 
@@ -410,14 +420,17 @@
 
                         // --- Adi Hərəkətlər (Moves) ---
                         if (!isMandatoryJump) {
+                            // Adi daşlar yalnız irəli diaqonal, Kinglər 4 istiqamətə diaqonal
                             const directions = isKingPiece ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] :
-                                player === 'white' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]];
+                                player === 'white' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]]; // Ağ yuxarı, Qara aşağı
 
                             for (const [dr, dc] of directions) {
                                 const newR = r + dr;
                                 const newC = c + dc;
                                 
                                 if (isValidCell(newR, newC) && board[newR][newC] === 0) {
+                                    // Yalnız qara xanalarda hərəkət etmə qadağası (Əgər taxta rəngi yoxdursa, bunu server yoxlamalıdır)
+                                    // Buradakı taxta düzdür, amma qayda olaraq yeyənə qədər yalnız irəliyə!
                                     moves.push({
                                         from: { r, c },
                                         to: { r: newR, c: newC },
@@ -467,6 +480,7 @@
                 for (let c = 0; c < BOARD_SIZE; c++) {
                     const cell = document.createElement('div');
                     const isDark = (r + c) % 2 === 0;
+                    // Checkers-də adətən yalnız qara xanalar istifadə olunur (bu kodda rənglər estetikdir)
                     cell.className = `cell ${ isDark ? 'bg-gray-200' : 'bg-gray-500' }`;
                     cell.dataset.row = r;
                     cell.dataset.col = c;
@@ -474,7 +488,7 @@
                     
                     const pieceValue = board[r][c];
                     
-                    // 1. Məcburi yemə start daşını vurğula
+                    // 1. Məcburi yemə start daşını vurğula 
                     if (isMyTurn && getPiecePlayer(pieceValue) === myColor) {
                         const canStartJump = possibleMoves.some(m => m.from.r === r && m.from.c === c);
                         if (canStartJump && possibleMoves.some(m => m.type === 'jump') && !mandatoryCapture) {
