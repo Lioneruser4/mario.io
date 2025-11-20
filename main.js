@@ -80,7 +80,8 @@ const userInfo = parseTelegramParams();
 let myName = userInfo.name;
 let myID = userInfo.id;
 
-parseTelegramParams(); // Sayfa yüklenir yüklenmez isimleri ayarla
+// Sunucuya kullanıcı bilgilerini gönder
+socket.emit('setUsername', { name: myName, id: myID });
 
 
 // --- ZAMANLAYICI YÖNETİMİ VE RASTGELE HAMLE ---
@@ -400,12 +401,30 @@ socket.on("roomCreated", code => {
 socket.on("errorMsg", alert);
 
 // Sunucuya ismi ve ID'yi gönder (Eşleştirme ve oda kurulurken kullanılması için)
-socket.on("gameStart", data => {
-  board = data.board; 
-  myColor = data.color; 
-  myTurn = data.turn === data.color;
-
-  // İsimleri ayarla
+socket.on('gameStart', (data) => {
+    document.getElementById('lobby').classList.remove('active');
+    document.getElementById('game').classList.add('active');
+    
+    board = data.board;
+    myColor = data.color;
+    myTurn = data.turn === myColor;
+    
+    // Oyuncu isimlerini ayarla
+    p1NameEl.textContent = data.playerName || 'Misafir';
+    p2NameEl.textContent = data.opponentName || 'Misafir';
+    
+    // Işıkları güncelle
+    document.getElementById('l1').style.backgroundColor = myTurn ? '#4CAF50' : '#ccc';
+    document.getElementById('l2').style.backgroundColor = !myTurn ? '#4CAF50' : '#ccc';
+    
+    // Oyun durumunu güncelle
+    updateStatus(data.turn);
+    
+    // Tahtayı çiz
+    resize();
+    
+    // Eşleşme bulundu mesajı göster
+    statusEl.textContent = `Eşleşme bulundu! Rakip: ${data.opponentName || 'Misafir'}`;
   const opponentName = data.opponentName || "Rakip Oyuncu";
   const myActualName = myName;
 
