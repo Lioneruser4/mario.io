@@ -18,24 +18,67 @@ const gameOverEl = document.getElementById("gameOverMessage");
 
 // --- TELEGRAM / İSİM YÖNETİMİ ---
 
-let myName = "Oyuncu 1";
-let myID = null;
+// Rastgele isim oluştur
+function generateRandomName() {
+    const adjectives = ['Hızlı', 'Zeki', 'Güçlü', 'Şanslı', 'Usta', 'Yenilmez', 'Kurnaz', 'Bilge', 'Çevik', 'Sakin'];
+    const nouns = ['Dâhice', 'Şahin', 'Kaplan', 'Ejderha', 'Kartal', 'Aslan', 'Kurt', 'Yıldız', 'Ayı', 'Tilki'];
+    const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+    return `${randomAdj} ${randomNoun}${Math.floor(100 + Math.random() * 900)}`;
+}
 
+// Telegram parametrelerini kontrol et
 function parseTelegramParams() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tgId = urlParams.get('tgWebAppUser.id');
-    const tgName = urlParams.get('tgWebAppUser.first_name');
-    
-    // Güvenlik: Botfather'den gelen veriler 'tgWebAppUser' nesnesinde kodlanmış olabilir.
-    // Ancak basit bir webview testi için direkt URL parametrelerini kontrol ediyoruz.
-    if (tgId && tgName) {
-        myName = decodeURIComponent(tgName.split('&')[0]); // Sadece isim kısmını al
-        myID = tgId;
-        console.log(`Telegram kullanıcı: ${myName} (ID: ${myID})`);
-    } else {
-        myName = "Anonim Oyuncu"; // Normal siteden girenler
+    try {
+        // Telegram WebApp'ten gelen parametreleri kontrol et
+        if (window.Telegram && window.Telegram.WebApp) {
+            const user = window.Telegram.WebApp.initDataUnsafe?.user;
+            if (user) {
+                return {
+                    id: user.id.toString(),
+                    name: user.first_name || 'Misafir',
+                    username: user.username || `user_${user.id}`
+                };
+            }
+        }
+        
+        // URL parametrelerini kontrol et (eski yöntem)
+        const urlParams = new URLSearchParams(window.location.search);
+        const tgUser = urlParams.get('tgWebAppUser');
+        
+        if (tgUser) {
+            try {
+                const user = JSON.parse(decodeURIComponent(tgUser));
+                return {
+                    id: user.id || Date.now().toString(),
+                    name: user.first_name || 'Misafir',
+                    username: user.username || `user_${Date.now()}`
+                };
+            } catch (e) {
+                console.error('Telegram user parse error:', e);
+            }
+        }
+        
+        // Hiçbir kaynaktan kullanıcı bilgisi alınamadıysa rastgele isim oluştur
+        return {
+            id: `guest_${Date.now()}`,
+            name: generateRandomName(),
+            username: `guest_${Math.floor(1000 + Math.random() * 9000)}`
+        };
+    } catch (error) {
+        console.error('Error parsing Telegram params:', error);
+        return {
+            id: `guest_${Date.now()}`,
+            name: generateRandomName(),
+            username: `guest_${Math.floor(1000 + Math.random() * 9000)}`
+        };
     }
 }
+
+// Kullanıcı bilgilerini al
+const userInfo = parseTelegramParams();
+let myName = userInfo.name;
+let myID = userInfo.id;
 
 parseTelegramParams(); // Sayfa yüklenir yüklenmez isimleri ayarla
 
