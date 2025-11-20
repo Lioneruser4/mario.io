@@ -80,7 +80,13 @@
 </div>
 
 <div id="game" class="screen">
-  <div class="game-container">
+  <div id="gameOverOverlay" class="game-over-overlay hidden">
+    <div class="game-over-content">
+      <h2 id="gameOverText"></h2>
+      <button id="returnToLobbyBtn" class="btn">Lobiye Dön</button>
+    </div>
+  </div>
+  <div class="game-container">
     <div class="header">
       <div class="p" id="p1"><div class="light" id="l1"></div> <span id="player1Name"></span></div>
       <div class="vs">VS</div>
