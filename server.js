@@ -54,14 +54,53 @@ function getValidMoves(board, x, y, color) {
 }
 
 io.on("connection", socket => {
-  socket.on("findMatch", () => {
+  // Kullanıcı bağlandığında ismini kaydet
+  socket.on("setUsername", (data) => {
+    socket.username = data.name || 'Misafir';
+    socket.userId = data.id || socket.id;
+  });
+
+  socket.on("findMatch", (data) => {
+    // Kullanıcı adını kaydet
+    if (data && data.name) {
+      socket.username = data.name;
+      socket.userId = data.id || socket.id;
+    } else {
+      socket.username = 'Misafir';
+      socket.userId = socket.id;
+    }
+
     if (queue.length > 0) {
       const opponent = queue.shift();
       const roomId = "ranked_" + Date.now();
-      rooms[roomId] = { board: createBoard(), turn: "white", players: [socket.id, opponent.id] };
-      socket.join(roomId); opponent.join(roomId);
-      socket.emit("gameStart", { color: "white", board: rooms[roomId].board, turn: "white" });
-      opponent.emit("gameStart", { color: "black", board: rooms[roomId].board, turn: "white" });
+      rooms[roomId] = { 
+        board: createBoard(), 
+        turn: "white", 
+        players: [
+          { id: socket.id, name: socket.username },
+          { id: opponent.id, name: opponent.username || 'Misafir' }
+        ]
+      };
+      
+      socket.join(roomId);
+      opponent.join(roomId);
+      
+      // Oyunculara kendi ve rakip bilgilerini gönder
+      socket.emit("gameStart", { 
+        color: "white", 
+        board: rooms[roomId].board, 
+        turn: "white",
+        playerName: socket.username,
+        opponentName: opponent.username || 'Misafir'
+      });
+      
+      opponent.emit("gameStart", { 
+        color: "black", 
+        board: rooms[roomId].board, 
+        turn: "white",
+        playerName: opponent.username || 'Misafir',
+        opponentName: socket.username
+      });
     } else {
       queue.push(socket);
       socket.emit("searching");
