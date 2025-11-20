@@ -80,11 +80,32 @@ class CheckersGame {
             this.showToast('Rakip oyundan ayrıldı!', 'warning');
             this.gameOver = true;
             this.updateGameStatus('Rakip oyundan ayrıldı!');
+            
+            // Return to lobby after showing the message
+            setTimeout(() => {
+                this.returnToLobby();
+            }, 3000);
+        });
+        
+        this.socket.on('returnToLobby', () => {
+            this.returnToLobby();
         });
         
         this.socket.on('chatMessage', (message) => {
             this.showToast(`${this.opponentName}: ${message}`, 'info');
         });
+    }
+    
+    // Reset game to initial state and return to lobby
+    returnToLobby() {
+        this.initializeBoard();
+        this.gameOver = false;
+        this.selectedPiece = null;
+        this.validMoves = [];
+        this.currentPlayer = 'black';
+        this.isPlayerTurn = this.playerColor === 'black';
+        this.updateGameStatus(this.isPlayerTurn ? 'Sıra sende!' : 'Rakibin hamlesi bekleniyor...');
+        this.render();
     }
     
     // Handle opponent's move received from server
@@ -375,12 +396,18 @@ class CheckersGame {
         
         // Check win conditions
         if (blackPieces.length === 0 || (this.currentPlayer === 'black' && !blackHasMoves)) {
-            this.handleGameOver({ winner: 'white', reason: 'Tüm siyah taşlar yok edildi veya hamle yapılamıyor' });
+            this.handleGameOver({ winner: 'white', reason: 'Tüm siyah taşlar yok edildi!' });
+            if (this.isMultiplayer) {
+                this.socket.emit('gameOver', { winner: 'white', reason: 'Tüm siyah taşlar yok edildi!' });
+            }
             return true;
         }
         
         if (whitePieces.length === 0 || (this.currentPlayer === 'white' && !whiteHasMoves)) {
-            this.handleGameOver({ winner: 'black', reason: 'Tüm beyaz taşlar yok edildi veya hamle yapılamıyor' });
+            this.handleGameOver({ winner: 'black', reason: 'Tüm beyaz taşlar yok edildi!' });
+            if (this.isMultiplayer) {
+                this.socket.emit('gameOver', { winner: 'black', reason: 'Tüm beyaz taşlar yok edildi!' });
+            }
             return true;
         }
         
@@ -398,6 +425,24 @@ class CheckersGame {
             const winnerName = this.isMultiplayer 
                 ? (result.winner === this.playerColor ? this.playerName : this.opponentName)
                 : (result.winner === 'black' ? 'Siyah' : 'Beyaz');
+            
+            // Show win/lose message
+            const isWinner = this.isMultiplayer ? result.winner === this.playerColor : false;
+            const resultMessage = isWinner ? 'Kazandınız!' : 'Kaybettiniz!';
+            this.showToast(resultMessage, isWinner ? 'success' : 'error');
+            
+            // Update game status with the result
+            this.updateGameStatus(resultMessage);
+            
+            // Return to lobby after 3 seconds
+            if (this.isMultiplayer) {
+                setTimeout(() => {
+                    if (this.socket) {
+                        this.socket.emit('returnToLobby');
+                    }
+                    this.returnToLobby();
+                }, 3000);
+            }
                 
             message = `Kazanan: ${winnerName}!`;
             if (result.reason) {
@@ -420,8 +465,11 @@ class CheckersGame {
     
     // Render the game board
     render() {
-        const gameBoard = document.getElementById('gameBoard');
-        if (!gameBoard) return;
+        const gameBoard = document.getElementById('board');
+        if (!gameBoard) {
+            console.error('Tahta elementi bulunamadı!');
+            return;
+        }
         
         // Clear the board
         gameBoard.innerHTML = '';
@@ -466,9 +514,22 @@ class CheckersGame {
     renderValidMoves() {
         // Bu fonksiyonun doğru çalışması için HTML yapınızda uygun bir 'moveHints' elementi olmalıdır.
         const moveHints = document.getElementById('moveHints');
-        const gameBoard = document.getElementById('gameBoard');
+        const gameBoard = document.getElementById('board');
         
-        if (!moveHints || !gameBoard || !this.selectedPiece) return;
+        if (!moveHints) {
+            console.error('moveHints elementi bulunamadı!');
+            return;
+        }
+        
+        if (!gameBoard) {
+            console.error('Tahta elementi bulunamadı!');
+            return;
+        }
+        
+        if (!this.selectedPiece) {
+            console.log('Seçili taş yok.');
+            return;
+        }
         
         moveHints.innerHTML = '';
         
