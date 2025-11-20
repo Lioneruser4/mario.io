@@ -213,11 +213,164 @@ input:focus {
   to   { box-shadow: 0 0 60px #00ff00; }
 }
 
+/* Tahta stilleri */
+/* Oyun Konteynırı */
+#game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.board-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 20px auto;
+  aspect-ratio: 1/1;
+}
+
 #board {
-  max-width: 95vw;
-  max-height: 70vh;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background-color: #1a1a2e;
   border: 6px solid #00ffff;
   border-radius: 20px;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+}
+
+/* Hücre stilleri */
+.cell {
+  width: 50px;
+  height: 50px;
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+}
+
+.cell.light {
+  background-color: #f0d9b5; /* Açık renk hücre */
+}
+
+.cell.dark {
+  background-color: #b58863; /* Koyu renk hücre */
+}
+
+/* Taş stilleri */
+.piece {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.piece:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+}
+
+.piece.black {
+  background: linear-gradient(135deg, #333, #000);
+  border: 2px solid #555;
+}
+
+.piece.white {
+  background: linear-gradient(135deg, #fff, #ccc);
+  border: 2px solid #eee;
+}
+
+.piece.king {
+  box-shadow: 0 0 15px gold, 0 0 5px gold inset;
+}
+
+/* Seçili taş stili */
+.piece.highlight {
+  box-shadow: 0 0 15px #00ffff, 0 0 5px #00ffff inset;
+  transform: scale(1.1);
+}
+
+/* Hamle ipuçları */
+.move-hint {
+  position: absolute;
+  background-color: rgba(0, 255, 255, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.2s;
+}
+
+.move-hint:hover {
+  background-color: rgba(0, 255, 255, 0.5);
+  transform: scale(1.1);
+}
+
+.move-hint.capture-hint {
+  background-color: rgba(255, 0, 0, 0.3);
+}
+
+.move-hint.capture-hint:hover {
+  background-color: rgba(255, 0, 0, 0.5);
+}
+
+/* Rakip tarafındaki (p2) göstergelerin sırasını ayarlamak için */
+#p2 {
+  flex-direction: row-reverse; 
+}
+
+/* Move hints için stil */
+.move-hints {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Oyun başlık alanı */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+.vs {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #ffeb3b;
+  text-shadow: 0 0 10px rgba(255, 235, 59, 0.7);
+}
+
+#centralTimer {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
   box-shadow: 
     0 0 40px rgba(0, 255, 255, 0.8),
     inset 0 0 40px rgba(0, 0, 0, 0.5);
