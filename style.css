@@ -256,31 +256,37 @@ input:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 95%;
-  max-width: 600px;
-  padding: 15px 20px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 20px;
+  width: 100%;
+  max-width: 500px;
+  padding: 12px 15px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 15px;
   backdrop-filter: blur(10px);
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   border: 2px solid #00ffff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 .p {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 1.3rem;
+  gap: 10px;
+  font-size: 1.1rem;
   font-weight: 600;
+  flex: 1;
+  position: relative;
+  padding: 5px 10px;
+  border-radius: 10px;
+  transition: all 0.3s ease;
 }
 
 .light {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #333;
-  box-shadow: 0 0 10px #000;
-  transition: all 0.4s;
+  box-shadow: 0 0 8px #000;
+  transition: all 0.3s;
   flex-shrink: 0;
 }
 
