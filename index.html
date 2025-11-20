@@ -7,15 +7,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        /* --- Dama Taxtası CSS --- */
+        /* CSS HİSSƏSİ (DƏYİŞMƏYİB) */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         
         .board {
             display: grid;
-            /* Hüceyrə ölçülərini adaptiv saxla, maksimum 60px */
             grid-template-columns: repeat(8, min(12vw, 60px));
             grid-template-rows: repeat(8, min(12vw, 60px));
-            border: 8px solid #334155; /* Slate-700 */
+            border: 8px solid #334155; 
             box-shadow: 0 15px 25px rgba(0, 0, 0, 0.7);
             border-radius: 12px;
             overflow: hidden;
@@ -49,7 +48,6 @@
         .piece-white { background-color: #f3f4f6; color: #1f2937; border-color: #9ca3af; }
         .piece-black { background-color: #1f2937; color: #f3f4f6; border-color: #4b5563; }
         
-        /* Dama (King) effekti */
         @keyframes king-glow {
             0%, 100% { text-shadow: 0 0 10px #fde047, 0 0 5px #000; }
             50% { text-shadow: 0 0 20px #fde047, 0 0 10px #000; }
@@ -58,28 +56,25 @@
         .piece-king-white { background: linear-gradient(135deg, #fde047, #fef08a); color: #1f2937; }
         .piece-king-black { background: linear-gradient(135deg, #374151, #4b5563); color: #fde047; }
         
-        /* Vurğulama (Highlight) CSS */
-        .selected { border: 4px solid #ef4444; transform: scale(1.05); } /* Red-500 */
-        .possible-move { background-color: #10b981 !important; cursor: pointer; } /* Emerald-500 */
+        .selected { border: 4px solid #ef4444; transform: scale(1.05); } 
+        .possible-move { background-color: #10b981 !important; cursor: pointer; } 
         .possible-move:hover { background-color: #059669 !important; }
         
-        /* 1. Məcburi Yemə Daşını Vurğulama (Əsas Yenilik) */
         @keyframes mandatory-pulse {
             0%, 100% { box-shadow: 0 0 15px #f97316; }
             50% { box-shadow: 0 0 25px #f97316; }
         }
         .mandatory-jump { 
-            border: 4px solid #f97316; /* Narıncı Çərçivə */
+            border: 4px solid #f97316; 
             animation: mandatory-pulse 0.8s infinite alternate; 
         } 
 
-        /* Animasiyalar */
         @keyframes pulse-fast {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
         .animate-pulse-fast { animation: pulse-fast 0.5s infinite alternate; }
-        .title-glow { text-shadow: 0 0 10px #3b82f6, 0 0 20px #3b82f6; } /* Blue-500 */
+        .title-glow { text-shadow: 0 0 10px #3b82f6, 0 0 20px #3b82f6; } 
     </style>
     <script>
         tailwind.config = {
@@ -99,7 +94,7 @@
             <span id="user-name-display">İstifadəçi: Yüklənir...</span> |
             <span id="current-user-id-display">ID: ...</span>
         </div>
-        <div id="connection-status" class="text-sm font-semibold mt-2 text-red-500 animate-pulse-fast">Serverə qoşulur... (Zəhmət olmasa, serverin aktiv olduğundan əmin olun!)</div>
+        <div id="connection-status" class="text-sm font-semibold mt-2 text-red-500 animate-pulse-fast">Serverə qoşulur...</div>
     </header>
 
     <div id="message-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center z-50">
@@ -197,7 +192,7 @@
     <script>
         // --- Sabitlər və Global Dəyişənlər ---
         
-        // 🚀 SERVER URL: https://mario-io-1.onrender.com (Dəyişdirilməyib)
+        // SERVER URL: Əmin olun ki, bu URL-də Sizin Socket.IO serveriniz işləyir
         const SERVER_URL = "https://mario-io-1.onrender.com"; 
 
         const BOARD_SIZE = 8;
@@ -207,26 +202,16 @@
         let currentUserName = null;
         let currentRoomId = null;
         let isMyTurn = false;
-        let myColor = null; // 'black' və ya 'white'
+        let myColor = null; 
         
         let boardState = null;
-        let selectedPiece = null; // {r, c}
-        let mandatoryCapture = null; // {r, c} (çoxlu zəncirdə qalmış daş)
-        let possibleMoves = []; // Cari seçilmiş daş üçün icazə verilən hərəkətlərin siyahısı
+        let selectedPiece = null; 
+        let mandatoryCapture = null; 
+        let possibleMoves = []; 
 
-        // --- UI Elementləri ---
-        const loader = document.getElementById('loader');
-        const lobbyScreen = document.getElementById('lobby-screen');
-        const gameScreen = document.getElementById('game-screen');
-        const dereceliBtn = document.getElementById('dereceli-btn');
-        const deregeliCancelBtn = document.getElementById('deregeli-cancel-btn');
-        const boardElement = document.getElementById('board');
-        const modalCloseBtn = document.getElementById('modal-close-btn');
-        
-        // --- Yardımçı Funksiyalar ---
+        // --- Digər Yardımçı Funksiyalar (Dəyişməyib) ---
 
         function getTelegramUser() {
-            // Telegram WebApp parametrlərini yoxla
             const urlParams = new URLSearchParams(window.location.search);
             const tgUserId = urlParams.get('tg_user_id') || urlParams.get('id');
             const tgUsername = urlParams.get('tg_username') || urlParams.get('name');
@@ -253,7 +238,6 @@
             deregeliCancelBtn.classList.add('hidden');
             dereceliBtn.classList.remove('hidden');
             
-            // Timeri dayandır
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
 
@@ -276,7 +260,6 @@
         }
 
         function formatTime(seconds) {
-            // Saniyəni formatlama (20s kimi)
             return `${Math.max(0, seconds)}s`;
         }
         
@@ -292,26 +275,18 @@
             return '';
         }
 
-        // --- Dama Məntiqi (Yalnız UI üçün) ---
-
         function isValidCell(r, c) { return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE; }
 
-        /**
-         * Daşın tək yemə hərəkətlərini tapır (Çapraz - King üçün uzaqdan vurma daxil olmaqla).
-         * Bu funksiya serverin yoxlamasını təqlid edir.
-         */
         function findJumps(board, r, c, player) {
             const pieceValue = board[r][c];
             const isKingPiece = pieceValue === 3 || pieceValue === 4;
             const jumps = [];
-            
             const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
             for (const [dr, dc] of directions) {
                 if (isKingPiece) {
                     let capturedR = -1, capturedC = -1;
                     
-                    // King - Uzaqdan Vurma Məntiqi
                     for (let i = 1; i < BOARD_SIZE; i++) {
                         const curR = r + i * dr;
                         const curC = c + i * dc;
@@ -321,47 +296,36 @@
                         const cellValue = board[curR][curC];
                         const cellPlayer = getPiecePlayer(cellValue);
                         
-                        if (cellPlayer === player) break; // Öz daşını keçə bilməz
+                        if (cellPlayer === player) break; 
 
                         if (cellPlayer !== null && cellPlayer !== player) {
                             if (capturedR === -1) {
-                                // Rəqibin daşını tapdı
                                 capturedR = curR;
                                 capturedC = curC;
                             } else {
-                                // İkinci rəqib daşını keçə bilməz (vurmaq üçün)
-                                break;
+                                break; 
                             }
                         }
 
                         if (capturedR !== -1 && cellValue === 0) {
-                            // Rəqib daşından sonra boş xana tapdı (Bura düşə bilər)
                             jumps.push({ 
                                 from: { r, c }, 
                                 to: { r: curR, c: curC }, 
                                 captured: { r: capturedR, c: capturedC } 
                             });
-                            // King vurmadan sonra daşın arxasındakı bütün boş xanalara düşə bilər, 
-                            // amma biz sadəcə ən qısa yolu tapırıq, zəncir davamı sonrakı iterasiyada tapılacaq.
-                        } else if (capturedR === -1 && !isKingPiece && i > 1) {
-                            // Adi daş yalnız bir addım gedir
-                            break;
-                        }
+                        } 
                     }
 
                 } else {
-                    // Adi daş - Yalnız 1 addım vurma
                     const capturedR = r + dr;
                     const capturedC = c + dc;
                     const landR = r + 2 * dr;
                     const landC = c + 2 * dc;
 
-                    // 1. Düşəcək xana taxtanın içində və boş olmalıdır
                     if (isValidCell(landR, landC) && board[landR][landC] === 0) {
                         const capturedPieceValue = board[capturedR]?.[capturedC];
                         const capturedPlayer = getPiecePlayer(capturedPieceValue);
 
-                        // 2. Vurulan xana rəqibin daşı olmalıdır
                         if (capturedPlayer && capturedPlayer !== player) {
                             jumps.push({ 
                                 from: { r, c }, 
@@ -375,10 +339,6 @@
             return jumps;
         }
 
-
-        // Qalan hissə əvvəlki kimi: findLongestJumpChain, getMaxJumpChainLength, getPossibleMoves...
-        // Məcburi yemə, ən uzun zəncir və Afk məntiqi (Serverə göndərməklə)
-
         function findLongestJumpChain(board, r, c, player, currentLength) {
             const possibleNextJumps = findJumps(board, r, c, player);
             let maxChain = currentLength;
@@ -386,7 +346,6 @@
             for (const jump of possibleNextJumps) {
                 const nextBoard = makeTempMove(board, r, c, jump.to.r, jump.to.c, jump.captured.r, jump.captured.c);
                 
-                // King promosiyası yoxlanılmır, çünki bu, sadəcə zəncirin uzunluğunu tapır
                 const chainLengthFromHere = findLongestJumpChain(
                     nextBoard,
                     jump.to.r,
@@ -422,30 +381,26 @@
             const maxLength = getMaxJumpChainLength(board, player);
             const isMandatoryJump = maxLength > 0;
             
-            // --- UI Mesajının Yenilənməsi ---
             document.getElementById('action-info').textContent = isMandatoryJump 
                 ? "MƏCBURİ YEMƏ VAR: O daşı seçin!"
                 : "Adi hərəkət edin.";
             document.getElementById('action-info').className = `text-sm text-center p-2 rounded-lg w-full ${isMandatoryJump ? 'bg-red-500 text-white animate-pulse-fast' : 'bg-blue-600 text-white'}`;
-            // ---------------------------------
-
+            
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
                     if (getPiecePlayer(board[r][c]) === player) {
                         
-                        // Əgər çoxlu zəncir varsa, yalnız bu daşla hərəkətə icazə ver
                         if (mandatoryStart && (mandatoryStart.r !== r || mandatoryStart.c !== c)) continue;
 
                         const piece = board[r][c];
                         const isKingPiece = piece === 3 || piece === 4;
                         
-                        // --- Yemə Hərəkətləri (Jumps) ---
+                        // Yemə Hərəkətləri (Jumps)
                         const jumps = findJumps(board, r, c, player);
                         jumps.forEach(jump => {
                             const nextBoard = makeTempMove(board, r, c, jump.to.r, jump.to.c, jump.captured.r, jump.captured.c);
                             const chainLength = findLongestJumpChain(nextBoard, jump.to.r, jump.to.c, player, 1);
                             
-                            // Yalnız ən uzun zəncirin bir hissəsi olan tək yemələrə icazə ver
                             if (chainLength === maxLength || !isMandatoryJump) {
                                 moves.push({
                                     from: { r, c },
@@ -457,39 +412,27 @@
                             }
                         });
 
-                        // --- Adi Hərəkətlər (Moves) ---
+                        // Adi Hərəkətlər (Moves)
                         if (!isMandatoryJump) {
-                            // Adi daşlar yalnız irəli diaqonal, Kinglər istənilən məsafəyə diaqonal
                             const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; 
                             
                             for (const [dr, dc] of directions) {
                                 if (isKingPiece) {
-                                    // King - Uzaq Məsafə Hərəkəti
                                     for (let i = 1; i < BOARD_SIZE; i++) {
                                         const newR = r + i * dr;
                                         const newC = c + i * dc;
                                         if (!isValidCell(newR, newC) || board[newR][newC] !== 0) break;
 
-                                        moves.push({
-                                            from: { r, c },
-                                            to: { r: newR, c: newC },
-                                            type: 'move'
-                                        });
+                                        moves.push({ from: { r, c }, to: { r: newR, c: newC }, type: 'move' });
                                     }
                                 } else {
-                                    // Adi daş - Yalnız 1 addım irəli diaqonal
                                     const newR = r + dr;
                                     const newC = c + dc;
                                     
-                                    // Ağ yuxarıya (r artır), Qara aşağıya (r azalır) - Düzəliş
                                     const isForward = (player === 'white' && dr > 0) || (player === 'black' && dr < 0);
                                     
                                     if (isForward && isValidCell(newR, newC) && board[newR][newC] === 0) {
-                                        moves.push({
-                                            from: { r, c },
-                                            to: { r: newR, c: newC },
-                                            type: 'move'
-                                        });
+                                        moves.push({ from: { r, c }, to: { r: newR, c: newC }, type: 'move' });
                                     }
                                 }
                             }
@@ -511,25 +454,20 @@
             return newBoard;
         }
 
-        // --- UI Çəkmə və Hadisə İdarəetməsi ---
-
         function drawBoard(board, turn, mandatoryCapture) {
             boardElement.innerHTML = '';
             boardState = board;
 
-            // Əgər növbə bizdədirsə, icazə verilən hərəkətləri hesablayın
             if (isMyTurn && myColor === turn) {
                 possibleMoves = getPossibleMoves(board, myColor, mandatoryCapture);
             } else {
                 possibleMoves = [];
             }
             
-            // Seçilmiş daşın hərəkətlərini əvvəlcədən təyin et (Əgər seçim varsa)
             const movesFromSelectedPiece = selectedPiece 
                 ? possibleMoves.filter(m => m.from.r === selectedPiece.r && m.from.c === selectedPiece.c)
                 : [];
             
-            // Məcburi yemə olan daşların koordinatları
             const mandatoryJumpPieces = isMyTurn && possibleMoves.some(m => m.type === 'jump') && !mandatoryCapture
                 ? possibleMoves.filter(m => m.type === 'jump').map(m => m.from)
                 : [];
@@ -545,7 +483,7 @@
                     
                     const pieceValue = board[r][c];
                     
-                    // 1. Məcburi yemə start daşını vurğula (Əsas yenilik)
+                    // 1. Məcburi yemə start daşını vurğula
                     if (isMyTurn && getPiecePlayer(pieceValue) === myColor) {
                         const isMandatoryPiece = mandatoryJumpPieces.some(p => p.r === r && p.c === c);
                         const isMandatoryContinue = mandatoryCapture && mandatoryCapture.r === r && mandatoryCapture.c === c;
@@ -555,7 +493,7 @@
                         }
                     }
                     
-                    // 2. Mümkün hərəkət xanalarını vurğula (Seçim varsa)
+                    // 2. Mümkün hərəkət xanalarını vurğula
                     const isPossibleMoveTo = movesFromSelectedPiece.some(m => m.to.r === r && m.to.c === c);
                     if (isPossibleMoveTo) {
                         cell.classList.add('possible-move');
@@ -597,7 +535,6 @@
             const piecePlayer = getPiecePlayer(pieceValue);
             const isMyPiece = piecePlayer === myColor;
             
-            // Məcburi yemə daşlarının yoxlanılması (UI yoxlaması)
             const isMandatoryJumpActive = possibleMoves.some(m => m.type === 'jump');
             const mandatoryJumpPieces = possibleMoves.filter(m => m.type === 'jump').map(m => m.from);
 
@@ -605,12 +542,10 @@
             if (isMyPiece) {
                 // Daş seçimi
                 if (isMandatoryJumpActive && !mandatoryCapture) {
-                    // Məcburi yemə varsa, yalnız vurma hərəkəti olan daşı seçə bilər
                     if (!mandatoryJumpPieces.some(p => p.r === r && p.c === c)) {
                         return showModal("MƏCBURİ YEMƏ var. Yalnız vurma hərəkəti olan daşı seçin.");
                     }
                 } else if (mandatoryCapture && (mandatoryCapture.r !== r || mandatoryCapture.c !== c)) {
-                    // Zəncir davam edirsə, yalnız əvvəlki daşı seçə bilər
                     return showModal("Zənciri davam etdirmək üçün əvvəlki daşla hərəkət etməlisiniz.");
                 }
 
@@ -621,7 +556,6 @@
                     selectedPiece = { r, c };
                 }
                 
-                // Seçim vizualizasiyasını yenilə
                 drawBoard(boardState, myColor, mandatoryCapture);
                 
             } else if (selectedPiece) {
@@ -630,7 +564,6 @@
                 const moveAttempt = movesFromSelectedPiece.find(m => m.to.r === r && m.to.c === c);
 
                 if (moveAttempt) {
-                    // Hərəkəti serverə göndər (və timer sıfırlansın)
                     socket.emit('makeMove', {
                         roomId: currentRoomId,
                         from: selectedPiece,
@@ -641,7 +574,6 @@
                         chainLength: moveAttempt.chainLength 
                     });
                     
-                    // UI-da gözləmə vəziyyətinə keç 
                     selectedPiece = null; 
                     drawBoard(boardState, myColor, mandatoryCapture);
                     
@@ -659,18 +591,20 @@
             currentUserId = userData.id;
             currentUserName = userData.name;
             
-            // UI-da istifadəçi adını göstər
             document.getElementById('user-name-display').textContent = `İstifadəçi: ${currentUserName}`;
             document.getElementById('current-user-id-display').textContent = `ID: ${currentUserId.substring(0, 8)}...`;
             document.getElementById('my-name-display').textContent = currentUserName;
 
-
+            // 🛠️ YENİLƏNMİŞ BAĞLANTI KONFİQURASİYASI
             socket = io(SERVER_URL, {
                 query: { 
                     userId: currentUserId,
                     userName: currentUserName
                 },
-                transports: ['websocket', 'polling']
+                // Əlaqəni gücləndirir
+                transports: ['websocket', 'polling'], 
+                // Uğursuz əlaqə cəhdləri arasında gözləmə müddətini azaldır
+                reconnectionDelayMax: 5000 
             });
 
             showScreen('loading');
@@ -681,8 +615,17 @@
                 showScreen('lobby');
             });
 
+            // 🛠️ DAHA ƏTRAFLI XƏTA DİAQNOSTİKASI
             socket.on('connect_error', (error) => {
-                 document.getElementById('connection-status').textContent = `❌ Serverlə əlaqə qurulmadı. (${error.message}). Zəhmət olmasa serverin aktiv olduğundan əmin olun!`;
+                let errorMessage = "Naməlum xəta.";
+                if (error.message.includes("websocket error")) {
+                    errorMessage = "WebSocket əlaqəsi uğursuz oldu. Server Socket.IO-nu qəbul etmir.";
+                } else if (error.message.includes("xhr poll error")) {
+                    errorMessage = "HTTP Polling xətası. Server cavab vermir/erişilməzdir.";
+                } else if (error.message.includes("timeout")) {
+                     errorMessage = "Bağlantı vaxtı bitdi (Timeout). Server çox yavaşdır və ya yatıb.";
+                }
+                 document.getElementById('connection-status').textContent = `❌ Bağlantı Xətası: ${errorMessage} (${error.message}). Zəhmət olmasa serveri yoxlayın!`;
                  document.getElementById('connection-status').className = "text-sm font-semibold mt-2 text-red-600";
                  showScreen('loading');
             });
@@ -697,7 +640,6 @@
                 showModal(`Xəta: ${message}`);
             });
             
-            // Serverdən Gələn Yeniləmələr
             socket.on('statusUpdate', (data) => {
                 if (data.status === 'searching') {
                     showScreen('searching');
@@ -737,7 +679,6 @@
                 showModal(message);
             });
 
-            // ⏱️ 20 saniyəlik timer üçün yeniləmə
             socket.on('turnTimerUpdate', (data) => {
                 if (data.turn === 'white') {
                     document.getElementById('white-timer').textContent = formatTime(data.timeLeft);
@@ -746,21 +687,16 @@
                 }
             });
             
-            // Serverin tərk etmə xəbərdarlığı
              socket.on('opponentLeft', (data) => {
                  showModal(`Rəqib oyunu tərk etdi. ${data.winner === myColor ? 'Siz udunuz!' : 'Oyun dayandırıldı.'}`, () => leaveGame(false));
              });
         }
         
-        // --- Oyun UI-nın Yenilənməsi ---
-        
         let timerInterval = null;
 
         function updateGameUI(data) {
-            const isBlack = myColor === 'black';
             const myId = currentUserId;
 
-            // Rəqib adını təyin et
             let opponentName;
             if (data.playerBlackId === myId) {
                 opponentName = data.playerWhite?.name || 'Ağ Oyunçu (Rəqib)';
@@ -769,34 +705,29 @@
             }
             document.getElementById('opponent-name-display').textContent = opponentName;
             
-            // Növbəni təyin et
             const turnColor = data.turn;
             isMyTurn = turnColor === myColor;
-            mandatoryCapture = data.mandatoryCapture; // Serverdən gələn son hərəkətin nəticəsi
+            mandatoryCapture = data.mandatoryCapture; 
 
-            // Növbə mesajı
             document.getElementById('current-turn-display').textContent = isMyTurn ? 'SİZİN NÖVBƏNİZDİR!' : `Rəqibdədir (${turnColor === 'black' ? 'Qara' : 'Ağ'})`;
             document.getElementById('current-turn-display').className = `text-lg font-bold p-3 rounded-xl shadow-xl transition duration-300 w-full text-center ${isMyTurn ? 'bg-green-600 animate-pulse-fast' : 'bg-yellow-600'}`;
             
-            // Timer Vurğusu (Afk cəzası 20 saniyədir)
             const whiteTimer = document.getElementById('white-timer');
             const blackTimer = document.getElementById('black-timer');
 
             whiteTimer.className = `p-2 rounded-lg font-mono text-2xl text-white shadow-md min-w-[80px] text-center ${turnColor === 'white' ? 'bg-red-500 animate-pulse-fast' : 'bg-gray-700'}`;
             blackTimer.className = `p-2 rounded-lg font-mono text-2xl text-white shadow-md min-w-[80px] text-center ${turnColor === 'black' ? 'bg-red-500 animate-pulse-fast' : 'bg-gray-700'}`;
             
-            // Timer Loop (1 saniyəlik yeniləmə, serverə sorğu göndərir)
             if (!timerInterval) {
                 timerInterval = setInterval(() => {
                     socket.emit('requestTimerUpdate', { roomId: data.roomId });
                 }, 1000); 
             }
 
-            // Taxtanı çək
             drawBoard(data.board, turnColor, mandatoryCapture);
         }
 
-        // --- Lobiya Hərəkətləri ---
+        // --- Lobiya Hərəkətləri (Dəyişməyib) ---
 
         dereceliBtn.onclick = () => {
             if (!socket || !socket.connected) return showModal("Serverə qoşulmayıb.");
@@ -852,11 +783,9 @@
             }
             
             if (notifyServer && socket && socket.connected) {
-                // Serverə oyunu tərk etdiyimi bildir (Avtomatik uduzma ilə nəticələnəcək)
                 socket.emit('leaveRoom', { roomId: currentRoomId, userId: currentUserId });
             }
             
-            // Client tərəfində təmizlə
             currentRoomId = null;
             selectedPiece = null;
             mandatoryCapture = null;
