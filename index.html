@@ -187,7 +187,7 @@
     <script>
         // --- Sabitlər və Global Dəyişənlər ---
         
-        // 🚨 DİQQƏT: Bu placeholder-i ÖZ RENDER.COM SERVERİNİZİN ÜNVANI İLƏ ƏVƏZ EDİN!
+        // 🚀 SERVER URL Sizin Tələbinizə Əsasən Dəyişdirildi!
         const SERVER_URL = "https://mario-io-1.onrender.com"; 
 
         const BOARD_SIZE = 8;
@@ -449,7 +449,7 @@
         function drawBoard(board, turn, mandatoryCapture) {
             boardElement.innerHTML = '';
             boardState = board;
-            selectedPiece = null; // Hər yeniləmədə seçimi sıfırla
+            // selectedPiece = null; // Seçimi sıfırlama
 
             // Əgər növbə bizdədirsə, icazə verilən hərəkətləri hesablayın
             if (isMyTurn && myColor === turn) {
@@ -457,6 +457,11 @@
             } else {
                 possibleMoves = [];
             }
+            
+            // Seçilmiş daşın hərəkətlərini əvvəlcədən təyin et (Əgər seçim varsa)
+            const movesFromSelectedPiece = selectedPiece 
+                ? possibleMoves.filter(m => m.from.r === selectedPiece.r && m.from.c === selectedPiece.c)
+                : [];
             
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
@@ -469,15 +474,21 @@
                     
                     const pieceValue = board[r][c];
                     
-                    // Məcburi yemə start daşını vurğula (əgər hələ seçilməyibsə)
+                    // 1. Məcburi yemə start daşını vurğula
                     if (isMyTurn && getPiecePlayer(pieceValue) === myColor) {
                         const canStartJump = possibleMoves.some(m => m.from.r === r && m.from.c === c);
-                        if (canStartJump && possibleMoves.some(m => m.type === 'jump')) {
+                        if (canStartJump && possibleMoves.some(m => m.type === 'jump') && !mandatoryCapture) {
                             cell.classList.add('mandatory-jump');
                         }
                     }
+                    
+                    // 2. Mümkün hərəkət xanalarını vurğula (Seçim varsa)
+                    const isPossibleMoveTo = movesFromSelectedPiece.some(m => m.to.r === r && m.to.c === c);
+                    if (isPossibleMoveTo) {
+                        cell.classList.add('possible-move');
+                    }
 
-                    // Daş varsa
+                    // 3. Daş varsa
                     if (pieceValue !== 0) {
                         const piece = document.createElement('div');
                         const player = getPiecePlayer(pieceValue);
@@ -487,6 +498,11 @@
                         piece.textContent = getPieceSymbol(pieceValue);
                         piece.dataset.row = r;
                         piece.dataset.col = c;
+                        
+                        // 4. Seçilmiş daşı vurğula
+                        if (selectedPiece && selectedPiece.r === r && selectedPiece.c === c) {
+                            piece.classList.add('selected');
+                        }
 
                         cell.appendChild(piece);
                     }
@@ -498,7 +514,7 @@
         
         function handleBoardClick(event) {
             if (!isMyTurn || !currentRoomId) {
-                return; // showModal("Gözləyin, növbə sizin deyil.");
+                return; 
             }
             
             const cell = event.currentTarget;
@@ -509,11 +525,9 @@
             const isMyPiece = piecePlayer === myColor;
             
             // Seçilmiş xanadan hərəkətləri tap
-            const movesFromSelectedPiece = selectedPiece 
+            let movesFromSelectedPiece = selectedPiece 
                 ? possibleMoves.filter(m => m.from.r === selectedPiece.r && m.from.c === selectedPiece.c)
                 : [];
-            
-            const pieceElement = cell.querySelector('.piece');
 
             if (isMyPiece) {
                 // Daş seçimi
@@ -524,15 +538,23 @@
                     if (possibleMoves.some(m => m.from.r === r && m.from.c === c)) {
                          selectedPiece = { r, c };
                     } else {
-                        return showModal("Bu daşla hərəkət edə bilməzsiniz, ya da məcburi yemə varsa, ən uzun zəncirə başlaya biləcək daşı seçin.");
+                        // Əgər heç bir hərəkət yoxdursa, ancaq mandatoryCapture varsa, bu daş seçilə bilməz.
+                        if (mandatoryCapture && (mandatoryCapture.r !== r || mandatoryCapture.c !== c)) {
+                             return showModal("Zənciri davam etdirmək üçün əvvəlki daşla hərəkət etməlisiniz.");
+                        } else if (mandatoryCapture) {
+                            selectedPiece = {r, c}; // Mandatory capture-də eyni daşı seç
+                        } else {
+                            return showModal("Bu daşla hərəkət edə bilməzsiniz (Məcburi yemə qaydası).");
+                        }
                     }
                 }
                 
                 // Seçim vizualizasiyasını yenilə
-                updateSelectionUI(movesFromSelectedPiece);
+                drawBoard(boardState, myColor, mandatoryCapture);
                 
             } else if (selectedPiece) {
                 // Hərəkət cəhdi
+                movesFromSelectedPiece = possibleMoves.filter(m => m.from.r === selectedPiece.r && m.from.c === selectedPiece.c);
                 const moveAttempt = movesFromSelectedPiece.find(m => m.to.r === r && m.to.c === c);
 
                 if (moveAttempt) {
@@ -547,9 +569,9 @@
                         chainLength: moveAttempt.chainLength 
                     });
                     
-                    // UI-da gözləmə vəziyyətinə keç
+                    // UI-da gözləmə vəziyyətinə keç (Optimistik yeniləmə yoxdur, server təsdiqini gözləyirik)
                     selectedPiece = null; 
-                    updateSelectionUI([]);
+                    drawBoard(boardState, myColor, mandatoryCapture);
                     
                 } else {
                     showModal("Bu, qaydalara uyğun olmayan hərəkətdir. Lütfən vurğulanmış xanalara hərəkət edin.");
@@ -557,34 +579,10 @@
             }
         }
 
-        function updateSelectionUI(movesFromSelectedPiece) {
-            // Əvvəlki vurğulamaları təmizlə
-            document.querySelectorAll('.possible-move').forEach(el => el.classList.remove('possible-move'));
-            document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
-            
-            if (!selectedPiece) return;
-
-            // Yeni seçimi vurğula
-            const selectedCell = document.querySelector(`.piece[data-row="${selectedPiece.r}"][data-col="${selectedPiece.c}"]`);
-            if (selectedCell) selectedCell.classList.add('selected');
-
-            // Mümkün hərəkət xanalarını vurğula
-            movesFromSelectedPiece.forEach(m => {
-                const targetCell = document.querySelector(`.cell[data-row="${m.to.r}"][data-col="${m.to.c}"]`);
-                if (targetCell) targetCell.classList.add('possible-move');
-            });
-        }
-
-
         // --- Socket.IO Əlaqəsi ---
         
         function initSocket() {
-            if (SERVER_URL === "YOUR_RENDER_SERVER_URL_HERE") {
-                document.getElementById('connection-status').textContent = "🚨 XƏTA: SERVER_URL-i dəyişdirin!";
-                document.getElementById('connection-status').className = "text-sm font-semibold mt-2 text-red-700 font-bold";
-                return;
-            }
-
+            
             const userData = getTelegramUser();
             currentUserId = userData.id;
             currentUserName = userData.name;
