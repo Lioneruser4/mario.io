@@ -50,21 +50,76 @@ class CheckersGame {
         this.isMultiplayer = true;
         this.playerColor = playerColor;
         this.opponentColor = playerColor === 'black' ? 'white' : 'black';
-        this.playerName = playerName || 'Sen';
-        this.opponentName = 'Rakip';
+        this.playerName = 'Sen'; // Always show as 'Sen' for self
+        this.opponentName = 'Rakip'; // Always show as 'Rakip' for opponent
         this.isPlayerTurn = playerColor === 'black'; // Black starts first
         
         this.setupSocketListeners();
         this.render();
+        this.setupTouchControls(); // Initialize touch controls for mobile
+    }
+    
+    setupTouchControls() {
+        const board = document.getElementById('board');
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+        let touchStartTime = 0;
+        
+        board.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+            
+            // Handle piece selection
+            const rect = board.getBoundingClientRect();
+            const x = Math.floor((touch.clientX - rect.left) / (rect.width / 8));
+            const y = Math.floor((touch.clientY - rect.top) / (rect.height / 8));
+            
+            if (this.isValidSelection(x, y)) {
+                this.selectPiece(x, y);
+            }
+        }, { passive: false });
+        
+        board.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            touchEndX = touch.clientX;
+            touchEndY = touch.clientY;
+            
+            const touchDuration = Date.now() - touchStartTime;
+            
+            // Only process as tap if it was a short touch (not a swipe)
+            if (touchDuration < 300) {
+                const rect = board.getBoundingClientRect();
+                const x = Math.floor((touch.clientX - rect.left) / (rect.width / 8));
+                const y = Math.floor((touch.clientY - rect.top) / (rect.height / 8));
+                
+                if (this.selectedPiece) {
+                    this.handleMove(x, y);
+                } else if (this.isValidSelection(x, y)) {
+                    this.selectPiece(x, y);
+                }
+            }
+        }, { passive: false });
+        
+        // Prevent scrolling when touching the game board
+        board.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
     }
     
     setupSocketListeners() {
         if (!this.socket) return;
         
         this.socket.on('gameStart', (data) => {
-            this.opponentName = data.opponentName;
+            // Always show opponent as 'Rakip' regardless of their actual name
+            this.opponentName = 'Rakip';
             this.updatePlayerInfo();
-            this.showToast(`${this.opponentName} oyuna katıldı!`);
+            this.showToast(`Rakip oyuna katıldı!`);
             this.render();
         });
         
@@ -77,14 +132,7 @@ class CheckersGame {
         });
         
         this.socket.on('opponentLeft', () => {
-            this.showToast('Rakip oyundan ayrıldı!', 'warning');
-            this.gameOver = true;
-            this.updateGameStatus('Rakip oyundan ayrıldı!');
-            
-            // Return to lobby after showing the message
-            setTimeout(() => {
-                this.returnToLobby();
-            }, 3000);
+            this.handleOpponentLeft();
         });
         
         this.socket.on('returnToLobby', () => {
@@ -96,8 +144,43 @@ class CheckersGame {
         });
     }
     
+    handleOpponentLeft() {
+        this.showToast('Rakip oyundan ayrıldı!', 'warning');
+        this.gameOver = true;
+        this.updateGameStatus('Rakip oyundan ayrıldı!');
+        
+        // Return to lobby after a delay
+        setTimeout(() => {
+            this.returnToLobby();
+        }, 3000);
+    }
+    
     // Reset game to initial state and return to lobby
     returnToLobby() {
+        // Reset game state
+        this.initializeBoard();
+        this.currentPlayer = 'black';
+        this.selectedPiece = null;
+        this.validMoves = [];
+        this.gameOver = false;
+        this.lastMove = null;
+        this.mustCapture = false;
+        this.captureChains = [];
+        
+        // Show lobby and hide game
+        document.getElementById('game').classList.remove('active');
+        document.getElementById('lobby').classList.add('active');
+        
+        // Clear any game over message
+        document.getElementById('gameOverMessage').style.display = 'none';
+        
+        // Reset player info
+        this.updatePlayerInfo();
+        
+        // Notify server we're leaving the game
+        if (this.socket && this.roomId) {
+            this.socket.emit('leaveGame');
+        }
         this.initializeBoard();
         this.gameOver = false;
         this.selectedPiece = null;
@@ -651,45 +734,36 @@ class CheckersGame {
     updatePlayerInfo() {
         const player1Name = document.getElementById('player1Name');
         const player2Name = document.getElementById('player2Name');
-        const player1Status = document.getElementById('player1Status');
-        const player2Status = document.getElementById('player2Status');
-        
-        if (this.isMultiplayer) {
-            if (this.playerColor === 'black') {
-                player1Name.textContent = this.playerName;
-                player2Name.textContent = this.opponentName || 'Bekleniyor...';
-                
-                if (this.isPlayerTurn) {
-                    player1Status.classList.add('active');
-                    player2Status.classList.remove('active');
-                } else {
-                    player1Status.classList.remove('active');
-                    player2Status.classList.add('active');
-                }
+        const player1Status = document.getElementById('l1');
+        const player2Status = document.getElementById('l2');
+
+        // Always show current player as 'Sen' and opponent as 'Rakip' in their respective positions
+        if (this.playerColor === 'black') {
+            player1Name.textContent = 'Sen';
+            player2Name.textContent = 'Rakip';
+            
+            // Update turn indicators
+            if (this.currentPlayer === 'black') {
+                player1Status.style.backgroundColor = this.isPlayerTurn ? '#4CAF50' : '#ccc';
+                player2Status.style.backgroundColor = '#ccc';
             } else {
-                player1Name.textContent = this.opponentName || 'Bekleniyor...';
-                player2Name.textContent = this.playerName;
-                
-                if (this.isPlayerTurn) {
-                    player2Status.classList.add('active');
-                    player1Status.classList.remove('active');
-                } else {
-                    player2Status.classList.remove('active');
-                    player1Status.classList.add('active');
-                }
+                player1Status.style.backgroundColor = '#ccc';
+                player2Status.style.backgroundColor = this.isPlayerTurn ? '#4CAF50' : '#ccc';
             }
         } else {
-            player1Name.textContent = 'Siyah';
-            player2Name.textContent = 'Beyaz';
+            player1Name.textContent = 'Rakip';
+            player2Name.textContent = 'Sen';
             
+            // Update turn indicators
             if (this.currentPlayer === 'black') {
-                player1Status.classList.add('active');
-                player2Status.classList.remove('active');
+                player1Status.style.backgroundColor = this.isPlayerTurn ? '#4CAF50' : '#ccc';
+                player2Status.style.backgroundColor = '#ccc';
             } else {
-                player1Status.classList.remove('active');
-                player2Status.classList.add('active');
+                player1Status.style.backgroundColor = '#ccc';
+                player2Status.style.backgroundColor = this.isPlayerTurn ? '#4CAF50' : '#ccc';
             }
         }
+    }
     }
     
     // Update game status text
