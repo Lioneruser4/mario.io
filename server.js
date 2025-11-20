@@ -61,13 +61,15 @@ io.on("connection", socket => {
   socket.username = 'Misafir';
   socket.userId = socket.id;
   socket.matchmakingTimer = null;
+  socket.roomId = null; // Oda ID'sini takip etmek için
 
-  // Kullanıcı bağlandığında ismini kaydet
+  // Kullanıcı bağlandığında ismini ve kaynağını kaydet
   socket.on("setUsername", (data) => {
-    if (data && data.name) {
-      socket.username = data.name;
+    if (data) {
+      socket.username = data.name || 'Misafir';
       socket.userId = data.id || socket.id;
-      console.log(`Kullanıcı güncellendi: ${socket.username} (${socket.userId})`);
+      socket.isTelegram = data.isTelegram || false;
+      console.log(`Kullanıcı güncellendi: ${socket.username} (${socket.userId}), Kaynak: ${socket.isTelegram ? 'Telegram' : 'Web'}`);
     }
   });
 
@@ -117,8 +119,8 @@ io.on("connection", socket => {
       }
 
       const roomId = "ranked_" + Date.now();
-      const player1 = { id: socket.id, name: socket.username };
-      const player2 = { id: opponent.id, name: opponent.username || 'Misafir' };
+      const player1 = { id: socket.id, name: socket.username, isTelegram: socket.isTelegram || false };
+      const player2 = { id: opponent.id, name: opponent.username || 'Misafir', isTelegram: opponent.isTelegram || false };
       
       rooms[roomId] = { 
         board: createBoard(), 
@@ -127,7 +129,11 @@ io.on("connection", socket => {
         createdAt: Date.now()
       };
       
-      console.log(`Oda oluşturuldu: ${roomId}, Oyuncular: ${player1.name} vs ${player2.name}`);
+      // Oda bilgisini socket'lere kaydet
+      socket.roomId = roomId;
+      opponent.roomId = roomId;
+      
+      console.log(`Oda oluşturuldu: ${roomId}, Oyuncular: ${player1.name} (${player1.isTelegram ? 'Telegram' : 'Misafir'}) vs ${player2.name} (${player2.isTelegram ? 'Telegram' : 'Misafir'})`);
       
       socket.join(roomId);
       opponent.join(roomId);
@@ -217,8 +223,25 @@ io.on("connection", socket => {
   });
 
   socket.on("disconnect", () => {
-    const i = queue.indexOf(socket);
-    if (i > -1) queue.splice(i, 1);
+    // Kuyruktan çıkar
+    const queueIndex = queue.indexOf(socket);
+    if (queueIndex > -1) queue.splice(queueIndex, 1);
+    
+    // Eğer bir odadaysa, diğer oyuncuyu bilgilendir
+    if (socket.roomId && rooms[socket.roomId]) {
+      const room = rooms[socket.roomId];
+      const opponent = room.players.find(p => p.id !== socket.id);
+      
+      if (opponent) {
+        // Diğer oyuncuya oyuncunun ayrıldığını bildir
+        io.to(opponent.id).emit('opponentDisconnected');
+      }
+      
+      // Odayı temizle
+      delete rooms[socket.roomId];
+    }
+    
+    console.log(`Kullanıcı ayrıldı: ${socket.username || 'Misafir'} (${socket.userId})`);
   });
 });
 
