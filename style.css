@@ -8,6 +8,15 @@
   box-sizing: border-box;
 }
 
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
   background-attachment: fixed;
@@ -16,6 +25,11 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   touch-action: manipulation;
+  -webkit-overflow-scrolling: touch;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
 }
 
 /* ============== EKRANLAR ============== */
@@ -40,8 +54,8 @@ body {
   background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00, #00ff00);
   background-size: 300% 300%;
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
   animation: neonGradient 6s ease infinite, pulse 4s infinite;
   text-shadow: 0 0 40px rgba(0, 255, 255, 0.8);
   margin-bottom: 20px;
@@ -83,6 +97,20 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   text-transform: uppercase;
   letter-spacing: 2px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  min-width: 200px;
+  text-align: center;
+}
+
+/* Make buttons easier to tap on mobile */
+@media (max-width: 768px) {
+  .btn {
+    padding: 18px 24px;
+    font-size: 1.2rem;
+    min-width: 180px;
+    margin: 8px 0;
+  }
 }
 
 .btn:before {
@@ -219,10 +247,16 @@ input:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
   box-sizing: border-box;
+  min-height: 100vh;
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .game-container {
@@ -230,35 +264,62 @@ input:focus {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
+  height: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 .board-container {
   position: relative;
   width: 100%;
-  max-width: 400px;
-  margin: 20px auto;
-  aspect-ratio: 1/1;
+  max-width: 100%;
+  margin: 0 auto;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  padding: 10px;
+  box-sizing: border-box;
+  max-width: 100vw;
+  max-height: calc(100vh - 150px); /* Header ve diğer elementler için boşluk bırak */
+  margin: 10px 0;
+  flex-shrink: 1;
 }
 
 #board {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 90vh;
+  aspect-ratio: 1/1;
+  background: #1a1a2e;
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
   display: block;
-  background-color: #1a1a2e;
-  border: 6px solid #00ffff;
-  border-radius: 20px;
-  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+  margin: 0 auto;
 }
 
-/* Hücre stilleri */
+/* Hücre boyutlarını ayarla */
 .cell {
-  width: 50px;
-  height: 50px;
-  display: inline-block;
+  width: 12.5%;
+  height: 0;
+  padding-bottom: 12.5%;
   position: relative;
   cursor: pointer;
+  float: left;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cell.dark {
+  background-color: #b58863; /* Koyu renk hücre */
 }
 
 .cell.light {
@@ -351,11 +412,46 @@ input:focus {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  max-width: 400px;
-  margin-bottom: 15px;
+  max-width: 100%;
+  margin-bottom: 10px;
   padding: 10px;
   background-color: rgba(0, 0, 0, 0.3);
   border-radius: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* Oyuncu isimleri için stil */
+.p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1em;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 15px;
+  background: rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+/* Işık göstergeleri */
+.light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #333;
+  box-shadow: 0 0 10px #000;
+  transition: all 0.4s;
+  flex-shrink: 0;
+}
+
+.light.active {
+  background: #00ff00;
+  box-shadow: 0 0 40px #00ff00, 0 0 60px #00ff00;
+  animation: glowLight 1.5s infinite alternate;
 }
 
 .vs {
@@ -371,9 +467,7 @@ input:focus {
   right: 10px;
 }
 
-  box-shadow: 
-    0 0 40px rgba(0, 255, 255, 0.8),
-    inset 0 0 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 40px rgba(0, 255, 255, 0.8), inset 0 0 40px rgba(0, 0, 0, 0.5);
   background: #000;
 }
 
@@ -390,9 +484,115 @@ input:focus {
 }
 
 /* ============== MOBİL OPTİMİZASYON ============== */
+/* Tahta ve hücreler için mobil uyumluluk */
+@media (max-width: 768px) {
+  .title { 
+    font-size: 2.5rem; 
+    margin-bottom: 15px;
+  }
+  
+  .btn { 
+    font-size: 1.1rem; 
+    padding: 15px 20px; 
+    margin: 8px 0;
+  }
+  
+  .header {
+    padding: 8px;
+    font-size: 0.9rem;
+  }
+  
+  .p {
+    font-size: 0.9em;
+    padding: 4px 8px;
+  }
+  
+  .vs {
+    font-size: 1.2em;
+    padding: 0 5px;
+  }
+}
+
 @media (max-width: 480px) {
-  .title { font-size: 2.8rem; }
-  .btn { font-size: 1.2rem; padding: 18px 25px; }
-  input { font-size: 1.4rem; }
-  .header { font-size: 1.1rem; }
+  /* Daha küçük ekranlar için ayarlar */
+  .board-container {
+    max-height: calc(100vh - 120px);
+  }
+  
+  .header {
+    padding: 5px;
+  }
+  
+  .p {
+    font-size: 0.8em;
+    padding: 3px 6px;
+  }
+  
+  .vs {
+    font-size: 1em;
+    padding: 0 3px;
+  }
+  .title { 
+    font-size: 2rem;
+    letter-spacing: 2px;
+  }
+  
+  .btn { 
+    font-size: 1rem; 
+    padding: 12px 16px;
+  }
+  
+  .header {
+    font-size: 0.8rem;
+  }
+  
+  .p {
+    font-size: 0.8em;
+  }
+  
+  #centralTimer {
+    font-size: 1.2em;
+  }
+  
+  .light {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+/* Yatay mod için ekstra ayarlar */
+@media (max-height: 500px) and (orientation: landscape) {
+  .game-container {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+  }
+  
+  .header {
+    flex-direction: column;
+    max-width: 100px;
+    height: 100%;
+    justify-content: center;
+    margin: 0 10px 0 0;
+  }
+  
+  .board-container {
+    max-height: 95vh;
+    max-width: 95vh;
+    padding-bottom: 0;
+    height: 100%;
+    aspect-ratio: 1/1;
+  }
+  
+  .p {
+    flex-direction: column;
+    padding: 5px;
+    max-width: none;
+    width: 100%;
+  }
+  
+  .light {
+    margin: 0 auto;
+  }
 }
