@@ -18,70 +18,80 @@ const gameOverEl = document.getElementById("gameOverMessage");
 
 // --- TELEGRAM / İSİM YÖNETİMİ ---
 
-// Rastgele isim oluştur
-function generateRandomName() {
-    const adjectives = ['Hızlı', 'Zeki', 'Güçlü', 'Şanslı', 'Usta', 'Yenilmez', 'Kurnaz', 'Bilge', 'Çevik', 'Sakin'];
-    const nouns = ['Dâhice', 'Şahin', 'Kaplan', 'Ejderha', 'Kartal', 'Aslan', 'Kurt', 'Yıldız', 'Ayı', 'Tilki'];
-    const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-    return `${randomAdj} ${randomNoun}${Math.floor(100 + Math.random() * 900)}`;
-}
-
-// Telegram parametrelerini kontrol et
-function parseTelegramParams() {
-    try {
-        // Telegram WebApp'ten gelen parametreleri kontrol et
-        if (window.Telegram && window.Telegram.WebApp) {
-            const user = window.Telegram.WebApp.initDataUnsafe?.user;
-            if (user) {
-                return {
-                    id: user.id.toString(),
-                    name: user.first_name || 'Misafir',
-                    username: user.username || `user_${user.id}`
-                };
-            }
+// Telegram'dan gelen kullanıcı bilgilerini işle
+function parseTelegramUser() {
+    // Telegram WebApp'ten gelen kullanıcı bilgilerini kontrol et
+    if (window.Telegram && window.Telegram.WebApp) {
+        const initData = window.Telegram.WebApp.initDataUnsafe;
+        if (initData && initData.user) {
+            const user = initData.user;
+            const firstName = user.first_name || '';
+            const lastName = user.last_name ? ` ${user.last_name}` : '';
+            const username = user.username ? `@${user.username}` : '';
+            
+            // Hoşgeldin mesajını göster
+            setTimeout(() => {
+                showToast(`Hoş geldin ${firstName}${lastName}${username ? ' (' + username + ')' : ''}`, 'success');
+            }, 1000);
+            
+            return {
+                id: user.id.toString(),
+                name: firstName + lastName,
+                username: username || `user_${user.id}`
+            };
         }
-        
-        // URL parametrelerini kontrol et (eski yöntem)
-        const urlParams = new URLSearchParams(window.location.search);
-        const tgUser = urlParams.get('tgWebAppUser');
-        
-        if (tgUser) {
-            try {
-                const user = JSON.parse(decodeURIComponent(tgUser));
-                return {
-                    id: user.id || Date.now().toString(),
-                    name: user.first_name || 'Misafir',
-                    username: user.username || `user_${Date.now()}`
-                };
-            } catch (e) {
-                console.error('Telegram user parse error:', e);
-            }
-        }
-        
-        // Hiçbir kaynaktan kullanıcı bilgisi alınamadıysa rastgele isim oluştur
-        return {
-            id: `guest_${Date.now()}`,
-            name: generateRandomName(),
-            username: `guest_${Math.floor(1000 + Math.random() * 9000)}`
-        };
-    } catch (error) {
-        console.error('Error parsing Telegram params:', error);
-        return {
-            id: `guest_${Date.now()}`,
-            name: generateRandomName(),
-            username: `guest_${Math.floor(1000 + Math.random() * 9000)}`
-        };
     }
+    
+    // Telegram dışı girişler için rastgele isim oluştur
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    return {
+        id: `guest_${Date.now()}`,
+        name: `Misafir ${randomNum}`,
+        username: `guest_${randomNum}`
+    };
 }
 
 // Kullanıcı bilgilerini al
-const userInfo = parseTelegramParams();
+const userInfo = parseTelegramUser();
 let myName = userInfo.name;
 let myID = userInfo.id;
 
 // Sunucuya kullanıcı bilgilerini gönder
 socket.emit('setUsername', { name: myName, id: myID });
+
+// Lobi durumunu güncelle
+function updateLobbyStatus(message, isSearching = false) {
+    const statusEl = document.getElementById('lobbyStatus');
+    const searchBtn = document.getElementById('ranked');
+    
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = isSearching ? 'searching' : '';
+    }
+    
+    if (searchBtn) {
+        searchBtn.disabled = isSearching;
+        searchBtn.textContent = isSearching ? 'Aranıyor...' : 'Dereceli Maç';
+    }
+}
+
+// Toast mesajı göster
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }, 100);
+}
 
 
 // --- ZAMANLAYICI YÖNETİMİ VE RASTGELE HAMLE ---
@@ -319,7 +329,7 @@ function getBestMoves(sx, sy) { /* Önceki sorudaki ÇAPRAZ DAMA MANTIK KODU bur
 
 // --- ETKİLEŞİM VE SOCKET OLAYLARI ---
 
-function getPos(e) { /* Önceki sorudaki KOD buraya gelir (aynı kalır) */
+function getPos(e) { 
   const rect = canvas.getBoundingClientRect();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
