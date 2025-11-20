@@ -433,9 +433,29 @@ function updateStatus(currentTurn) {
 
 // Lobi Butonları
 document.getElementById("ranked").onclick = () => {
-    document.getElementById("lobby").classList.add("active");
-    document.getElementById("searching").classList.remove("hidden");
-    socket.emit("findMatch", { name: myName, id: myID }); // İsim/ID gönder
+    const rankedBtn = document.getElementById("ranked");
+    const searchingEl = document.getElementById("searching");
+    
+    // Eğer zaten aranıyorsa, tekrar tıklamayı engelle
+    if (rankedBtn.disabled) return;
+    
+    // Butonu devre dışı bırak ve aranıyor mesajını göster
+    rankedBtn.disabled = true;
+    rankedBtn.textContent = 'Aranıyor...';
+    searchingEl.classList.remove("hidden");
+    
+    // Sunucuya eşleşme isteği gönder
+    socket.emit("findMatch", { name: myName, id: myID });
+    
+    // 5 saniye sonra butonu tekrar aktif et
+    setTimeout(() => {
+        if (searchingEl.classList.contains("hidden") === false) {
+            rankedBtn.disabled = false;
+            rankedBtn.textContent = 'Dereceli Maç';
+            searchingEl.classList.add("hidden");
+            statusEl.textContent = 'Eşleşme bulunamadı. Tekrar deneyin.';
+        }
+    }, 5000);
 };
 document.getElementById("create").onclick = () => {
     document.getElementById("lobby").classList.add("active");
