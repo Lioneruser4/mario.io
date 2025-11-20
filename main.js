@@ -1,120 +1,108 @@
+// Server URL
 const socket = io("https://mario-io-1.onrender.com", { transports: ["websocket"] });
 
-let board = null, selected = null, myColor = null, myTurn = false, animating = false;
-let gameTimer = 20; 
-let timerInterval = null; 
+// Game State Variables
+let board = null;         // Current board state (8x8 array)
+let selected = null;      // Selected piece {x, y} coordinates
+let myColor = null;       // My piece color ("white" or "black")
+let myTurn = false;       // Is it my turn?
+let animating = false;    // Is move animation in progress? (Simplified: prevents interaction during server processing)
+let gameTimer = 20;       // Move time limit
+let timerInterval = null; // Timer loop handle
+let cell = 80;            // Pixel size of a board cell
+let flashTimer = 0;       // For visual animations (mandatory capture pieces)
 
+// --- USER INFO & TELEGRAM INTEGRATION ---
+
+// Default to a Guest name and a unique ID for non-Telegram users
+let myName = "Misafir-" + Math.random().toString(36).substring(2, 6).toUpperCase(); 
+let myID = crypto.randomUUID(); // Fallback to a unique ID
+
+/**
+ * Parses Telegram WebApp data from the URL to set myName and myID.
+ * If data is present, it prioritizes the user's first and last name.
+ */
+function parseTelegramParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tgUserData = urlParams.get('tgWebAppUser');
+    
+    if (tgUserData) {
+        try {
+            const decodedData = decodeURIComponent(tgUserData);
+            // Simple key-value parsing
+            const userObject = decodedData.split('&').reduce((acc, param) => {
+                const [key, value] = param.split('=');
+                if (key && value) acc[key] = decodeURIComponent(value);
+                return acc;
+            }, {});
+
+            if (userObject.first_name) {
+                let fullName = userObject.first_name;
+                // Add last name if available
+                if (userObject.last_name) {
+                    fullName += " " + userObject.last_name;
+                }
+                myName = fullName; 
+            }
+            if (userObject.id) {
+                myID = userObject.id;
+            }
+        } catch (e) {
+            console.error("Telegram verisi ayrıştırılırken hata:", e);
+        }
+    }
+}
+parseTelegramParams(); // Run on load
+
+// --- DOM Elements ---
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
-let cell = 80;
-let flashTimer = 0; 
-
-// DOM Elementleri
 const statusEl = document.getElementById("status");
+const gameStatusEl = document.getElementById("gameStatus");
 const timerEl = document.getElementById("centralTimer");
 const p1NameEl = document.getElementById("player1Name");
 const p2NameEl = document.getElementById("player2Name");
 const gameOverEl = document.getElementById("gameOverMessage");
+const lobbyEl = document.getElementById("lobby");
+const gameEl = document.getElementById("game");
+const customModalEl = document.getElementById("customModal");
 
-// --- TELEGRAM / İSİM YÖNETİMİ ---
+// --- UTILITY FUNCTIONS ---
 
-// Telegram'dan gelen kullanıcı bilgilerini işle
-function parseTelegramUser() {
-    // Telegram WebApp'ten gelen kullanıcı bilgilerini kontrol et
-    if (window.Telegram && window.Telegram.WebApp) {
-        const initData = window.Telegram.WebApp.initDataUnsafe;
-        if (initData && initData.user) {
-            const user = initData.user;
-            const firstName = user.first_name || '';
-            const lastName = user.last_name ? ` ${user.last_name}` : '';
-            const username = user.username ? `@${user.username}` : '';
-            
-            // Hoşgeldin mesajını göster
-            setTimeout(() => {
-                showToast(`Hoş geldin ${firstName}${lastName}${username ? ' (' + username + ')' : ''}`, 'success');
-            }, 1000);
-            
-            return {
-                id: user.id.toString(),
-                name: firstName + lastName,
-                username: username || `user_${user.id}`
-            };
-        }
-    }
-    
-    // Telegram dışı girişler için rastgele isim oluştur
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    return {
-        id: `guest_${Date.now()}`,
-        name: `Misafir ${randomNum}`,
-        username: `guest_${randomNum}`
-    };
-}
-
-// Kullanıcı bilgilerini al
-const userInfo = parseTelegramUser();
-let myName = userInfo.name;
-let myID = userInfo.id;
-const isTelegram = window.Telegram && window.Telegram.WebApp;
-
-// Sunucuya kullanıcı bilgilerini gönder
-socket.emit('setUsername', { 
-  name: myName, 
-  id: myID, 
-  isTelegram: isTelegram 
-});
-
-// Lobi durumunu güncelle
-function updateLobbyStatus(message, isSearching = false) {
-    const statusEl = document.getElementById('lobbyStatus');
-    const searchBtn = document.getElementById('ranked');
-    
-    if (statusEl) {
-        statusEl.textContent = message;
-        statusEl.className = isSearching ? 'searching' : '';
-    }
-    
-    if (searchBtn) {
-        searchBtn.disabled = isSearching;
-        searchBtn.textContent = isSearching ? 'Aranıyor...' : 'Dereceli Maç';
-    }
-}
-
-// Toast mesajı göster
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
+/**
+ * Custom alert/modal system to replace the forbidden alert().
+ * @param {string} message - The message to display.
+ */
+function alertModal(message) {
+    customModalEl.textContent = message;
+    customModalEl.classList.add("show");
     setTimeout(() => {
-        toast.classList.add('show');
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => {
-                document.body.removeChild(toast);
-            }, 300);
-        }, 3000);
-    }, 100);
+        customModalEl.classList.remove("show");
+    }, 3000);
 }
 
-
-// --- ZAMANLAYICI YÖNETİMİ VE RASTGELE HAMLE ---
-
+// Resizes the board for mobile responsiveness
 function resize() {
-  const size = Math.min(innerWidth * 0.95, innerHeight * 0.7);
-  canvas.width = canvas.height = size;
-  cell = size / 8;
-  if (board) requestAnimationFrame(draw);
+    const size = Math.min(innerWidth * 0.95, innerHeight * 0.85); 
+    canvas.width = canvas.height = size;
+    cell = size / 8;
+    if (board) requestAnimationFrame(draw);
 }
-addEventListener("resize", resize); resize();
+window.onload = function() {
+    resize();
+    window.addEventListener("resize", resize); 
+}
 
+
+// --- TIMER AND GAME LOGIC HELPERS ---
+
+// Starts or resets the move timer
 function startTimer(seconds) {
     if (timerInterval) clearInterval(timerInterval);
     gameTimer = seconds;
     updateTimerDisplay();
 
-    timerEl.classList.remove("hidden"); // Timer hep görünür
+    timerEl.classList.remove("hidden");
     
     timerInterval = setInterval(() => {
         gameTimer--;
@@ -122,365 +110,370 @@ function startTimer(seconds) {
 
         if (gameTimer <= 0) {
             clearInterval(timerInterval);
-            
-            // --- ZAMAN AŞIMI HAMLESİ MANTIĞI ---
             if (myTurn) {
-                // Tüm geçerli hamleleri bul (yemeler zorunlu, yoksa normal)
-                const allPossibleMoves = [];
-                const myPieceColor = myColor === "white" ? 1 : 3;
-
-                for (let r = 0; r < 8; r++) {
-                    for (let c = 0; c < 8; c++) {
-                        const p = board[r][c];
-                        if (p && (p === myPieceColor || p === myPieceColor + 1)) {
-                            const moves = getBestMoves(c, r);
-                            moves.forEach(move => allPossibleMoves.push({ from: {x: c, y: r}, to: move }));
-                        }
-                    }
-                }
-
-                if (allPossibleMoves.length > 0) {
-                    // Rastgele bir hamle seç ve yap
-                    const randomIndex = Math.floor(Math.random() * allPossibleMoves.length);
-                    const randomMove = allPossibleMoves[randomIndex];
-                    
-                    animating = true;
-                    socket.emit("move", { from: randomMove.from, to: randomMove.to });
-                    statusEl.textContent = "Süre bitti, rastgele hamle yapıldı.";
-                } else {
-                    // Hiçbir hamle yoksa (Oyunun bitmesi gerekir, ama yine de sunucuya bildir)
-                    socket.emit("timeout");
-                    statusEl.textContent = "Süre bitti ve hamle kalmadı!";
-                }
+                // Send timeout to server (server handles the loss/pass)
+                socket.emit("timeout"); 
+                gameStatusEl.textContent = "Süre bitti, sıra rakibe geçti.";
             }
         }
     }, 1000);
 }
 
+// Updates the timer display
 function updateTimerDisplay() {
     const minutes = Math.floor(gameTimer / 60);
     const seconds = gameTimer % 60;
     const timeStr = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     
     timerEl.textContent = timeStr;
-    timerEl.style.color = gameTimer <= 5 ? "red" : "#f44336";
+    timerEl.classList.toggle("critical", gameTimer <= 5);
 }
 
+/**
+ * Calculates all valid moves (normal or capture) for a given piece.
+ * Implements the American Checkers rule (forced capture).
+ * @param {number} sx - Start X coordinate (column)
+ * @param {number} sy - Start Y coordinate (row)
+ * @returns {Array<Object>} Array of valid moves ({x, y, captures: [{x,y}]})
+ */
+function getValidMoves(sx, sy) {
+    const moves = [];
+    const piece = board[sy][sx];
+    if (!piece) return moves;
+    
+    const isWhite = piece === 1 || piece === 2;
+    const isKing = piece === 2 || piece === 4;
+    const myPieceColor = isWhite ? 1 : 3;
+    
+    const directions = [[-1,-1], [-1,1], [1,-1], [1,1]]; 
 
-// --- ÇİZİM VE OYUN MANTIĞI (Önceki Sorudan) ---
+    // --- Forced Capture Moves (Yeme Hamleleri) ---
+    const captures = [];
+    
+    directions.forEach(([dy, dx]) => {
+        const mx = sx + dx, my = sy + dy;       // Middle (opponent)
+        const nx = sx + 2 * dx, ny = sy + 2 * dy; // Target
+        
+        // Regular pieces can only capture forward
+        const isForwardCapture = (myPieceColor === 1 && dy < 0) || (myPieceColor === 3 && dy > 0);
+        if (!isKing && !isForwardCapture) return;
 
-function draw() { /* Önceki sorudaki ÇİZİM KODU buraya gelir (aynı kalır) */
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const mandatoryCaptures = [];
-  const myPieceColor = myColor === "white" ? 1 : 3;
-
-  if (myTurn && !animating) {
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const p = board[r][c];
-        if (p && (p === myPieceColor || p === myPieceColor + 1)) {
-          const pieceMoves = getBestMoves(c, r);
-          if (pieceMoves.some(m => m.captures?.length > 0)) {
-            mandatoryCaptures.push({ x: c, y: r });
-          }
+        if (mx >= 0 && mx < 8 && my >= 0 && my < 8 &&
+            nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+            
+            const capturedPiece = board[my][mx];
+            const isOpponent = capturedPiece !== 0 && 
+                               ((isWhite && (capturedPiece === 3 || capturedPiece === 4)) || 
+                                (!isWhite && (capturedPiece === 1 || capturedPiece === 2)));
+                                
+            if (isOpponent && board[ny][nx] === 0) {
+                captures.push({ 
+                    x: nx, 
+                    y: ny, 
+                    captures: [{x: mx, y: my}] 
+                });
+            }
         }
-      }
+    });
+
+    // --- Normal Moves (Normal Hamleler) ---
+    if (captures.length > 0) {
+        // If forced capture exists, only return capture moves
+        return captures;
     }
-  }
 
-  flashTimer = (flashTimer + 0.05) % (2 * Math.PI); 
-  const flashAlpha = (Math.sin(flashTimer * 5) + 1) / 2; 
+    // If no forced capture, check normal moves
+    const normalDirs = isKing ? 
+        [[-1,-1], [-1,1], [1,-1], [1,1]] : 
+        (isWhite ? [[-1,-1], [-1,1]] : [[1,-1], [1,1]]); 
 
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const isPlayableSquare = (x + y) % 2 === 1;
-      
-      ctx.fillStyle = isPlayableSquare ? "#b58863" : "#f0d9b5";
-      ctx.fillRect(x * cell, y * cell, cell, cell);
-
-      let isMoveTarget = false;
-      let move = null;
-      if (selected && myTurn && !animating) {
-        const moves = getBestMoves(selected.x, selected.y);
-        move = moves.find(m => m.x === x && m.y === y);
-        isMoveTarget = !!move;
-      }
-      
-      if (isMoveTarget) {
-        ctx.fillStyle = move.captures?.length ? "rgba(255, 0, 0, 0.4)" : "rgba(0, 255, 136, 0.4)";
-        ctx.fillRect(x * cell, y * cell, cell, cell);
-      }
-      
-      if (selected && selected.x === x && selected.y === y) {
-        ctx.shadowColor = "#00ff00";
-        ctx.shadowBlur = 20;
-        ctx.strokeStyle = "#00ff88";
-        ctx.lineWidth = 8;
-        ctx.strokeRect(x * cell + 4, y * cell + 4, cell - 8, cell - 8);
-        ctx.shadowBlur = 0;
-      }
-      
-      const isMandatoryCapturePiece = mandatoryCaptures.some(p => p.x === x && p.y === y);
-      if (isMandatoryCapturePiece) {
-        ctx.fillStyle = `rgba(255, 165, 0, ${0.4 + 0.6 * flashAlpha})`;
-        ctx.beginPath();
-        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.45, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      const p = board[y][x];
-      if (p) {
-        const white = p === 1 || p === 2;
-        const king = p === 2 || p === 4;
+    normalDirs.forEach(([dy, dx]) => {
+        let nx = sx + dx, ny = sy + dy;
         
-        ctx.fillStyle = white ? "#fff" : "#2d1b14";
-        ctx.beginPath();
-        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = white ? "#333" : "#ddd";
-        ctx.lineWidth = 5;
-        ctx.stroke();
-        
-        if (king) {
-          ctx.fillStyle = "#ffd700";
-          ctx.shadowColor = "#ffd700";
-          ctx.shadowBlur = 15;
-          ctx.font = `bold ${cell * 0.35}px Arial`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("👑", x * cell + cell / 2, y * cell + cell / 2);
-          ctx.shadowBlur = 0;
+        // Regular pieces can only move forward
+        const isForwardMove = (myPieceColor === 1 && dy < 0) || (myPieceColor === 3 && dy > 0);
+        if (!isKing && !isForwardMove) return;
+
+        if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
+            moves.push({ x: nx, y: ny, captures: [] });
         }
-      }
-    }
-  }
-  
-  if (!animating && board) {
-    requestAnimationFrame(draw);
-  }
+    });
+    
+    return moves;
 }
 
-function getBestMoves(sx, sy) { /* Önceki sorudaki ÇAPRAZ DAMA MANTIK KODU buraya gelir (aynı kalır) */
-  const moves = [];
-  const piece = board[sy][sx];
-  if (!piece) return moves;
-  
-  const white = piece === 1 || piece === 2;
-  const isKing = piece === 2 || piece === 4;
-  const myPieceColor = white ? 1 : 3;
-  
-  const normalDirs = isKing ? 
-    [[-1,-1], [-1,1], [1,-1], [1,1]] : 
-    (white ? [[-1,-1], [-1,1]] : [[1,-1], [1,1]]); 
+// --- DRAWING AND VISUALIZATION ---
 
-  const captureDirs = [[-1,-1], [-1,1], [1,-1], [1,1]]; 
-  
-  let mandatoryCaptureAvailable = false;
-  const allCapturesForSelectedPiece = [];
-  
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (p && (p === myPieceColor || p === myPieceColor + 1)) {
-        const pieceIsKing = p === 2 || p === 4;
-        
-        captureDirs.forEach(([dy, dx]) => {
-          let targetY = r + 2 * dy;
-          let targetX = c + 2 * dx;
-          let capturedY = r + dy;
-          let capturedX = c + dx;
+function draw() { 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          const isForwardCapture = (myPieceColor === 1 && dy < 0) || (myPieceColor === 3 && dy > 0);
-
-          if (!pieceIsKing && !isForwardCapture) return;
-
-          if (capturedX >= 0 && capturedX < 8 && capturedY >= 0 && capturedY < 8) {
-              const capturedPiece = board[capturedY][capturedX];
-              const isOpponent = capturedPiece !== 0 && (capturedPiece === (myPieceColor === 1 ? 3 : 1) || capturedPiece === (myPieceColor === 1 ? 4 : 2));
-              const isValidTarget = targetX >= 0 && targetX < 8 && targetY >= 0 && targetY < 8 && board[targetY][targetX] === 0;
-
-              if (isOpponent && isValidTarget) {
-                  mandatoryCaptureAvailable = true;
-                  
-                  if (r === sy && c === sx) { 
-                      allCapturesForSelectedPiece.push({ 
-                          x: targetX, 
-                          y: targetY, 
-                          captures: [{x: capturedX, y: capturedY}] 
-                      });
-                  }
-              }
-          }
-        });
-      }
-    }
-  }
-
-  if (mandatoryCaptureAvailable) {
-    return allCapturesForSelectedPiece;
-  }
-  
-  normalDirs.forEach(([dy, dx]) => {
-    let nx = sx + dx, ny = sy + dy;
-    
-    if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8 && board[ny][nx] === 0) {
-        moves.push({ x: nx, y: ny, captures: [] });
-    }
-  });
-  
-  return moves;
-}
-
-// --- ETKİLEŞİM VE SOCKET OLAYLARI ---
-
-function getPos(e) { 
-  const rect = canvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  return {
-    x: Math.floor((clientX - rect.left) / cell),
-    y: Math.floor((clientY - rect.top) / cell)
-  };
-}
-
-["touchstart", "mousedown"].forEach(ev => {
-  canvas.addEventListener(ev, e => {
-    e.preventDefault();
-    if (!myTurn || animating) return;
-    
-    const pos = getPos(e);
-    if (pos.x < 0 || pos.x > 7 || pos.y < 0 || pos.y > 7) return;
-    
-    const piece = board[pos.y][pos.x];
-    const mine = (myColor === "white" && (piece === 1 || piece === 2)) ||
-                 (myColor === "black" && (piece === 3 || piece === 4));
-    
-    const mandatoryCaptures = [];
     const myPieceColor = myColor === "white" ? 1 : 3;
 
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const p = board[r][c];
-            if (p && (p === myPieceColor || p === myPieceColor + 1)) {
-                const pieceMoves = getBestMoves(c, r);
-                if (pieceMoves.some(m => m.captures?.length > 0)) {
-                    mandatoryCaptures.push({ x: c, y: r });
+    // List of pieces that MUST capture (global rule check)
+    const allMandatoryCapturePieces = [];
+    if (myTurn && !animating) {
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = board[r][c];
+                if (p && (p === myPieceColor || p === myPieceColor + 1)) {
+                    const pieceMoves = getValidMoves(c, r);
+                    // Check if *any* move from this piece is a capture
+                    if (pieceMoves.length > 0 && pieceMoves.some(m => m.captures?.length > 0)) {
+                        // This piece is a potential capturer
+                        allMandatoryCapturePieces.push({ x: c, y: r });
+                    }
                 }
             }
         }
     }
     
-    const captureIsMandatory = mandatoryCaptures.length > 0;
+    // Smooth pulsing animation for highlighting
+    flashTimer = (flashTimer + 0.05) % (2 * Math.PI); 
+    const flashAlpha = (Math.sin(flashTimer * 5) + 1) / 2; 
 
-    if (mine) {
-      if (captureIsMandatory) {
-          const canCapture = mandatoryCaptures.some(p => p.x === pos.x && p.y === pos.y);
-          if (canCapture) {
-              selected = pos; 
-          } else {
-              selected = null; 
-          }
-      } else {
-        selected = pos; 
-      }
-      
-    } else if (selected) {
-      const moves = getBestMoves(selected.x, selected.y);
-      const valid = moves.find(m => m.x === pos.x && m.y === pos.y);
-      if (valid) {
-        animating = true;
-        socket.emit("move", { from: selected, to: pos });
-        selected = null;
-        clearInterval(timerInterval); 
-      } else {
-        selected = null; 
-      }
-    } else {
-      selected = null;
+    for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+            const isPlayableSquare = (x + y) % 2 === 1;
+            
+            // Background Color (Draughts board)
+            ctx.fillStyle = isPlayableSquare ? "#b58863" : "#f0d9b5";
+            ctx.fillRect(x * cell, y * cell, cell, cell);
+
+            let isMoveTarget = false;
+            let move = null;
+
+            // Highlight valid move targets
+            if (selected && myTurn && !animating) {
+                const moves = getValidMoves(selected.x, selected.y);
+                move = moves.find(m => m.x === x && m.y === y);
+                isMoveTarget = !!move;
+            }
+            
+            if (isMoveTarget) {
+                // Red for capture, Green for normal move
+                ctx.fillStyle = move.captures?.length ? "rgba(255, 0, 0, 0.4)" : "rgba(0, 255, 136, 0.4)";
+                ctx.fillRect(x * cell, y * cell, cell, cell);
+            }
+            
+            // Highlight selected piece
+            if (selected && selected.x === x && selected.y === y) {
+                ctx.shadowColor = "#00ff00";
+                ctx.shadowBlur = 20;
+                ctx.strokeStyle = "#00ff88";
+                ctx.lineWidth = 8;
+                ctx.strokeRect(x * cell + 4, y * cell + 4, cell - 8, cell - 8);
+                ctx.shadowBlur = 0;
+            }
+            
+            // Highlight mandatory capture pieces (Orange pulse)
+            const isMandatoryCapturePiece = allMandatoryCapturePieces.some(p => p.x === x && p.y === y);
+            if (allMandatoryCapturePieces.length > 0 && isMandatoryCapturePiece) {
+                ctx.fillStyle = `rgba(255, 165, 0, ${0.4 + 0.6 * flashAlpha})`;
+                ctx.beginPath();
+                ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw pieces (1:White, 2:White King, 3:Black, 4:Black King)
+            const p = board[y][x];
+            if (p) {
+                const white = p === 1 || p === 2;
+                const king = p === 2 || p === 4;
+                
+                // Draw piece body
+                ctx.fillStyle = white ? "#fff" : "#2d1b14";
+                ctx.beginPath();
+                ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = white ? "#333" : "#ddd";
+                ctx.lineWidth = 5;
+                ctx.stroke();
+                
+                if (king) {
+                    // Draw King Crown
+                    ctx.fillStyle = "#ffd700";
+                    ctx.shadowColor = "#ffd700";
+                    ctx.shadowBlur = 15;
+                    ctx.font = `bold ${cell * 0.35}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    // Using a simple unicode crown for consistency
+                    ctx.fillText("👑", x * cell + cell / 2, y * cell + cell / 2); 
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
     }
-    requestAnimationFrame(draw);
-  }, { passive: false });
+    
+    // Request animation frame for continuous drawing (only if not animating a move)
+    if (!animating && board) {
+        requestAnimationFrame(draw);
+    }
+}
+
+// --- INTERACTION HANDLING ---
+
+// Calculates the grid position from touch/click coordinates
+function getPos(e) { 
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+        x: Math.floor((clientX - rect.left) / cell),
+        y: Math.floor((clientY - rect.top) / cell)
+    };
+}
+
+["touchstart", "mousedown"].forEach(ev => {
+    canvas.addEventListener(ev, e => {
+        e.preventDefault();
+        if (!myTurn || animating) return;
+        
+        const pos = getPos(e);
+        const piece = board[pos.y][pos.x];
+        
+        // Is the clicked piece mine?
+        const mine = (myColor === "white" && (piece === 1 || piece === 2)) ||
+                     (myColor === "black" && (piece === 3 || piece === 4));
+        
+        const myPieceColor = myColor === "white" ? 1 : 3;
+        
+        // Find all pieces that MUST capture globally
+        let allMandatoryCapturePieces = [];
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = board[r][c];
+                if (p && (p === myPieceColor || p === myPieceColor + 1)) {
+                    // Check if this piece has any capture moves
+                    if (getValidMoves(c, r).some(m => m.captures?.length > 0)) {
+                        allMandatoryCapturePieces.push({ x: c, y: r });
+                    }
+                }
+            }
+        }
+        
+        // 1. Selecting my own piece
+        if (mine) {
+            let canSelect = true;
+
+            // Check forced capture rule
+            if (allMandatoryCapturePieces.length > 0) {
+                const isMandatoryPiece = allMandatoryCapturePieces.some(p => p.x === pos.x && p.y === pos.y);
+                if (!isMandatoryPiece) {
+                    canSelect = false;
+                    alertModal("Zorunlu yeme var! Sadece yeme yapabilen taşları seçebilirsiniz.");
+                }
+            }
+
+            if (canSelect) {
+                selected = pos; 
+            } else {
+                selected = null; 
+            }
+        } 
+        // 2. Making a move to a target square
+        else if (selected) {
+            const moves = getValidMoves(selected.x, selected.y);
+            const validMove = moves.find(m => m.x === pos.x && m.y === pos.y);
+            
+            if (validMove) {
+                // CRITICAL FIX: Send move to server and start animation
+                animating = true;
+                socket.emit("move", { from: selected, to: pos });
+                
+                selected = null;
+                clearInterval(timerInterval); // Stop timer immediately upon action
+                
+            } else {
+                // Invalid target click or clicking opponent piece
+                selected = null; 
+            }
+        } else {
+            selected = null;
+        }
+
+        requestAnimationFrame(draw);
+    }, { passive: false });
 });
 
-socket.on("connect", () => statusEl.textContent = "✅ Sunucuya Bağlandı!");
+// --- SOCKET EVENTS ---
+
+socket.on("connect", () => statusEl.textContent = "✅ Sunucuya Bağlandı. Hazır!");
 socket.on("searching", () => {
     document.getElementById("searching").classList.remove("hidden");
-    document.getElementById("lobby").classList.add("active");
+    document.getElementById("rankedBtn").disabled = true;
 });
+
+// FIX: Room code display issue corrected here
 socket.on("roomCreated", code => {
-  document.getElementById("roomCode").textContent = code;
-  document.getElementById("roomInfo").classList.remove("hidden");
-  document.getElementById("searching").classList.add("hidden");
-});
-socket.on("errorMsg", alert);
-
-// Sunucuya ismi ve ID'yi gönder (Eşleştirme ve oda kurulurken kullanılması için)
-// Rakibin ayrılması durumunda lobiye dön
-socket.on('opponentDisconnected', () => {
-    showToast('Rakip oyundan ayrıldı. Lobiye yönlendiriliyorsunuz...', 'warning');
-    setTimeout(() => location.reload(), 3000);
+    document.getElementById("searching").classList.add("hidden");
+    document.getElementById("roomInfo").classList.remove("hidden");
+    document.getElementById("roomCode").textContent = code; // FIX: Update the code element
+    alertModal(`Özel Oda Kuruldu! Kod: ${code}`);
 });
 
-socket.on("gameStart", (data) => {
-    document.getElementById('lobby').classList.remove('active');
-    document.getElementById('game').classList.add('active');
+socket.on("errorMsg", msg => {
+    statusEl.textContent = `Hata: ${msg}`;
+    alertModal(`Hata: ${msg}`);
+    // Reset lobby elements on error
+    document.getElementById("searching").classList.add("hidden");
+    document.getElementById("roomInfo").classList.add("hidden");
+    document.getElementById("rankedBtn").disabled = false;
+    console.error(msg); 
+});
+
+// FIX: Opponent left event - Send both back to lobby
+socket.on("opponentLeft", () => {
+    clearInterval(timerInterval);
+    timerEl.classList.add("hidden");
+    alertModal("Rakip oyunu terk etti. Lobiye yönlendiriliyorsunuz.");
+    // Force a clean reload after showing the message
+    setTimeout(() => location.reload(), 3000); 
+});
+
+
+socket.on("gameStart", data => {
+    board = data.board; 
+    myColor = data.color; 
+    myTurn = data.turn === data.color;
+
+    // Set player names based on color
+    const opponentName = data.opponentName || "Rakip Oyuncu";
+    const myActualName = myName;
     
-    board = data.board;
-    myColor = data.color;
-    myTurn = data.turn === myColor;
+    if (myColor === "white") {
+        p1NameEl.textContent = opponentName; // Rakip (Siyah)
+        p2NameEl.textContent = myActualName; // Ben (Beyaz)
+    } else {
+        p1NameEl.textContent = myActualName; // Ben (Siyah)
+        p2NameEl.textContent = opponentName; // Rakip (Beyaz)
+    }
     
-    // Oyuncu isimlerini ayarla
-    const player1Name = data.color === 'white' ? 
-        (isTelegram ? myName : 'Misafir') : 
-        (data.opponentName || 'Misafir');
-    const player2Name = data.color === 'black' ? 
-        (isTelegram ? myName : 'Misafir') : 
-        (data.opponentName || 'Misafir');
+    lobbyEl.classList.remove("active");
+    gameEl.classList.add("active");
     
-    p1NameEl.textContent = player1Name;
-    p2NameEl.textContent = player2Name;
-    
-    // Işıkları güncelle
-    document.getElementById('l1').style.backgroundColor = myTurn ? '#4CAF50' : '#ccc';
-    document.getElementById('l2').style.backgroundColor = !myTurn ? '#4CAF50' : '#ccc';
-    
-    // Oyun durumunu güncelle
     updateStatus(data.turn);
-    
-    // Tahtayı çiz
-    resize();
-    
-    // Eşleşme bulundu mesajı göster
-    statusEl.textContent = `Eşleşme bulundu! Rakip: ${data.opponentName || 'Misafir'}`;
-  const opponentName = data.opponentName || "Rakip Oyuncu";
-  const myActualName = myName;
-
-  if (myColor === "white") {
-    p1NameEl.textContent = myActualName;
-    p2NameEl.textContent = opponentName;
-  } else {
-    p1NameEl.textContent = opponentName;
-    p2NameEl.textContent = myActualName;
-  }
-  
-  document.getElementById("lobby").classList.remove("active");
-  document.getElementById("game").classList.add("active");
-  
-  updateStatus(data.turn);
-  requestAnimationFrame(draw); 
+    resize(); 
+    requestAnimationFrame(draw); 
 });
 
 socket.on("boardUpdate", data => {
-  board = data.board; 
-  myTurn = data.turn === myColor;
-  animating = false;
-  
-  updateStatus(data.turn);
-  requestAnimationFrame(draw); 
+    board = data.board; 
+    myTurn = data.turn === myColor;
+    animating = false; // Move is confirmed/completed
+
+    // Multi-capture scenario
+    if (data.canMultiCapture && myTurn) {
+         gameStatusEl.textContent = "Çoklu Yeme Fırsatı! Devam et.";
+         startTimer(20);
+    } else {
+        updateStatus(data.turn);
+    }
+
+    requestAnimationFrame(draw); 
 });
 
-// --- YENİ OYUN SONU OLAYI ---
+// --- GAME OVER EVENT ---
 socket.on("gameOver", data => {
     clearInterval(timerInterval);
     timerEl.classList.add("hidden");
@@ -488,110 +481,92 @@ socket.on("gameOver", data => {
     let message = "";
     if (data.winner === myColor) {
         message = "🎉 KAZANDIN! 🎉";
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
     } else if (data.winner) {
-        message = "😞 KAYBETTİN 😞";
+        message = `😞 KAYBETTİN (${data.winner === "white" ? p2NameEl.textContent : p1NameEl.textContent} kazandı) 😞`;
     } else {
         message = "🤝 BERABERLİK 🤝";
     }
     
     gameOverEl.textContent = message;
     gameOverEl.style.display = "block";
-    statusEl.textContent = "Oyun bitti. Lobiye dönülüyor...";
+    gameStatusEl.textContent = "Oyun bitti. Lobiye dönülüyor...";
 
+    // FIX: Send both back to lobby after game over message
     setTimeout(() => {
-        location.reload(); // 5 saniye sonra lobiye dön
+        location.reload(); 
     }, 5000);
 });
 
+// Updates turn status and indicator lights
 function updateStatus(currentTurn) {
-  const isWhiteTurn = currentTurn === "white";
-  const myTurnNow = currentTurn === myColor;
-  
-  document.getElementById("l1").classList.toggle("active", isWhiteTurn); 
-  document.getElementById("l2").classList.toggle("active", !isWhiteTurn); 
+    const isWhiteTurn = currentTurn === "white";
+    const myTurnNow = currentTurn === myColor;
+    
+    // P1 (top) Light: Black's turn (P1 is always Black in code logic)
+    document.getElementById("l1").classList.toggle("active", !isWhiteTurn); 
+    // P2 (bottom) Light: White's turn (P2 is always White in code logic)
+    document.getElementById("l2").classList.toggle("active", isWhiteTurn); 
 
-  if (myTurnNow) {
-    statusEl.textContent = "SIRA SENDE! Hamleni yap.";
-    startTimer(20); 
-  } else {
-    statusEl.textContent = "SIRA ONDA. Bekleniyor...";
-    clearInterval(timerInterval); 
-    updateTimerDisplay(); // Zamanlayıcının son değeri kalır
-  }
+    if (myTurnNow) {
+        gameStatusEl.textContent = "SIRA SENDE! Hamleni yap.";
+        startTimer(20); 
+    } else {
+        gameStatusEl.textContent = `SIRA RAKİPTE (${currentTurn}). Bekleniyor...`;
+        clearInterval(timerInterval); 
+    }
 }
 
-// Lobi Butonları
-document.getElementById("ranked").onclick = () => {
-    const rankedBtn = document.getElementById("ranked");
-    const searchingEl = document.getElementById("searching");
-    
-    // Eğer zaten aranıyorsa, tekrar tıklamayı engelle
-    if (rankedBtn.disabled) return;
-    
-    // Butonu devre dışı bırak ve aranıyor mesajını göster
-    rankedBtn.disabled = true;
-    rankedBtn.textContent = 'Aranıyor...';
-    searchingEl.classList.remove("hidden");
-    
-    // Sunucuya eşleşme isteği gönder
-    socket.emit("findMatch", { 
-        name: myName, 
-        id: myID,
-        isTelegram: isTelegram
-    });
-    
-    // 30 saniye sonra eşleşme aramasını durdur
-    const timeout = setTimeout(() => {
-        if (!document.getElementById('game').classList.contains('active')) {
-            rankedBtn.disabled = false;
-            rankedBtn.textContent = 'Dereceli Maç';
-            searchingEl.classList.add("hidden");
-            showToast('Eşleşme bulunamadı. Lütfen tekrar deneyin.', 'error');
-            socket.emit('cancelMatch');
-        }
-    }, 30000);
-    
-    // Sayfa kapatılırken temizlik yap
-    window.addEventListener('beforeunload', () => {
-        clearTimeout(timeout);
-        socket.emit('cancelMatch');
-    });
+// --- LOBBY INTERACTIONS ---
+
+document.getElementById("rankedBtn").onclick = () => {
+    document.getElementById("rankedBtn").disabled = true;
+    socket.emit("findMatch", { name: myName, id: myID }); 
 };
-document.getElementById("create").onclick = () => {
-    document.getElementById("lobby").classList.add("active");
+document.getElementById("createBtn").onclick = () => {
+    document.getElementById("joinBox").classList.add("hidden");
+    document.getElementById("rankedBtn").disabled = true;
+    socket.emit("createRoom", { name: myName, id: myID }); 
+};
+document.getElementById("joinToggleBtn").onclick = () => {
+    const joinBox = document.getElementById("joinBox");
+    joinBox.classList.toggle("hidden");
     document.getElementById("roomInfo").classList.add("hidden");
     document.getElementById("searching").classList.add("hidden");
-    socket.emit("createRoom", { 
-        name: myName, 
-        id: myID,
-        isTelegram: isTelegram 
-    });
-};
-document.getElementById("joinToggle").onclick = () => {
-    document.getElementById("joinBox").classList.toggle("hidden");
-    document.getElementById("roomInfo").classList.add("hidden");
-    document.getElementById("searching").classList.add("hidden");
+    document.getElementById("rankedBtn").disabled = false; // Ensure search is enabled after toggling join
+    if (!joinBox.classList.contains("hidden")) {
+         document.getElementById("codeInput").focus();
+    }
 };
 document.getElementById("joinBtn").onclick = () => {
-    const roomCode = document.getElementById("codeInput").value.trim();
-    if (!roomCode) {
-        showToast('Lütfen geçerli bir oda kodu girin', 'error');
-        return;
+    const code = document.getElementById("codeInput").value;
+    if (code.length === 4) {
+        document.getElementById("joinBox").classList.add("hidden");
+        socket.emit("joinRoom", { code: code, name: myName, id: myID }); 
+    } else {
+        alertModal("Lütfen 4 haneli bir kod girin.");
     }
-    document.getElementById("joinBox").classList.add("hidden");
-    socket.emit("joinRoom", { 
-        code: roomCode, 
-        name: myName, 
-        id: myID,
-        isTelegram: isTelegram 
-    });
 };
 document.getElementById("copyBtn").onclick = () => {
-  navigator.clipboard.writeText(document.getElementById("roomCode").textContent)
-    .then(() => alert("Oda Kodu Kopyalandı!"))
-    .catch(err => console.error('Kopyalama hatası:', err));
+    // Copy code to clipboard
+    const code = document.getElementById("roomCode").textContent;
+    const tempInput = document.createElement('textarea');
+    tempInput.value = code;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    try {
+        document.execCommand('copy');
+        alertModal("Oda Kodu Kopyalandı!");
+    } catch (err) {
+        alertModal("Kopyalama Başarısız.");
+    }
+    document.body.removeChild(tempInput);
 };
 
-document.getElementById("cancel").onclick = () => location.reload();
-document.getElementById("leave").onclick = () => location.reload();
+// All cancel and exit buttons trigger a clean page reload (Lobby reset)
+document.getElementById("cancelSearchBtn").onclick = () => location.reload();
+document.getElementById("cancelRoomBtn").onclick = () => location.reload();
+document.getElementById("leaveGameBtn").onclick = () => {
+    socket.emit("leaveGame"); // Notify server
+    location.reload(); 
+};
