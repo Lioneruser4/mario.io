@@ -53,57 +53,110 @@ function getValidMoves(board, x, y, color) {
   return moves;
 }
 
+// Eşleşme arayan oyuncular için zaman aşımı kontrolü
+const MATCHMAKING_TIMEOUT = 30000; // 30 saniye
+
 io.on("connection", socket => {
+  // Varsayılan kullanıcı bilgileri
+  socket.username = 'Misafir';
+  socket.userId = socket.id;
+  socket.matchmakingTimer = null;
+
   // Kullanıcı bağlandığında ismini kaydet
   socket.on("setUsername", (data) => {
-    socket.username = data.name || 'Misafir';
-    socket.userId = data.id || socket.id;
-  });
-
-  socket.on("findMatch", (data) => {
-    // Kullanıcı adını kaydet
     if (data && data.name) {
       socket.username = data.name;
       socket.userId = data.id || socket.id;
-    } else {
-      socket.username = 'Misafir';
-      socket.userId = socket.id;
+      console.log(`Kullanıcı güncellendi: ${socket.username} (${socket.userId})`);
+    }
+  });
+
+  // Eşleşme aramayı iptal et
+  function cancelMatchmaking() {
+    const index = queue.indexOf(socket);
+    if (index > -1) {
+      queue.splice(index, 1);
+      console.log(`Eşleşme iptal edildi: ${socket.username}`);
+    }
+    if (socket.matchmakingTimer) {
+      clearTimeout(socket.matchmakingTimer);
+      socket.matchmakingTimer = null;
+    }
+  }
+
+  socket.on("findMatch", (data) => {
+    // Eğer zaten eşleşme arıyorsa işlem yapma
+    if (queue.includes(socket)) {
+      console.log('Zaten eşleşme aranıyor:', socket.username);
+      return;
     }
 
+    // Kullanıcı adını güncelle
+    if (data && data.name) {
+      socket.username = data.name;
+      socket.userId = data.id || socket.id;
+    }
+
+    console.log(`Eşleşme aranıyor: ${socket.username} (${socket.userId})`);
+    
+    // Eşleşme zaman aşımını ayarla
+    socket.matchmakingTimer = setTimeout(() => {
+      cancelMatchmaking();
+      socket.emit('matchmakingTimeout');
+      console.log(`Eşleşme zaman aşımı: ${socket.username}`);
+    }, MATCHMAKING_TIMEOUT);
+
+    // Eşleşme kontrolü
     if (queue.length > 0) {
       const opponent = queue.shift();
+      
+      // Rakibin zamanlayıcısını temizle
+      if (opponent.matchmakingTimer) {
+        clearTimeout(opponent.matchmakingTimer);
+        opponent.matchmakingTimer = null;
+      }
+
       const roomId = "ranked_" + Date.now();
+      const player1 = { id: socket.id, name: socket.username };
+      const player2 = { id: opponent.id, name: opponent.username || 'Misafir' };
+      
       rooms[roomId] = { 
         board: createBoard(), 
         turn: "white", 
-        players: [
-          { id: socket.id, name: socket.username },
-          { id: opponent.id, name: opponent.username || 'Misafir' }
-        ]
+        players: [player1, player2],
+        createdAt: Date.now()
       };
+      
+      console.log(`Oda oluşturuldu: ${roomId}, Oyuncular: ${player1.name} vs ${player2.name}`);
       
       socket.join(roomId);
       opponent.join(roomId);
       
-      // Oyunculara kendi ve rakip bilgilerini gönder
+      // Oyunculara oyun başlangıç bilgilerini gönder
+      const gameData = {
+        roomId: roomId,
+        board: rooms[roomId].board,
+        turn: "white"
+      };
+      
       socket.emit("gameStart", { 
-        color: "white", 
-        board: rooms[roomId].board, 
-        turn: "white",
-        playerName: socket.username,
-        opponentName: opponent.username || 'Misafir'
+        ...gameData,
+        color: "white",
+        playerName: player1.name,
+        opponentName: player2.name
       });
       
       opponent.emit("gameStart", { 
-        color: "black", 
-        board: rooms[roomId].board, 
-        turn: "white",
-        playerName: opponent.username || 'Misafir',
-        opponentName: socket.username
+        ...gameData,
+        color: "black",
+        playerName: player2.name,
+        opponentName: player1.name
       });
     } else {
+      // Eşleşme bulunamadı, kuyruğa ekle
       queue.push(socket);
       socket.emit("searching");
+      console.log(`Eşleşme bekleniyor: ${socket.username}`);
     }
   });
 
