@@ -273,6 +273,12 @@ function drawBoard() {
             cell.dataset.r = r;
             cell.dataset.c = c;
             cell.onclick = () => handleCellClick(r, c);
+            
+            // Mobil uyumlu touch olayları
+            cell.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handleCellClick(r, c);
+            }, { passive: false });
 
             const pieceValue = gameState.board[r] && gameState.board[r][c];
             if (pieceValue && pieceValue !== 0) {
@@ -288,6 +294,9 @@ function drawBoard() {
 
                 if (gameState.selectedPiece && gameState.selectedPiece.r === r && gameState.selectedPiece.c === c) {
                     pieceElement.classList.add('selected');
+                    pieceElement.style.zIndex = '20';
+                } else {
+                    pieceElement.style.zIndex = '1';
                 }
 
                 if (gameState.currentTurn === piecePlayer && gameState.isMyTurn) {
@@ -328,25 +337,37 @@ function updateGameUI() {
 // --- Event Handlers ---
 
 function handleCellClick(r, c) {
+    console.log('Cell clicked:', r, c, 'isMyTurn:', gameState.isMyTurn, 'gameStarted:', gameState.gameStarted);
+    
     if (!gameState.isMyTurn || !gameState.gameStarted) return;
 
     const pieceValue = gameState.board[r] && gameState.board[r][c];
     const piecePlayer = getPiecePlayer(pieceValue);
+    
+    console.log('Piece value:', pieceValue, 'Piece player:', piecePlayer, 'My color:', gameState.myColor);
 
     if (piecePlayer === gameState.myColor) {
         gameState.selectedPiece = { r, c };
+        console.log('Piece selected:', gameState.selectedPiece);
         drawBoard();
     } else if (gameState.selectedPiece && pieceValue === 0) {
         const fromR = gameState.selectedPiece.r;
         const fromC = gameState.selectedPiece.c;
-
+        
+        console.log('Trying to move from', fromR, fromC, 'to', r, c);
+        
         if (isValidMove(gameState.board, fromR, fromC, r, c, gameState.myColor)) {
+            console.log('Valid move, sending to server');
             socket.emit('makeMove', {
                 roomCode: gameState.roomCode,
                 from: { r: fromR, c: fromC },
                 to: { r, c }
             });
             gameState.selectedPiece = null;
+        } else {
+            console.log('Invalid move');
+            gameState.selectedPiece = null;
+            drawBoard();
         }
     } else {
         gameState.selectedPiece = null;
