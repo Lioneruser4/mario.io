@@ -2,111 +2,192 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Online Türk Daması</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 10px;
             overflow-x: hidden;
         }
 
         .container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 20px;
+            width: 100%;
+            max-width: 600px;
         }
 
         /* Lobi Ekranı */
         #lobby {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 30px;
-            padding: 50px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            animation: fadeIn 0.5s ease;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 25px;
+            padding: 30px 20px;
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4);
+            animation: slideUp 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(50px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        h1 {
+        .header {
             text-align: center;
-            font-size: 3.5em;
+            margin-bottom: 25px;
+        }
+
+        .logo {
+            font-size: 4em;
+            margin-bottom: 10px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        h1 {
+            font-size: 2em;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 20px;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            font-weight: 800;
+            margin-bottom: 8px;
         }
 
         .subtitle {
-            text-align: center;
             color: #666;
-            margin-bottom: 40px;
-            font-size: 1.2em;
+            font-size: 0.95em;
         }
 
+        /* Kullanıcı Bilgisi */
+        .user-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            border: 3px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 3px;
+        }
+
+        .user-id {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        /* Bağlantı Durumu */
         .connection-status {
             text-align: center;
-            padding: 15px;
-            margin-bottom: 30px;
-            border-radius: 15px;
-            font-weight: bold;
-            animation: slideDown 0.5s ease;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9em;
+            animation: fadeIn 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        @keyframes slideDown {
-            from { transform: translateY(-20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
         }
 
         .connected {
-            background: #d4edda;
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
             color: #155724;
-            border: 2px solid #c3e6cb;
+            border: 2px solid #28a745;
+        }
+
+        .connected .status-dot {
+            background: #28a745;
         }
 
         .disconnected {
-            background: #f8d7da;
+            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
             color: #721c24;
-            border: 2px solid #f5c6cb;
+            border: 2px solid #dc3545;
         }
 
+        .disconnected .status-dot {
+            background: #dc3545;
+        }
+
+        /* Butonlar */
         .button-container {
             display: flex;
             flex-direction: column;
-            gap: 25px;
-            margin-bottom: 30px;
+            gap: 15px;
         }
 
         .game-button {
-            padding: 25px 40px;
-            font-size: 1.3em;
-            font-weight: bold;
+            padding: 18px 25px;
+            font-size: 1.1em;
+            font-weight: 700;
             border: none;
-            border-radius: 20px;
+            border-radius: 15px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
             position: relative;
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
         }
 
         .game-button::before {
@@ -117,19 +198,27 @@
             width: 0;
             height: 0;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.25);
             transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
+            transition: width 0.5s, height 0.5s;
         }
 
-        .game-button:hover::before {
-            width: 300px;
-            height: 300px;
+        .game-button:active::before {
+            width: 400px;
+            height: 400px;
         }
 
-        .game-button:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        .game-button:active {
+            transform: scale(0.95);
+        }
+
+        .btn-icon {
+            font-size: 1.5em;
+        }
+
+        .btn-text {
+            position: relative;
+            z-index: 1;
         }
 
         .ranked-btn {
@@ -137,9 +226,19 @@
             color: white;
         }
 
+        .ranked-btn:hover {
+            box-shadow: 0 12px 30px rgba(245, 87, 108, 0.4);
+            transform: translateY(-3px);
+        }
+
         .friend-btn {
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             color: white;
+        }
+
+        .friend-btn:hover {
+            box-shadow: 0 12px 30px rgba(79, 172, 254, 0.4);
+            transform: translateY(-3px);
         }
 
         .join-btn {
@@ -147,6 +246,12 @@
             color: white;
         }
 
+        .join-btn:hover {
+            box-shadow: 0 12px 30px rgba(67, 233, 123, 0.4);
+            transform: translateY(-3px);
+        }
+
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -154,9 +259,10 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
             animation: fadeIn 0.3s ease;
+            padding: 20px;
         }
 
         .modal-content {
@@ -165,30 +271,40 @@
             left: 50%;
             transform: translate(-50%, -50%);
             background: white;
-            padding: 40px;
-            border-radius: 25px;
-            min-width: 400px;
-            animation: scaleIn 0.3s ease;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+            animation: modalSlide 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
         }
 
-        @keyframes scaleIn {
-            from { transform: translate(-50%, -50%) scale(0.8); }
-            to { transform: translate(-50%, -50%) scale(1); }
+        @keyframes modalSlide {
+            from { transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
+            to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
 
         .modal h2 {
             color: #667eea;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             text-align: center;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
         .room-code {
-            font-size: 2.5em;
+            font-size: 2.2em;
             text-align: center;
             color: #764ba2;
-            font-weight: bold;
+            font-weight: 800;
             margin: 20px 0;
-            letter-spacing: 8px;
+            letter-spacing: 10px;
+            background: linear-gradient(135deg, #f093fb, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .input-group {
@@ -198,52 +314,54 @@
         .input-group input {
             width: 100%;
             padding: 15px;
-            font-size: 1.2em;
-            border: 2px solid #ddd;
-            border-radius: 10px;
+            font-size: 1.3em;
+            border: 3px solid #ddd;
+            border-radius: 12px;
             text-align: center;
-            letter-spacing: 5px;
+            letter-spacing: 8px;
+            font-weight: bold;
             transition: all 0.3s ease;
         }
 
         .input-group input:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
         }
 
-        .copy-btn {
-            background: #667eea;
-            color: white;
-            padding: 12px 30px;
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px 20px;
             border: none;
             border-radius: 10px;
             cursor: pointer;
             font-size: 1em;
-            margin: 10px 5px;
+            font-weight: 600;
             transition: all 0.3s ease;
         }
 
-        .copy-btn:hover {
-            background: #764ba2;
-            transform: scale(1.05);
+        .primary-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .primary-btn:active {
+            transform: scale(0.95);
         }
 
         .cancel-btn {
             background: #dc3545;
             color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 1em;
-            margin: 10px 5px;
-            transition: all 0.3s ease;
         }
 
-        .cancel-btn:hover {
-            background: #c82333;
-            transform: scale(1.05);
+        .cancel-btn:active {
+            transform: scale(0.95);
         }
 
         .searching {
@@ -272,52 +390,74 @@
             animation: fadeIn 0.5s ease;
         }
 
-        .game-info {
-            background: rgba(255, 255, 255, 0.95);
+        .game-header {
+            background: rgba(255, 255, 255, 0.98);
             border-radius: 20px;
-            padding: 25px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
+            padding: 20px;
+            margin-bottom: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
 
-        .player-info {
-            text-align: center;
+        .players-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .player-card {
             padding: 15px;
             border-radius: 15px;
-            transition: all 0.3s ease;
-            min-width: 200px;
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            transition: all 0.4s ease;
+            border: 3px solid transparent;
         }
 
-        .player-info.active {
+        .player-card.active {
             background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
-            box-shadow: 0 0 25px rgba(253, 203, 110, 0.6);
-            animation: glow 1.5s ease-in-out infinite;
+            border-color: #fdcb6e;
+            box-shadow: 0 0 30px rgba(253, 203, 110, 0.8);
+            animation: activeGlow 1.5s ease-in-out infinite;
         }
 
-        @keyframes glow {
-            0%, 100% { box-shadow: 0 0 25px rgba(253, 203, 110, 0.6); }
-            50% { box-shadow: 0 0 35px rgba(253, 203, 110, 0.9); }
+        @keyframes activeGlow {
+            0%, 100% { box-shadow: 0 0 30px rgba(253, 203, 110, 0.8); }
+            50% { box-shadow: 0 0 40px rgba(253, 203, 110, 1); }
         }
 
         .player-name {
-            font-size: 1.3em;
-            font-weight: bold;
+            font-size: 1.1em;
+            font-weight: 700;
             color: #333;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-badge {
+            font-size: 1.3em;
         }
 
         .player-color {
-            margin-top: 10px;
             font-size: 0.9em;
             color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .turn-indicator {
+            text-align: center;
+            margin-top: 15px;
+            font-weight: 700;
+            font-size: 1.1em;
+            color: #667eea;
         }
 
         .board-container {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.98);
             border-radius: 20px;
-            padding: 30px;
+            padding: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
 
@@ -325,12 +465,12 @@
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             gap: 2px;
-            max-width: 600px;
             margin: 0 auto;
-            background: #333;
-            padding: 2px;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            background: #1a1a1a;
+            padding: 3px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            max-width: 500px;
         }
 
         .square {
@@ -339,7 +479,7 @@
             justify-content: center;
             align-items: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             position: relative;
         }
 
@@ -353,60 +493,60 @@
 
         .square.selected {
             background: #7fc97f !important;
-            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+            animation: selectedPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes selectedPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
 
         .square.valid-move {
             background: #9fdfb0 !important;
-            animation: pulse-move 1s ease-in-out infinite;
-        }
-
-        @keyframes pulse-move {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
         }
 
         .square.valid-move::after {
             content: '';
             position: absolute;
-            width: 30%;
-            height: 30%;
-            background: rgba(34, 139, 34, 0.6);
+            width: 35%;
+            height: 35%;
+            background: rgba(34, 139, 34, 0.7);
             border-radius: 50%;
-            animation: pulse-dot 1s ease-in-out infinite;
+            animation: moveDot 1.2s ease-in-out infinite;
         }
 
-        @keyframes pulse-dot {
-            0%, 100% { transform: scale(1); opacity: 0.6; }
-            50% { transform: scale(1.3); opacity: 0.9; }
+        @keyframes moveDot {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.4); opacity: 1; }
         }
 
         .piece {
-            width: 80%;
-            height: 80%;
+            width: 85%;
+            height: 85%;
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.5em;
+            font-size: 1.3em;
             font-weight: bold;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
             transition: all 0.3s ease;
             cursor: pointer;
         }
 
-        .piece:hover {
-            transform: scale(1.1);
+        .piece:active {
+            transform: scale(0.9);
         }
 
         .piece.white {
-            background: radial-gradient(circle, #fff, #ddd);
+            background: radial-gradient(circle, #ffffff, #e0e0e0);
             color: #333;
             border: 3px solid #999;
         }
 
         .piece.black {
-            background: radial-gradient(circle, #333, #111);
+            background: radial-gradient(circle, #2c2c2c, #000000);
             color: #fff;
             border: 3px solid #555;
         }
@@ -415,32 +555,39 @@
             content: '♔';
             position: absolute;
             font-size: 1.2em;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .game-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
         }
 
         .leave-btn {
-            background: #dc3545;
+            flex: 1;
+            background: linear-gradient(135deg, #dc3545, #c82333);
             color: white;
-            padding: 15px 30px;
+            padding: 15px;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
             font-size: 1em;
-            margin-top: 20px;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
+            font-weight: 700;
             transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
         }
 
-        .leave-btn:hover {
-            background: #c82333;
-            transform: scale(1.05);
+        .leave-btn:active {
+            transform: scale(0.95);
         }
 
-        @media (max-width: 768px) {
-            h1 { font-size: 2em; }
-            .modal-content { min-width: 90%; }
-            .game-info { flex-direction: column; gap: 15px; }
+        @media (max-width: 480px) {
+            h1 { font-size: 1.6em; }
+            .logo { font-size: 3em; }
+            .game-button { padding: 15px 20px; font-size: 1em; }
+            .modal-content { padding: 20px; }
+            #board { max-width: 100%; }
         }
     </style>
 </head>
@@ -448,54 +595,83 @@
     <div class="container">
         <!-- Lobi Ekranı -->
         <div id="lobby">
-            <h1>🎮 Online Türk Daması</h1>
-            <p class="subtitle">Arkadaşlarınla veya rastgele oyuncularla oyna!</p>
+            <div class="header">
+                <div class="logo">🎲</div>
+                <h1>TÜRK DAMASI</h1>
+                <p class="subtitle">Online Multiplayer</p>
+            </div>
+
+            <!-- Kullanıcı Bilgisi -->
+            <div class="user-info" id="userInfo">
+                <div class="user-avatar" id="userAvatar">👤</div>
+                <div class="user-details">
+                    <div class="user-name" id="userName">Yükleniyor...</div>
+                    <div class="user-id" id="userId">Kullanıcı ID: ...</div>
+                </div>
+            </div>
             
             <div id="connectionStatus" class="connection-status disconnected">
-                Sunucuya bağlanıyor...
+                <div class="status-dot"></div>
+                <span>Sunucuya bağlanıyor...</span>
             </div>
 
             <div class="button-container">
                 <button class="game-button ranked-btn" onclick="startRankedGame()">
-                    <span style="position: relative; z-index: 1;">🏆 Dereceli Oyun</span>
+                    <span class="btn-icon">🏆</span>
+                    <span class="btn-text">DERECELİ OYUN</span>
                 </button>
                 <button class="game-button friend-btn" onclick="createPrivateRoom()">
-                    <span style="position: relative; z-index: 1;">👥 Arkadaşla Oyna</span>
+                    <span class="btn-icon">👥</span>
+                    <span class="btn-text">ARKADAŞLA OYNA</span>
                 </button>
                 <button class="game-button join-btn" onclick="showJoinModal()">
-                    <span style="position: relative; z-index: 1;">🔗 Odaya Katıl</span>
+                    <span class="btn-icon">🔗</span>
+                    <span class="btn-text">ODAYA KATIL</span>
                 </button>
             </div>
         </div>
 
         <!-- Oyun Ekranı -->
         <div id="game">
-            <div class="game-info">
-                <div id="player1Info" class="player-info">
-                    <div class="player-name">Oyuncu 1</div>
-                    <div class="player-color">⚪ Beyaz</div>
+            <div class="game-header">
+                <div class="players-container">
+                    <div id="player1Card" class="player-card">
+                        <div class="player-name">
+                            <span class="player-badge">👤</span>
+                            <span id="player1Name">Oyuncu 1</span>
+                        </div>
+                        <div class="player-color">⚪ Beyaz</div>
+                    </div>
+                    <div id="player2Card" class="player-card">
+                        <div class="player-name">
+                            <span class="player-badge">👤</span>
+                            <span id="player2Name">Oyuncu 2</span>
+                        </div>
+                        <div class="player-color">⚫ Siyah</div>
+                    </div>
                 </div>
-                <div id="player2Info" class="player-info">
-                    <div class="player-name">Oyuncu 2</div>
-                    <div class="player-color">⚫ Siyah</div>
-                </div>
+                <div class="turn-indicator" id="turnIndicator">Sıra: Beyaz</div>
             </div>
             <div class="board-container">
                 <div id="board"></div>
-                <button class="leave-btn" onclick="leaveGame()">🚪 Oyundan Çık</button>
+                <div class="game-actions">
+                    <button class="leave-btn" onclick="leaveGame()">
+                        🚪 Oyundan Çık
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Dereceli Oyun Arama Modal -->
+    <!-- Dereceli Oyun Modal -->
     <div id="rankedModal" class="modal">
         <div class="modal-content">
             <h2>🏆 Dereceli Oyun</h2>
             <div class="searching">
                 <div class="spinner"></div>
-                <p>Rakip aranıyor...</p>
+                <p style="font-size: 1.1em; color: #667eea; font-weight: 600;">Rakip aranıyor...</p>
             </div>
-            <button class="cancel-btn" onclick="cancelSearch()">İptal</button>
+            <button class="modal-btn cancel-btn" onclick="cancelSearch()">İptal</button>
         </div>
     </div>
 
@@ -503,11 +679,11 @@
     <div id="privateModal" class="modal">
         <div class="modal-content">
             <h2>👥 Özel Oda</h2>
-            <p style="text-align: center;">Oda Kodu:</p>
+            <p style="text-align: center; color: #666; margin-bottom: 10px;">Oda Kodu:</p>
             <div class="room-code" id="roomCode">----</div>
-            <div style="text-align: center;">
-                <button class="copy-btn" onclick="copyRoomCode()">📋 Kodu Kopyala</button>
-                <button class="cancel-btn" onclick="closePrivateModal()">İptal</button>
+            <div class="modal-buttons">
+                <button class="modal-btn primary-btn" onclick="copyRoomCode()">📋 Kopyala</button>
+                <button class="modal-btn cancel-btn" onclick="closePrivateModal()">İptal</button>
             </div>
         </div>
     </div>
@@ -517,11 +693,11 @@
         <div class="modal-content">
             <h2>🔗 Odaya Katıl</h2>
             <div class="input-group">
-                <input type="text" id="joinRoomCode" placeholder="Oda Kodunu Girin" maxlength="4">
+                <input type="text" id="joinRoomCode" placeholder="----" maxlength="4" inputmode="numeric">
             </div>
-            <div style="text-align: center;">
-                <button class="copy-btn" onclick="joinRoom()">Katıl</button>
-                <button class="cancel-btn" onclick="closeJoinModal()">İptal</button>
+            <div class="modal-buttons">
+                <button class="modal-btn primary-btn" onclick="joinRoom()">Katıl</button>
+                <button class="modal-btn cancel-btn" onclick="closeJoinModal()">İptal</button>
             </div>
         </div>
     </div>
