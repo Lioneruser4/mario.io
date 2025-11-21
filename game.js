@@ -38,9 +38,6 @@ const boardElement = document.getElementById('board');
 const currentTurnDisplay = document.getElementById('current-turn-display');
 const turnText = document.getElementById('turn-text');
 const leaveGameBtn = document.getElementById('leave-game-btn');
-const messageModal = document.getElementById('message-modal');
-const modalMessage = document.getElementById('modal-message');
-const modalCloseBtn = document.getElementById('modal-close-btn');
 
 const BOARD_SIZE = 8;
 
@@ -59,7 +56,8 @@ socket.on('disconnect', () => {
     connectionStatus.textContent = 'Serverle elaqe kesildi';
     connectionStatus.classList.remove('text-green-500');
     connectionStatus.classList.add('text-red-500');
-    showModal('Serverle elaqe kesildi. Səhifeni yenileyin.');
+    turnText.textContent = 'Serverle elaqe kesildi!';
+    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-red-600';
 });
 
 socket.on('matchFound', (data) => {
@@ -73,7 +71,6 @@ socket.on('matchFound', (data) => {
     clearInterval(searchTimer);
     searchTimer = null;
     
-    showModal('Raqib tapildi! Siz ' + (gameState.myColor === 'red' ? 'Qirmizi' : 'Ag') + ' rengindesiniz.');
     showScreen('game');
     updateGameUI();
 });
@@ -84,7 +81,6 @@ socket.on('searchStatus', (data) => {
 });
 
 socket.on('searchCancelled', (data) => {
-    showModal(data.message);
     clearInterval(searchTimer);
     searchTimer = null;
     showScreen('main');
@@ -115,24 +111,22 @@ socket.on('gameUpdate', (data) => {
 
 socket.on('gameOver', (data) => {
     const isWinner = data.winner === gameState.myColor;
-    showModal('Oyun bitdi! ' + (isWinner ? 'Siz qazandiniz!' : 'Raqib qazandi!'));
-    setTimeout(() => leaveGame(), 3000);
+    turnText.textContent = isWinner ? 'Qazandiniz!' : 'Raqib Qazandi!';
+    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center ' + 
+        (isWinner ? 'bg-blue-600' : 'bg-red-600');
+    setTimeout(() => leaveGame(), 5000);
 });
 
 socket.on('error', (message) => {
-    showModal(message);
+    turnText.textContent = 'Xeta: ' + message;
+    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-red-600';
     gameState.isSearching = false;
     clearInterval(searchTimer);
     searchTimer = null;
-    showScreen('main');
+    setTimeout(() => showScreen('main'), 3000);
 });
 
 // --- Yardimci Funksiyalar ---
-
-function showModal(message) {
-    modalMessage.textContent = message;
-    messageModal.classList.remove('hidden');
-}
 
 function showScreen(screen) {
     loader.classList.add('hidden');
@@ -327,9 +321,13 @@ function drawBoard() {
 function updateGameUI() {
     if (!gameState.gameStarted) return;
     
-    turnText.textContent = gameState.isMyTurn ? 'Sizdir!' : 'Raqibdir';
-    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl bg-gray-800 shadow-xl text-center ' + 
-        (gameState.isMyTurn ? 'bg-green-700' : 'bg-yellow-700');
+    if (gameState.isMyTurn) {
+        turnText.textContent = 'Sira Sende!';
+        currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-green-600';
+    } else {
+        turnText.textContent = 'Raqib Sirasi';
+        currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-yellow-600';
+    }
     
     drawBoard();
 }
@@ -337,27 +335,29 @@ function updateGameUI() {
 // --- Event Handlers ---
 
 function handleCellClick(r, c) {
-    console.log('Cell clicked:', r, c, 'isMyTurn:', gameState.isMyTurn, 'gameStarted:', gameState.gameStarted);
-    
     if (!gameState.isMyTurn || !gameState.gameStarted) return;
 
-    const pieceValue = gameState.board[r] && gameState.board[r][c];
+    const pieceValue = gameState.board[r][c];
     const piecePlayer = getPiecePlayer(pieceValue);
-    
-    console.log('Piece value:', pieceValue, 'Piece player:', piecePlayer, 'My color:', gameState.myColor);
 
+    // Eğer kendi taşına tıklandıysa - taşı seç
     if (piecePlayer === gameState.myColor) {
         gameState.selectedPiece = { r, c };
-        console.log('Piece selected:', gameState.selectedPiece);
         drawBoard();
-    } else if (gameState.selectedPiece && pieceValue === 0) {
+        return;
+    }
+
+    // Eğer bir taş seçiliyse ve boş hücreye tıklandıysa - taşı hareket ettir
+    if (gameState.selectedPiece && pieceValue === 0) {
         const fromR = gameState.selectedPiece.r;
         const fromC = gameState.selectedPiece.c;
-        
-        console.log('Trying to move from', fromR, fromC, 'to', r, c);
-        
-        if (isValidMove(gameState.board, fromR, fromC, r, c, gameState.myColor)) {
-            console.log('Valid move, sending to server');
+
+        // Hamle geçerli mi kontrol et
+        const moves = findValidMoves(gameState.board, fromR, fromC, gameState.myColor);
+        const validMove = moves.find(move => move.to.r === r && move.to.c === c);
+
+        if (validMove) {
+            // Hamleyi server'a gönder
             socket.emit('makeMove', {
                 roomCode: gameState.roomCode,
                 from: { r: fromR, c: fromC },
@@ -365,11 +365,12 @@ function handleCellClick(r, c) {
             });
             gameState.selectedPiece = null;
         } else {
-            console.log('Invalid move');
+            // Geçersiz hamle - seçimi iptal et
             gameState.selectedPiece = null;
             drawBoard();
         }
     } else {
+        // Başka bir yere tıklandı - seçimi iptal et
         gameState.selectedPiece = null;
         drawBoard();
     }
@@ -409,9 +410,11 @@ copyCodeBtn.onclick = () => {
     const code = roomCodeOutput.textContent;
     if (code && code !== '...') {
         navigator.clipboard.writeText(code).then(() => {
-            showModal('Otaq kodu (' + code + ') kopyalandi!');
+            turnText.textContent = 'Otaq kodu (' + code + ') kopyalandi!';
+            currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-green-600';
         }).catch(() => {
-            showModal("Kopyalama xetasi: Kodu el ile kopyalayin.");
+            turnText.textContent = "Kopyalama xetasi: Kodu el ile kopyalayin.";
+            currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-yellow-600';
         });
     }
 };
@@ -419,7 +422,8 @@ copyCodeBtn.onclick = () => {
 joinRoomBtn.onclick = () => {
     const roomCode = joinRoomInput.value.trim();
     if (roomCode.length !== 4) {
-        showModal("Xahis edirik, 4 reqemli otaq kodunu daxil edin.");
+        turnText.textContent = "Xahis edirik, 4 reqemli otaq kodunu daxil edin.";
+        currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-yellow-600';
         return;
     }
     
@@ -448,10 +452,6 @@ function leaveGame() {
     
     showScreen('main');
 }
-
-modalCloseBtn.onclick = () => {
-    messageModal.classList.add('hidden');
-};
 
 // Baslangic
 document.addEventListener('DOMContentLoaded', () => {
