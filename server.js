@@ -173,13 +173,15 @@ io.on('connection', (socket) => {
             io.to(player1).emit('matchFound', { 
                 roomCode, 
                 color: 'red',
-                opponentId: player2
+                opponentId: player2,
+                currentTurn: 'red'
             });
             
             io.to(player2).emit('matchFound', { 
                 roomCode, 
                 color: 'white',
-                opponentId: player1
+                opponentId: player1,
+                currentTurn: 'red'
             });
             
             console.log(`🎉 Eşleşme: ${player1} (kırmızı) vs ${player2} (beyaz) - Oda: ${roomCode}`);
@@ -242,12 +244,14 @@ io.on('connection', (socket) => {
         // Her iki oyuncuya da oyunun başladığını bildir
         io.to(room.players.red).emit('opponentJoined', { 
             roomCode,
-            opponentId: socket.id
+            opponentId: socket.id,
+            currentTurn: room.currentTurn
         });
         
         socket.emit('opponentJoined', { 
             roomCode,
-            opponentId: room.players.red
+            opponentId: room.players.red,
+            currentTurn: room.currentTurn
         });
         
         console.log(`👥 Odaya katılım: ${roomCode} - Oyuncu: ${socket.id}`);
