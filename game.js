@@ -64,8 +64,10 @@ socket.on('matchFound', (data) => {
     console.log('🎉 Raqib tapildi!', data);
     gameState.roomCode = data.roomCode;
     gameState.myColor = data.color;
+    gameState.currentTurn = data.currentTurn || 'red';
     gameState.gameStarted = true;
     gameState.isSearching = false;
+    gameState.isMyTurn = gameState.currentTurn === gameState.myColor;
     gameState.board = createInitialBoard();
     
     clearInterval(searchTimer);
@@ -94,8 +96,10 @@ socket.on('roomCreated', (data) => {
 });
 
 socket.on('opponentJoined', (data) => {
+    gameState.roomCode = data.roomCode;
+    gameState.currentTurn = data.currentTurn || 'red';
     gameState.gameStarted = true;
-    gameState.isMyTurn = gameState.myColor === 'red';
+    gameState.isMyTurn = gameState.currentTurn === gameState.myColor;
     gameState.board = createInitialBoard();
     console.log('👥 Raqib qosuldu! Oyun baslayir...');
     showScreen('game');
@@ -335,14 +339,28 @@ function updateGameUI() {
 // --- Event Handlers ---
 
 function handleCellClick(r, c) {
-    if (!gameState.isMyTurn || !gameState.gameStarted) return;
+    console.log('=== TAŞ TIKLANDI ===');
+    console.log('Pozisyon:', r, c);
+    console.log('Sıra benim mi?', gameState.isMyTurn);
+    console.log('Oyun başladı mı?', gameState.gameStarted);
+    console.log('Benim rengim:', gameState.myColor);
+    console.log('Current turn:', gameState.currentTurn);
+    
+    if (!gameState.isMyTurn || !gameState.gameStarted) {
+        console.log('Sıra sizde değilsiniz veya oyun başlamadı!');
+        return;
+    }
 
     const pieceValue = gameState.board[r][c];
     const piecePlayer = getPiecePlayer(pieceValue);
+    
+    console.log('Taş değeri:', pieceValue);
+    console.log('Taşın sahibi:', piecePlayer);
 
     // Eğer kendi taşına tıklandıysa - taşı seç
     if (piecePlayer === gameState.myColor) {
         gameState.selectedPiece = { r, c };
+        console.log('Taş seçildi:', gameState.selectedPiece);
         drawBoard();
         return;
     }
@@ -352,11 +370,16 @@ function handleCellClick(r, c) {
         const fromR = gameState.selectedPiece.r;
         const fromC = gameState.selectedPiece.c;
 
+        console.log('Hamle denemesi:', fromR, fromC, '->', r, c);
+
         // Hamle geçerli mi kontrol et
         const moves = findValidMoves(gameState.board, fromR, fromC, gameState.myColor);
+        console.log('Geçerli hamleler:', moves);
+        
         const validMove = moves.find(move => move.to.r === r && move.to.c === c);
 
         if (validMove) {
+            console.log('Geçerli hamle! Server gönderiliyor...');
             // Hamleyi server'a gönder
             socket.emit('makeMove', {
                 roomCode: gameState.roomCode,
@@ -365,11 +388,13 @@ function handleCellClick(r, c) {
             });
             gameState.selectedPiece = null;
         } else {
+            console.log('Geçersiz hamle!');
             // Geçersiz hamle - seçimi iptal et
             gameState.selectedPiece = null;
             drawBoard();
         }
     } else {
+        console.log('Seçim iptal ediliyor...');
         // Başka bir yere tıklandı - seçimi iptal et
         gameState.selectedPiece = null;
         drawBoard();
