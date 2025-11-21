@@ -264,39 +264,10 @@ io.on('connection', (socket) => {
         
         if (!player || player !== currentTurn) return;
         
-        // Hamle geçerli mi kontrol et
-        if (!isValidMove(board, from.r, from.c, to.r, to.c, player)) {
-            return;
-        }
-        
-        // Taşı hareket ettir
+        // Hamleyi uygula
         const piece = board[from.r][from.c];
         board[to.r][to.c] = piece;
         board[from.r][from.c] = 0;
-        
-        // Taş yeme kontrolü
-        let capturedPieces = [];
-        const isJump = Math.abs(to.r - from.r) === 2;
-        
-        if (isJump) {
-            const capturedR = (from.r + to.r) / 2;
-            const capturedC = (from.c + to.c) / 2;
-            board[capturedR][capturedC] = 0;
-            capturedPieces.push({ r: capturedR, c: capturedC });
-            
-            // Çoklu zıplama kontrolü
-            const additionalJumps = findJumps(board, to.r, to.c, player);
-            if (additionalJumps.length > 0) {
-                // Oyun durumunu güncelle ama sırayı değiştirme
-                io.to(roomCode).emit('gameUpdate', {
-                    board,
-                    currentTurn: room.currentTurn,
-                    mustJump: true,
-                    jumpPosition: { r: to.r, c: to.c }
-                });
-                return;
-            }
-        }
         
         // Eğer taş son sıraya ulaştıysa kral yap
         if ((player === 'red' && to.r === 7) || (player === 'white' && to.r === 0)) {
@@ -317,8 +288,7 @@ io.on('connection', (socket) => {
         // Oyun durumunu güncelle
         io.to(roomCode).emit('gameUpdate', {
             board,
-            currentTurn: room.currentTurn,
-            mustJump: false
+            currentTurn: room.currentTurn
         });
     });
 
