@@ -5,131 +5,255 @@ const io = require('socket.io')(http, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
-    }
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    transports: ['websocket', 'polling'],
+    allowEIO3: true
 });
 
 const PORT = process.env.PORT || 3000;
 
-// Oyun odaları ve bekleme listesi
+// Veri yapıları
 const rooms = new Map();
-const waitingPlayers = [];
+const waitingPlayers = new Map();
+const users = new Map();
+
+console.log('🚀 Sunucu başlatılıyor...');
 
 // Rastgele 4 haneli oda kodu oluştur
 function generateRoomCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
+    let code;
+    do {
+        code = Math.floor(1000 + Math.random() * 9000).toString();
+    } while (rooms.has(code));
+    return code;
+}
+
+// Sunucu tarafında hamle kontrolü
+function getValidMovesServer(board, row, col) {
+    const moves = [];
+    const piece = board[row][col];
+    if (!piece) return moves;
+    
+    const directions = piece.king ? 
+        [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
+        piece.color === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+    
+    // Yeme hamlelerini kontrol et
+    const captureMoves = [];
+    directions.forEach(([dRow, dCol]) => {
+        const enemyRow = row + dRow;
+        const enemyCol = col + dCol;
+        
+        if (enemyRow >= 0 && enemyRow < 8 && enemyCol >= 0 && enemyCol < 8) {
+            const enemyPiece = board[enemyRow][enemyCol];
+            
+            if (enemyPiece && enemyPiece.color !== piece.color) {
+                const jumpRow = enemyRow + dRow;
+                const jumpCol = enemyCol + dCol;
+                
+                if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
+                    if (!board[jumpRow][jumpCol]) {
+                        captureMoves.push({ row: jumpRow, col: jumpCol });
+                    }
+                }
+            }
+        }
+    });
+    
+    if (captureMoves.length > 0) {
+        return captureMoves;
+    }
+    
+    // Normal hamleler
+    directions.forEach(([dRow, dCol]) => {
+        const newRow = row + dRow;
+        const newCol = col + dCol;
+        
+        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+            if (!board[newRow][newCol]) {
+                moves.push({ row: newRow, col: newCol });
+            }
+        }
+    });
+    
+    return moves;
 }
 
 // Socket.IO bağlantıları
 io.on('connection', (socket) => {
-    console.log('Yeni oyuncu bağlandı:', socket.id);
+    console.log('✅ Yeni bağlantı:', socket.id);
+
+    // Kullanıcı kaydı
+    socket.on('registerUser', (data) => {
+        users.set(socket.id, {
+            userId: data.userId,
+            userName: data.userName,
+            socketId: socket.id
+        });
+        console.log('👤 Kullanıcı kaydedildi:', data.userName, '| ID:', data.userId);
+    });
 
     // Dereceli oyun arama
-    socket.on('findMatch', () => {
-        if (waitingPlayers.length > 0) {
-            // Eşleşme bulundu
-            const opponent = waitingPlayers.shift();
-            const roomCode = generateRoomCode();
+    socket.on('findMatch', (data) => {
+        console.log('🔍 Oyuncu arama yapıyor:', data.userName);
+        
+        if (waitingPlayers.has(socket.id)) {
+            console.log('⚠️ Oyuncu zaten beklemede');
+            return;
+        }
+
+        if (waitingPlayers.size > 0) {
+            const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
+            const opponentSocket = io.sockets.sockets.get(opponentSocketId);
             
-            // Oda oluştur
-            rooms.set(roomCode, {
-                players: [socket.id, opponent.id],
-                board: null,
-                currentPlayer: 'white'
-            });
+            if (opponentSocket) {
+                waitingPlayers.delete(opponentSocketId);
+                
+                const roomCode = generateRoomCode();
+                
+                rooms.set(roomCode, {
+                    players: [
+                        { socketId: socket.id, userId: data.userId, userName: data.userName },
+                        { socketId: opponentSocketId, userId: opponentData.userId, userName: opponentData.userName }
+                    ],
+                    board: null,
+                    currentPlayer: 'white',
+                    createdAt: Date.now()
+                });
 
-            // Her iki oyuncuyu odaya ekle
-            socket.join(roomCode);
-            opponent.join(roomCode);
+                socket.join(roomCode);
+                opponentSocket.join(roomCode);
 
-            // Oyunculara renk ata
-            socket.emit('matchFound', {
-                roomCode: roomCode,
-                playerColor: 'white'
-            });
-            opponent.emit('matchFound', {
-                roomCode: roomCode,
-                playerColor: 'black'
-            });
+                socket.emit('matchFound', {
+                    roomCode: roomCode,
+                    playerColor: 'white',
+                    opponentName: opponentData.userName
+                });
+                
+                opponentSocket.emit('matchFound', {
+                    roomCode: roomCode,
+                    playerColor: 'black',
+                    opponentName: data.userName
+                });
 
-            console.log(`Eşleşme bulundu: ${roomCode}`);
+                console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
+            } else {
+                waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.set(socket.id, data);
+                console.log('⏳ Bekleme listesine eklendi:', data.userName);
+            }
         } else {
-            // Bekleme listesine ekle
-            waitingPlayers.push(socket);
-            console.log('Oyuncu bekleme listesine eklendi:', socket.id);
+            waitingPlayers.set(socket.id, data);
+            console.log('⏳ Bekleme listesine eklendi:', data.userName);
         }
     });
 
     // Arama iptal
-    socket.on('cancelSearch', () => {
-        const index = waitingPlayers.findIndex(p => p.id === socket.id);
-        if (index !== -1) {
-            waitingPlayers.splice(index, 1);
-            console.log('Arama iptal edildi:', socket.id);
+    socket.on('cancelSearch', (data) => {
+        if (waitingPlayers.has(socket.id)) {
+            waitingPlayers.delete(socket.id);
+            console.log('❌ Arama iptal edildi');
         }
     });
 
     // Özel oda oluştur
-    socket.on('createRoom', () => {
+    socket.on('createRoom', (data) => {
         const roomCode = generateRoomCode();
         
         rooms.set(roomCode, {
-            players: [socket.id],
+            players: [
+                { socketId: socket.id, userId: data.userId, userName: data.userName }
+            ],
             board: null,
             currentPlayer: 'white',
-            isPrivate: true
+            isPrivate: true,
+            createdAt: Date.now()
         });
 
         socket.join(roomCode);
         socket.emit('roomCreated', { roomCode: roomCode });
         
-        console.log(`Özel oda oluşturuldu: ${roomCode}`);
+        console.log('🏠 Özel oda:', roomCode, 'by', data.userName);
     });
 
     // Odaya katıl
-    socket.on('joinRoom', (roomCode) => {
-        const room = rooms.get(roomCode);
+    socket.on('joinRoom', (data) => {
+        const room = rooms.get(data.roomCode);
         
         if (!room) {
             socket.emit('error', { message: 'Oda bulunamadı!' });
+            console.log('❌ Oda bulunamadı:', data.roomCode);
             return;
         }
 
         if (room.players.length >= 2) {
             socket.emit('error', { message: 'Oda dolu!' });
+            console.log('❌ Oda dolu:', data.roomCode);
             return;
         }
 
-        // Odaya katıl
-        room.players.push(socket.id);
-        socket.join(roomCode);
+        if (room.players.some(p => p.userId === data.userId)) {
+            socket.emit('error', { message: 'Zaten bu odasınız!' });
+            return;
+        }
 
-        // Her iki oyuncuya oyun başladığını bildir
+        room.players.push({ 
+            socketId: socket.id, 
+            userId: data.userId, 
+            userName: data.userName 
+        });
+        socket.join(data.roomCode);
+
         const [player1, player2] = room.players;
         
-        io.to(player1).emit('roomJoined', {
-            roomCode: roomCode,
-            playerColor: 'white'
-        });
+        const player1Socket = io.sockets.sockets.get(player1.socketId);
+        const player2Socket = io.sockets.sockets.get(player2.socketId);
         
-        io.to(player2).emit('roomJoined', {
-            roomCode: roomCode,
-            playerColor: 'black'
-        });
+        if (player1Socket) {
+            player1Socket.emit('roomJoined', {
+                roomCode: data.roomCode,
+                playerColor: 'white',
+                opponentName: player2.userName
+            });
+        }
+        
+        if (player2Socket) {
+            player2Socket.emit('roomJoined', {
+                roomCode: data.roomCode,
+                playerColor: 'black',
+                opponentName: player1.userName
+            });
+        }
 
-        console.log(`Oyuncu odaya katıldı: ${roomCode}`);
+        console.log('👥 Odaya katıldı:', data.roomCode, '-', data.userName);
     });
 
     // Oyun hazır
     socket.on('gameReady', (data) => {
         const room = rooms.get(data.roomCode);
-        if (room) {
+        if (!room) return;
+
+        if (!room.board) {
             room.board = data.board;
             
-            // Her iki oyuncuya oyun durumunu gönder
-            io.to(data.roomCode).emit('gameStart', {
-                board: room.board,
-                currentPlayer: room.currentPlayer
+            room.players.forEach(player => {
+                const playerSocket = io.sockets.sockets.get(player.socketId);
+                if (playerSocket) {
+                    const playerColor = room.players.indexOf(player) === 0 ? 'white' : 'black';
+                    const opponent = room.players.find(p => p.socketId !== player.socketId);
+                    
+                    playerSocket.emit('gameStart', {
+                        board: room.board,
+                        currentPlayer: room.currentPlayer,
+                        playerColor: playerColor,
+                        opponentName: opponent ? opponent.userName : 'Rakip'
+                    });
+                }
             });
+            
+            console.log('🎮 Oyun başladı:', data.roomCode);
         }
     });
 
@@ -138,13 +262,9 @@ io.on('connection', (socket) => {
         const room = rooms.get(data.roomCode);
         if (!room) return;
 
-        // Tahtayı güncelle
         room.board = data.board;
-        
-        // Sırayı değiştir
         room.currentPlayer = room.currentPlayer === 'white' ? 'black' : 'white';
 
-        // Tüm oyunculara hamleyi bildir
         io.to(data.roomCode).emit('moveMade', {
             board: room.board,
             currentPlayer: room.currentPlayer,
@@ -152,6 +272,8 @@ io.on('connection', (socket) => {
             to: data.to,
             capture: data.capture
         });
+
+        console.log('♟️ Hamle:', data.roomCode, '- Sıra:', room.currentPlayer);
 
         // Oyun bitişini kontrol et
         const hasWhitePieces = room.board.some(row => 
@@ -165,86 +287,175 @@ io.on('connection', (socket) => {
             const winner = hasWhitePieces ? 'white' : 'black';
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             
-            // Odayı temizle
+            console.log('🏆 Oyun bitti:', data.roomCode, '- Kazanan:', winner);
+            
+            setTimeout(() => {
+                rooms.delete(data.roomCode);
+            }, 5000);
+        } else {
+            // Hareket edebilecek taş var mı kontrol et
+            const currentPlayerPieces = [];
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = room.board[row][col];
+                    if (piece && piece.color === room.currentPlayer) {
+                        currentPlayerPieces.push({row, col});
+                    }
+                }
+            }
+            
+            let hasValidMoves = false;
+            for (const pos of currentPlayerPieces) {
+                const moves = getValidMovesServer(room.board, pos.row, pos.col);
+                if (moves.length > 0) {
+                    hasValidMoves = true;
+                    break;
+                }
+            }
+            
+            if (!hasValidMoves) {
+                const winner = room.currentPlayer === 'white' ? 'black' : 'white';
+                io.to(data.roomCode).emit('gameOver', { winner: winner });
+                console.log('🏆 Oyun bitti (hamle yok):', data.roomCode, '- Kazanan:', winner);
+                
+                setTimeout(() => {
+                    rooms.delete(data.roomCode);
+                }, 5000);
+            }
+        }
+    });
+
+    // Oyun terk edildi
+    socket.on('gameAbandoned', (data) => {
+        const room = rooms.get(data.roomCode);
+        if (room) {
+            io.to(data.roomCode).emit('gameAbandoned');
             rooms.delete(data.roomCode);
-            console.log(`Oyun bitti: ${data.roomCode}, Kazanan: ${winner}`);
+            console.log('⚠️ Oyun terk edildi:', data.roomCode);
         }
     });
 
     // Oyundan çık
-    socket.on('leaveGame', (roomCode) => {
-        const room = rooms.get(roomCode);
+    socket.on('leaveGame', (data) => {
+        const room = rooms.get(data.roomCode);
         if (room) {
-            // Rakibe bildirim gönder
-            socket.to(roomCode).emit('opponentLeft');
-            
-            // Odayı temizle
-            rooms.delete(roomCode);
-            console.log(`Oyuncu oyundan ayrıldı: ${roomCode}`);
+            socket.to(data.roomCode).emit('opponentLeft');
+            rooms.delete(data.roomCode);
+            console.log('🚪 Oyundan çıkıldı:', data.roomCode);
         }
     });
 
     // Odadan çık
-    socket.on('leaveRoom', (roomCode) => {
-        const room = rooms.get(roomCode);
+    socket.on('leaveRoom', (data) => {
+        const room = rooms.get(data.roomCode);
         if (room) {
-            const index = room.players.indexOf(socket.id);
-            if (index !== -1) {
-                room.players.splice(index, 1);
+            const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+            if (playerIndex !== -1) {
+                room.players.splice(playerIndex, 1);
             }
             
-            // Oda boşsa sil
             if (room.players.length === 0) {
-                rooms.delete(roomCode);
-                console.log(`Oda silindi: ${roomCode}`);
+                rooms.delete(data.roomCode);
+                console.log('🗑️ Boş oda silindi:', data.roomCode);
             }
         }
     });
 
-    // Bağlantı kesildiğinde
+    // Bağlantı kesildi
     socket.on('disconnect', () => {
-        console.log('Oyuncu ayrıldı:', socket.id);
+        console.log('❌ Bağlantı kesildi:', socket.id);
         
-        // Bekleme listesinden çıkar
-        const waitingIndex = waitingPlayers.findIndex(p => p.id === socket.id);
-        if (waitingIndex !== -1) {
-            waitingPlayers.splice(waitingIndex, 1);
+        const user = users.get(socket.id);
+        if (user) {
+            console.log('👤 Kullanıcı ayrıldı:', user.userName);
+            users.delete(socket.id);
+        }
+        
+        if (waitingPlayers.has(socket.id)) {
+            waitingPlayers.delete(socket.id);
         }
 
-        // Odalardan çıkar
         rooms.forEach((room, roomCode) => {
-            const index = room.players.indexOf(socket.id);
-            if (index !== -1) {
-                // Rakibe bildirim gönder
+            const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+            if (playerIndex !== -1) {
                 socket.to(roomCode).emit('opponentLeft');
-                
-                // Odayı temizle
                 rooms.delete(roomCode);
-                console.log(`Oyuncu ayrıldı, oda silindi: ${roomCode}`);
+                console.log('🗑️ Oda silindi:', roomCode);
             }
         });
     });
 });
 
-// Statik dosyaları servis et
-app.use(express.static('public'));
+// Middleware
+app.use(express.json());
+app.use(express.static(__dirname));
 
 // Ana sayfa
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// Sunucuyu başlat
-http.listen(PORT, () => {
-    console.log(`Sunucu çalışıyor: http://localhost:${PORT}`);
-});
-
-// Sunucu durumu endpoint'i
+// Sunucu durumu
 app.get('/status', (req, res) => {
     res.json({
         status: 'online',
         activeRooms: rooms.size,
-        waitingPlayers: waitingPlayers.length,
+        waitingPlayers: waitingPlayers.size,
+        connectedUsers: users.size,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+// Health check
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy',
         timestamp: new Date().toISOString()
     });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).send('404 - Sayfa bulunamadı');
+});
+
+// Sunucuyu başlat
+http.listen(PORT, '0.0.0.0', () => {
+    console.log('═══════════════════════════════════════');
+    console.log('🚀 Sunucu çalışıyor!');
+    console.log('📡 Port:', PORT);
+    console.log('🌐 URL: http://localhost:' + PORT);
+    console.log('🎮 Amerikan Daması Online hazır!');
+    console.log('═══════════════════════════════════════');
+});
+
+// Periyodik temizlik
+setInterval(() => {
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    
+    rooms.forEach((room, roomCode) => {
+        if (now - room.createdAt > oneHour) {
+            rooms.delete(roomCode);
+            console.log('🗑️ Eski oda temizlendi:', roomCode);
+        }
+    });
+}, 30 * 60 * 1000);
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('⚠️ SIGTERM alındı');
+    http.close(() => {
+        console.log('✅ Sunucu kapatıldı');
+        process.exit(0);
+    });
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('💥 Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (error) => {
+    console.error('💥 Unhandled Rejection:', error);
 });
