@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 3000;
 const rooms = new Map();
 const waitingPlayers = new Map();
 const users = new Map();
+const roomTimers = new Map(); // Oda timer'ları
+const searchTimers = new Map(); // Eşleşme timer'ları
 
 console.log('🚀 Sunucu başlatılıyor...');
 
@@ -28,6 +30,75 @@ function generateRoomCode() {
         code = Math.floor(1000 + Math.random() * 9000).toString();
     } while (rooms.has(code));
     return code;
+}
+
+// Oda timer'ını başlat
+function startRoomTimer(roomCode) {
+    stopRoomTimer(roomCode);
+    
+    const timer = {
+        timeLeft: 20,
+        interval: setInterval(() => {
+            const room = rooms.get(roomCode);
+            if (!room) {
+                stopRoomTimer(roomCode);
+                return;
+            }
+            
+            timer.timeLeft--;
+            
+            // Her iki oyuncuya timer değerini gönder
+            io.to(roomCode).emit('timerUpdate', {
+                timeLeft: timer.timeLeft,
+                currentPlayer: room.currentPlayer
+            });
+            
+            if (timer.timeLeft <= 0) {
+                // Süre doldu - otomatik hamle veya oyun bitişi
+                handleTimerTimeout(roomCode);
+                stopRoomTimer(roomCode);
+            }
+        }, 1000)
+    };
+    
+    roomTimers.set(roomCode, timer);
+    
+    // İlk timer değerini gönder
+    const room = rooms.get(roomCode);
+    if (room) {
+        io.to(roomCode).emit('timerUpdate', {
+            timeLeft: 20,
+            currentPlayer: room.currentPlayer
+        });
+    }
+}
+
+// Oda timer'ını durdur
+function stopRoomTimer(roomCode) {
+    const timer = roomTimers.get(roomCode);
+    if (timer && timer.interval) {
+        clearInterval(timer.interval);
+        roomTimers.delete(roomCode);
+    }
+}
+
+// Oda timer'ını sıfırla ve yeniden başlat
+function resetRoomTimer(roomCode) {
+    stopRoomTimer(roomCode);
+    startRoomTimer(roomCode);
+}
+
+// Timer süresi dolduğunda
+function handleTimerTimeout(roomCode) {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    
+    // Süre doldu - oyuncuya bildir
+    io.to(roomCode).emit('timerTimeout', {
+        currentPlayer: room.currentPlayer
+    });
+    
+    console.log('⏰ Timer doldu:', roomCode, '- Sıra:', room.currentPlayer);
 }
 
 // Sunucu tarafında hamle kontrolü
@@ -116,6 +187,10 @@ io.on('connection', (socket) => {
             const opponentSocket = io.sockets.sockets.get(opponentSocketId);
             
             if (opponentSocket) {
+                // Eşleşme bulundu - timer'ları durdur
+                stopSearchTimer(socket.id);
+                stopSearchTimer(opponentSocketId);
+                
                 waitingPlayers.delete(opponentSocketId);
                 
                 const roomCode = generateRoomCode();
@@ -129,6 +204,9 @@ io.on('connection', (socket) => {
                     currentPlayer: 'white',
                     createdAt: Date.now()
                 });
+                
+                // Timer başlat
+                startRoomTimer(roomCode);
 
                 socket.join(roomCode);
                 opponentSocket.join(roomCode);
@@ -151,17 +229,53 @@ io.on('connection', (socket) => {
             } else {
                 waitingPlayers.delete(opponentSocketId);
                 waitingPlayers.set(socket.id, playerData);
+                startSearchTimer(socket.id);
                 console.log('⏳ Bekleme listesine eklendi:', data.userName);
             }
         } else {
             waitingPlayers.set(socket.id, playerData);
+            startSearchTimer(socket.id);
             console.log('⏳ Bekleme listesine eklendi:', data.userName);
         }
     });
+    
+    // Eşleşme timer fonksiyonları
+    function startSearchTimer(socketId) {
+        stopSearchTimer(socketId);
+        
+        let timeElapsed = 0;
+        const timer = setInterval(() => {
+            timeElapsed++;
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+                socket.emit('searchTimerUpdate', { timeElapsed });
+            } else {
+                clearInterval(timer);
+                searchTimers.delete(socketId);
+            }
+        }, 1000);
+        
+        searchTimers.set(socketId, { interval: timer, timeElapsed: 0 });
+        
+        // İlk değeri gönder
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+            socket.emit('searchTimerUpdate', { timeElapsed: 0 });
+        }
+    }
+    
+    function stopSearchTimer(socketId) {
+        const timer = searchTimers.get(socketId);
+        if (timer && timer.interval) {
+            clearInterval(timer.interval);
+            searchTimers.delete(socketId);
+        }
+    }
 
     // Arama iptal
     socket.on('cancelSearch', (data) => {
         if (waitingPlayers.has(socket.id)) {
+            stopSearchTimer(socket.id);
             waitingPlayers.delete(socket.id);
             console.log('❌ Arama iptal edildi');
         }
@@ -180,6 +294,8 @@ io.on('connection', (socket) => {
             isPrivate: true,
             createdAt: Date.now()
         });
+        
+        // Timer başlat (2 oyuncu olduğunda başlatılacak)
 
         socket.join(roomCode);
         socket.emit('roomCreated', { roomCode: roomCode });
@@ -266,6 +382,9 @@ io.on('connection', (socket) => {
                 }
             });
             
+            // Timer başlat
+            startRoomTimer(data.roomCode);
+            
             console.log('🎮 Oyun başladı:', data.roomCode);
         }
     });
@@ -315,6 +434,8 @@ io.on('connection', (socket) => {
         // Çoklu yeme sırasında sıra değişmez
         if (!data.continueCapture) {
             room.currentPlayer = room.currentPlayer === 'white' ? 'black' : 'white';
+            // Timer'ı sıfırla ve yeniden başlat
+            resetRoomTimer(data.roomCode);
         }
 
         io.to(data.roomCode).emit('moveMade', {
@@ -350,6 +471,7 @@ io.on('connection', (socket) => {
         }
 
         if (whitePieces.length === 0 || blackPieces.length === 0) {
+            stopRoomTimer(data.roomCode);
             const winner = whitePieces.length > 0 ? 'white' : 'black';
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             console.log('🏆 Oyun bitti (taş bitti):', data.roomCode, '- Kazanan:', winner);
@@ -397,6 +519,7 @@ io.on('connection', (socket) => {
         }
         
         if (!hasValidMoves) {
+            stopRoomTimer(data.roomCode);
             const winner = room.currentPlayer === 'white' ? 'black' : 'white';
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             console.log('🏆 Oyun bitti (hamle yok):', data.roomCode, '- Kazanan:', winner);
@@ -411,6 +534,7 @@ io.on('connection', (socket) => {
     socket.on('gameAbandoned', (data) => {
         const room = rooms.get(data.roomCode);
         if (room) {
+            stopRoomTimer(data.roomCode);
             io.to(data.roomCode).emit('gameAbandoned');
             rooms.delete(data.roomCode);
             console.log('⚠️ Oyun terk edildi:', data.roomCode);
@@ -421,6 +545,7 @@ io.on('connection', (socket) => {
     socket.on('leaveGame', (data) => {
         const room = rooms.get(data.roomCode);
         if (room) {
+            stopRoomTimer(data.roomCode);
             socket.to(data.roomCode).emit('opponentLeft');
             rooms.delete(data.roomCode);
             console.log('🚪 Oyundan çıkıldı:', data.roomCode);
@@ -437,6 +562,7 @@ io.on('connection', (socket) => {
             }
             
             if (room.players.length === 0) {
+                stopRoomTimer(data.roomCode);
                 rooms.delete(data.roomCode);
                 console.log('🗑️ Boş oda silindi:', data.roomCode);
             }
@@ -454,12 +580,14 @@ io.on('connection', (socket) => {
         }
         
         if (waitingPlayers.has(socket.id)) {
+            stopSearchTimer(socket.id);
             waitingPlayers.delete(socket.id);
         }
 
         rooms.forEach((room, roomCode) => {
             const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
             if (playerIndex !== -1) {
+                stopRoomTimer(roomCode);
                 socket.to(roomCode).emit('opponentLeft');
                 rooms.delete(roomCode);
                 console.log('🗑️ Oda silindi:', roomCode);
