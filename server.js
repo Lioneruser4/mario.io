@@ -260,68 +260,137 @@ io.on('connection', (socket) => {
     // Hamle yap
     socket.on('makeMove', (data) => {
         const room = rooms.get(data.roomCode);
-        if (!room) return;
+        if (!room) {
+            socket.emit('error', { message: 'Oda bulunamadı!' });
+            return;
+        }
+
+        // Oyuncu bu odada mı kontrol et
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (!player) {
+            socket.emit('error', { message: 'Bu odada değilsiniz!' });
+            return;
+        }
+
+        // Sıra kontrolü - çoklu yeme sırasında sıra değişmez
+        const playerColor = room.players.indexOf(player) === 0 ? 'white' : 'black';
+        if (!data.continueCapture && room.currentPlayer !== playerColor) {
+            socket.emit('error', { message: 'Sıra sizde değil!' });
+            return;
+        }
+
+        // Hamle validasyonu - geçerli hamle mi?
+        const validMoves = getValidMovesServer(room.board, data.from.row, data.from.col);
+        const isValidMove = validMoves.some(move => 
+            move.row === data.to.row && move.col === data.to.col
+        );
+        
+        if (!isValidMove) {
+            socket.emit('error', { message: 'Geçersiz hamle!' });
+            return;
+        }
+
+        // Taş kontrolü - doğru taş mı?
+        const piece = room.board[data.from.row] && room.board[data.from.row][data.from.col];
+        if (!piece || piece.color !== playerColor) {
+            socket.emit('error', { message: 'Geçersiz taş!' });
+            return;
+        }
 
         room.board = data.board;
-        room.currentPlayer = room.currentPlayer === 'white' ? 'black' : 'white';
+        
+        // Çoklu yeme sırasında sıra değişmez
+        if (!data.continueCapture) {
+            room.currentPlayer = room.currentPlayer === 'white' ? 'black' : 'white';
+        }
 
         io.to(data.roomCode).emit('moveMade', {
             board: room.board,
             currentPlayer: room.currentPlayer,
             from: data.from,
             to: data.to,
-            capture: data.capture
+            capture: data.capture,
+            continueCapture: data.continueCapture || false
         });
 
-        console.log('♟️ Hamle:', data.roomCode, '- Sıra:', room.currentPlayer);
+        console.log('♟️ Hamle:', data.roomCode, '- Sıra:', room.currentPlayer, data.continueCapture ? '(Çoklu Yeme)' : '');
 
-        // Oyun bitişini kontrol et
-        const hasWhitePieces = room.board.some(row => 
-            row.some(piece => piece && piece.color === 'white')
-        );
-        const hasBlackPieces = room.board.some(row => 
-            row.some(piece => piece && piece.color === 'black')
-        );
+        // Çoklu yeme sırasında oyun bitiş kontrolü yapılmaz
+        if (data.continueCapture) {
+            return;
+        }
 
-        if (!hasWhitePieces || !hasBlackPieces) {
-            const winner = hasWhitePieces ? 'white' : 'black';
+        // Oyun bitişini kontrol et - taş sayısı
+        const whitePieces = [];
+        const blackPieces = [];
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = room.board[row] && room.board[row][col];
+                if (piece) {
+                    if (piece.color === 'white') {
+                        whitePieces.push({row, col});
+                    } else {
+                        blackPieces.push({row, col});
+                    }
+                }
+            }
+        }
+
+        if (whitePieces.length === 0 || blackPieces.length === 0) {
+            const winner = whitePieces.length > 0 ? 'white' : 'black';
             io.to(data.roomCode).emit('gameOver', { winner: winner });
-            
-            console.log('🏆 Oyun bitti:', data.roomCode, '- Kazanan:', winner);
+            console.log('🏆 Oyun bitti (taş bitti):', data.roomCode, '- Kazanan:', winner);
             
             setTimeout(() => {
                 rooms.delete(data.roomCode);
             }, 5000);
-        } else {
-            // Hareket edebilecek taş var mı kontrol et
-            const currentPlayerPieces = [];
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const piece = room.board[row][col];
-                    if (piece && piece.color === room.currentPlayer) {
-                        currentPlayerPieces.push({row, col});
+            return;
+        }
+
+        // Hareket edebilecek taş var mı kontrol et
+        const currentPlayerPieces = room.currentPlayer === 'white' ? whitePieces : blackPieces;
+        let hasValidMoves = false;
+        let hasCaptureMoves = false;
+        
+        for (const pos of currentPlayerPieces) {
+            const moves = getValidMovesServer(room.board, pos.row, pos.col);
+            if (moves.length > 0) {
+                hasValidMoves = true;
+                // Yeme hamlesi var mı kontrol et
+                const captureMoves = moves.filter(m => {
+                    // Yeme hamlesi kontrolü - arada düşman taş var mı?
+                    const dRow = m.row - pos.row;
+                    const dCol = m.col - pos.col;
+                    const stepRow = dRow > 0 ? 1 : -1;
+                    const stepCol = dCol > 0 ? 1 : -1;
+                    
+                    let foundEnemy = false;
+                    for (let r = pos.row + stepRow, c = pos.col + stepCol; 
+                         r !== m.row && c !== m.col; 
+                         r += stepRow, c += stepCol) {
+                        const piece = room.board[r] && room.board[r][c];
+                        if (piece && piece.color !== room.currentPlayer) {
+                            foundEnemy = true;
+                            break;
+                        }
                     }
-                }
-            }
-            
-            let hasValidMoves = false;
-            for (const pos of currentPlayerPieces) {
-                const moves = getValidMovesServer(room.board, pos.row, pos.col);
-                if (moves.length > 0) {
-                    hasValidMoves = true;
-                    break;
-                }
-            }
-            
-            if (!hasValidMoves) {
-                const winner = room.currentPlayer === 'white' ? 'black' : 'white';
-                io.to(data.roomCode).emit('gameOver', { winner: winner });
-                console.log('🏆 Oyun bitti (hamle yok):', data.roomCode, '- Kazanan:', winner);
+                    return foundEnemy;
+                });
                 
-                setTimeout(() => {
-                    rooms.delete(data.roomCode);
-                }, 5000);
+                if (captureMoves.length > 0) {
+                    hasCaptureMoves = true;
+                }
             }
+        }
+        
+        if (!hasValidMoves) {
+            const winner = room.currentPlayer === 'white' ? 'black' : 'white';
+            io.to(data.roomCode).emit('gameOver', { winner: winner });
+            console.log('🏆 Oyun bitti (hamle yok):', data.roomCode, '- Kazanan:', winner);
+            
+            setTimeout(() => {
+                rooms.delete(data.roomCode);
+            }, 5000);
         }
     });
 
