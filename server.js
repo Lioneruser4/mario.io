@@ -259,14 +259,32 @@ io.on('connection', (socket) => {
 
     // Hamle yapma
     socket.on('makeMove', ({ roomCode, from, to }) => {
+        console.log('🎮 Hamle isteği:', { roomCode, from, to });
+        
         const room = rooms.get(roomCode);
-        if (!room) return;
+        if (!room) {
+            console.log('❌ Oda bulunamadı:', roomCode);
+            return;
+        }
         
         const { board, currentTurn } = room;
         const player = room.players.red === socket.id ? 'red' : 
                       room.players.white === socket.id ? 'white' : null;
         
-        if (!player || player !== currentTurn) return;
+        console.log('👤 Oyuncu:', player, 'Sıra:', currentTurn);
+        
+        if (!player || player !== currentTurn) {
+            console.log('❌ Sıra sizde değil veya oyuncu bulunamadı');
+            return;
+        }
+        
+        // Hamle geçerli mi kontrol et
+        if (!isValidMove(board, from.r, from.c, to.r, to.c, player)) {
+            console.log('❌ Geçersiz hamle!');
+            return;
+        }
+        
+        console.log('✅ Geçerli hamle, uygulanıyor...');
         
         // Hamleyi uygula
         const piece = board[from.r][from.c];
@@ -276,6 +294,7 @@ io.on('connection', (socket) => {
         // Eğer taş son sıraya ulaştıysa kral yap
         if ((player === 'red' && to.r === 7) || (player === 'white' && to.r === 0)) {
             board[to.r][to.c] = player === 'red' ? 3 : 4; // 3: Kırmızı kral, 4: Beyaz kral
+            console.log('👑 Kral yapıldı!');
         }
         
         // Sırayı değiştir
@@ -284,12 +303,14 @@ io.on('connection', (socket) => {
         // Kazanan var mı kontrol et
         const winner = checkWinner(board, currentTurn);
         if (winner) {
+            console.log('🏆 Oyun bitti! Kazanan:', winner);
             io.to(roomCode).emit('gameOver', { winner });
             rooms.delete(roomCode);
             return;
         }
         
         // Oyun durumunu güncelle
+        console.log('📡 Oyun durumu gönderiliyor...');
         io.to(roomCode).emit('gameUpdate', {
             board,
             currentTurn: room.currentTurn
