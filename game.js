@@ -67,12 +67,22 @@ socket.on('connect', () => {
     document.getElementById('connectionStatus').className = 'connection-status connected';
     document.getElementById('connectionStatus').innerHTML = '<div class="status-dot"></div><span>✅ Sunucuya bağlandı</span>';
     
+    // Butonları aktif et
+    document.getElementById('rankedBtn').disabled = false;
+    document.getElementById('friendBtn').disabled = false;
+    document.getElementById('joinBtn').disabled = false;
+    
     socket.emit('registerUser', { userId, userName });
 });
 
 socket.on('disconnect', () => {
     document.getElementById('connectionStatus').className = 'connection-status disconnected';
     document.getElementById('connectionStatus').innerHTML = '<div class="status-dot"></div><span>❌ Bağlantı kesildi</span>';
+    
+    // Butonları devre dışı bırak
+    document.getElementById('rankedBtn').disabled = true;
+    document.getElementById('friendBtn').disabled = true;
+    document.getElementById('joinBtn').disabled = true;
 });
 
 socket.on('connect_error', (error) => {
