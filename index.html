@@ -1,248 +1,331 @@
 <!DOCTYPE html>
-<html lang="az">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amerikan Damasi</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <title>Amerikan Daması</title>
     <style>
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        @keyframes piece-glow {
-            0%, 100% { 
-                box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
-                transform: scale(1);
-            }
-            50% { 
-                box-shadow: 0 0 25px rgba(255, 255, 255, 0.8);
-                transform: scale(1.05);
-            }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
         }
-        
-        @keyframes valid-move-pulse {
-            0%, 100% { 
-                background-color: rgba(34, 197, 94, 0.4);
-                transform: scale(1);
-            }
-            50% { 
-                background-color: rgba(34, 197, 94, 0.6);
-                transform: scale(1.02);
-            }
+
+        .game-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
         }
-        
-        .animate-float {
-            animation: float 3s ease-in-out infinite;
+
+        .game-header {
+            text-align: center;
+            margin-bottom: 20px;
         }
-        
+
+        .game-header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .player-indicator {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+        }
+
+        .player-indicator.red {
+            background: #ff4757;
+        }
+
+        .player-indicator.white {
+            background: #f1f2f6;
+        }
+
+        .player-indicator.active {
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .board-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            gap: 0;
+            border: 4px solid #2c3e50;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
         .cell {
             width: 60px;
             height: 60px;
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
         }
-        
-        .cell-white {
-            background-color: #f3f4f6;
-            border: 1px solid #e5e7eb;
+
+        .cell.black {
+            background: #2c3e50;
         }
-        
-        .cell-black {
-            background-color: #374151;
-            border: 1px solid #4b5563;
+
+        .cell.white {
+            background: #ecf0f1;
         }
-        
+
+        .cell.valid-move {
+            background: #27ae60 !important;
+            box-shadow: inset 0 0 20px rgba(39, 174, 96, 0.6);
+            animation: glow 1s infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: inset 0 0 20px rgba(39, 174, 96, 0.6); }
+            50% { box-shadow: inset 0 0 30px rgba(39, 174, 96, 0.9); }
+        }
+
+        .cell.selected {
+            background: #f39c12 !important;
+            box-shadow: inset 0 0 20px rgba(243, 156, 18, 0.8);
+        }
+
         .piece {
-            width: 50px;
-            height: 50px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: bold;
-            transition: all 0.3s ease;
+            border: 3px solid #2c3e50;
             cursor: pointer;
-            border: 3px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
         }
-        
-        .piece-black {
-            background: linear-gradient(135deg, #dc2626, #991b1b);
-            color: white;
+
+        .piece.red {
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
-        
-        .piece-white {
-            background: linear-gradient(135deg, #ffffff, #e5e7eb);
-            color: #374151;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            border: 3px solid #9ca3af;
+
+        .piece.white {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #bdc3c7);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
-        
-        .piece-king {
-            border: 3px solid #fbbf24;
-            box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+
+        .piece.king::after {
+            content: '♔';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #f39c12;
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
         }
-        
-        .piece-king-black {
-            border: 3px solid #f59e0b;
+
+        .piece:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
         }
-        
-        .piece-king-white {
-            border: 3px solid #fbbf24;
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
         }
-        
-        .selected {
-            transform: scale(1.1);
-            box-shadow: 0 0 25px rgba(59, 130, 246, 0.8);
-            border: 3px solid #3b82f6 !important;
+
+        .btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
-        
-        .valid-move {
-            background-color: rgba(34, 197, 94, 0.4) !important;
-            box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.8);
-            animation: valid-move-pulse 1s infinite ease-in-out;
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
-        
-        .current-turn-piece {
-            animation: piece-glow 2s infinite ease-in-out;
+
+        .btn:active {
+            transform: translateY(0);
         }
-        
-        .button-red {
-            background: linear-gradient(135deg, #dc2626, #991b1b);
+
+        .menu-screen {
+            text-align: center;
+            padding: 40px;
         }
-        
-        .button-red:hover {
-            background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+
+        .menu-screen h2 {
+            font-size: 2em;
+            margin-bottom: 30px;
         }
-        
-        @media (max-width: 640px) {
+
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .room-input {
+            padding: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .room-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .board.rotated {
+            transform: rotate(180deg);
+        }
+
+        .board.rotated .piece {
+            transform: rotate(180deg);
+        }
+
+        @media (max-width: 768px) {
+            .board {
+                grid-template-columns: repeat(8, 40px);
+                grid-template-rows: repeat(8, 40px);
+            }
+            
             .cell {
                 width: 40px;
                 height: 40px;
             }
             
             .piece {
-                width: 32px;
-                height: 32px;
+                width: 30px;
+                height: 30px;
+            }
+            
+            .piece.king::after {
                 font-size: 16px;
             }
         }
     </style>
 </head>
-
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-2 font-inter overflow-x-hidden">
-
-    <!-- Modal Mesaj Kutusu -->
-    <div id="message-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 text-white p-6 rounded-2xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-100">
-            <h3 class="text-xl font-bold mb-4 text-red-400">Bildiriş</h3>
-            <p id="modal-message" class="mb-6 text-gray-300"></p>
-            <button id="modal-close-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">
-                Bağla
-            </button>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>🎯 Amerikan Daması</h1>
         </div>
-    </div>
 
-    <!-- Loading Ekranı -->
-    <div id="loader" class="text-center p-8 bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full">
-        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mx-auto mb-4"></div>
-        <p class="text-lg font-semibold">Yuklenir...</p>
-    </div>
-
-    <!-- Ana Lobi Ekranı -->
-    <div id="main-lobby" class="hidden w-full max-w-md bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
-        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-8 text-red-400 animate-float">AMERIKAN DAMASI</h2>
-        
-        <div class="space-y-4">
-            <button id="dereceli-btn" class="w-full button-red text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl text-lg">
-                🏆 Dereceli Oyna
-            </button>
-            
-            <button id="friend-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl text-lg">
-                👥 Arkadaşla Oyna
-            </button>
+        <!-- Menü Ekranı -->
+        <div id="menuScreen" class="menu-screen">
+            <h2>Oyun Modu Seçin</h2>
+            <div class="menu-buttons">
+                <button class="btn" onclick="findMatch()">🔍 Rastgele Eşleşme</button>
+                <div>
+                    <input type="text" id="roomCodeInput" class="room-input" placeholder="Oda Kodu" maxlength="4">
+                    <button class="btn" onclick="joinRoom()">🏠 Odaya Katıl</button>
+                </div>
+                <button class="btn" onclick="createRoom()">➕ Yeni Oda Oluştur</button>
+            </div>
         </div>
-    </div>
 
-    <!-- Dereceli Arama Lobi -->
-    <div id="ranked-lobby" class="hidden w-full max-w-md bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
-        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-6 text-red-400 animate-float">🏆 Dereceli Eşleşme</h2>
-        <p id="ranked-status" class="text-center text-yellow-300 mb-8 font-semibold transition-all duration-300 text-lg">
-            Raqib axtarilir...
-        </p>
-        
-        <button id="cancel-ranked-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl">
-            ❌ İptal Et
-        </button>
-    </div>
+        <!-- Arama Ekranı -->
+        <div id="searchScreen" class="hidden">
+            <div class="status-message" id="searchStatus">Eşleşme aranıyor...</div>
+            <div class="controls">
+                <button class="btn" onclick="cancelSearch()">❌ İptal</button>
+            </div>
+        </div>
 
-    <!-- Arkadaş Lobi -->
-    <div id="friend-lobby" class="hidden w-full max-w-md bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
-        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-6 text-blue-400 animate-float">👥 Arkadaşla Oyna</h2>
-        
-        <div class="space-y-4">
-            <button id="create-room-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
-                🏠 Oda Yarat
-            </button>
-            
-            <div class="bg-gray-700 p-4 rounded-lg">
-                <div class="flex flex-col items-center space-y-2">
-                    <span class="text-sm font-semibold text-gray-300">Oda Kodu:</span>
-                    <span id="room-code-output" class="text-2xl font-mono text-green-400 bg-gray-900 px-4 py-2 rounded-lg shadow-inner select-all">...</span>
-                    <button id="copy-code-btn" class="bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-105">
-                        📋 Kopyala
-                    </button>
+        <!-- Oyun Ekranı -->
+        <div id="gameScreen" class="hidden">
+            <div class="game-info">
+                <div class="player-info">
+                    <div class="player-indicator red" id="redIndicator"></div>
+                    <span id="redPlayer">Kırmızı Oyuncu</span>
+                </div>
+                <div id="turnInfo">Sıra: Kırmızı</div>
+                <div class="player-info">
+                    <div class="player-indicator white" id="whiteIndicator"></div>
+                    <span id="whitePlayer">Beyaz Oyuncu</span>
                 </div>
             </div>
-            
-            <div class="bg-gray-700 p-4 rounded-lg space-y-3">
-                <input id="join-room-input" type="text" placeholder="Oda Kodu (4 Reqem)" maxlength="4" 
-                    class="w-full p-3 rounded-lg border-2 border-gray-600 bg-gray-900 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-center text-lg font-mono">
-                <button id="join-room-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
-                    🔗 Odaya Bağlan
-                </button>
+
+            <div class="board-container">
+                <div id="gameBoard" class="board"></div>
+            </div>
+
+            <div class="controls">
+                <button class="btn" onclick="leaveGame()">🚪 Oyundan Çık</button>
             </div>
         </div>
-        
-        <button id="back-to-main-btn" class="w-full mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200">
-            🔙 Ana Menü
-        </button>
     </div>
 
-    <!-- Oyun Ekranı -->
-    <div id="game-screen" class="hidden w-full flex flex-col items-center max-w-2xl">
-        
-        <!-- Növbə Göstəricisi -->
-        <div id="current-turn-display" class="w-full max-w-md mb-4 p-4 rounded-xl bg-gray-800 shadow-xl text-center">
-            <p class="text-lg sm:text-xl font-bold">Sıra: <span id="turn-text" class="text-yellow-400">Yuklenir...</span></p>
-        </div>
-        
-        <!-- Oyun Tahtası -->
-        <div id="board" class="grid grid-cols-8 gap-0 border-4 border-gray-700 rounded-lg overflow-hidden shadow-2xl bg-white">
-            <!-- Tahta hücreləri JavaScript ilə dinamik olaraq yaradılacaq -->
-        </div>
-        
-        <!-- Oyun Kontrolleri -->
-        <div class="mt-6 w-full max-w-md flex flex-col sm:flex-row gap-3">
-            <button id="leave-game-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
-                🚪 Oyundan Çıx
-            </button>
-        </div>
-    </div>
-
-    <!-- Bağlantı Statusu -->
-    <div class="fixed top-4 right-4 bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
-        <p id="connection-status" class="text-sm font-semibold">Serverə qoşulur...</p>
-    </div>
-
+    <script src="/socket.io/socket.io.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
