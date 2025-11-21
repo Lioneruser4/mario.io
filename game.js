@@ -1,400 +1,353 @@
-// game.js - Şaşki Online - Tam Profesyonel Türk Daması (2025)
-const socket = io("https://mario-io-1.onrender.com", { transports: ["websocket"] });
+// WebSocket bağlantısı
+const socket = io('https://mario-io-1.onrender.com');
 
-let board = null;
-let selectedPiece = null;
-let validMoves = [];
-let currentTurn = 'black';
-let myColor = null;
-let roomId = null;
-let isMyTurn = false;
-let timerInterval = null;
-let timeLeft = 30;
+// Oyun durumu
+let gameState = {
+    board: [],
+    currentPlayer: 'white',
+    selectedPiece: null,
+    playerColor: null,
+    roomCode: null,
+    gameStarted: false
+};
 
-const boardEl = document.getElementById('board');
-const lobbyScreen = document.getElementById('lobby');
-const gameScreen = document.getElementById('gameScreen');
-const statusEl = document.getElementById('connectionStatus');
-const playerLight = document.getElementById('playerLight');
-const opponentLight = document.getElementById('opponentLight');
-const timerEl = document.getElementById('gameTimer');
-const resultOverlay = document.getElementById('gameResult');
-const resultText = document.getElementById('resultText');
-
-// Sesler
-const moveSound = document.getElementById('moveSound');
-const captureSound = document.getElementById('captureSound');
-const winSound = document.getElementById('winSound');
-
-// === BAĞLANTI DURUMU ===
+// Socket bağlantı durumu
 socket.on('connect', () => {
-  statusEl.textContent = "Bağlandı! Hazır.";
-  statusEl.style.color = "#00ff00";
+    document.getElementById('connectionStatus').className = 'connection-status connected';
+    document.getElementById('connectionStatus').textContent = '✅ Sunucuya bağlandı';
 });
 
 socket.on('disconnect', () => {
-  status sloppyEl.textContent = "Bağlantı koptu... Yeniden bağlanıyor.";
-  statusEl.style.color = "#ff0000";
+    document.getElementById('connectionStatus').className = 'connection-status disconnected';
+    document.getElementById('connectionStatus').textContent = '❌ Sunucu bağlantısı kesildi';
 });
 
-socket.on('connect_error', () => {
-  statusEl.textContent = "Sunucuya bağlanılamıyor...";
-  statusEl.style.color = "#ff0066";
-});
-
-// === LOBİ BUTONLARI ===
-document.getElementById('rankedBtn').onclick = () => {
-  socket.emit('ranked');
-  showSearching();
-};
-
-document.getElementById('createRoomBtn').onclick = () => {
-  socket.emit('create_room');
-};
-
-document.getElementById('joinBtn').onclick = () => {
-  const code = document.getElementById('roomInput').value.trim();
-  if (code.length === 4 && /^\d{4}$/.test(code)) {
-    socket.emit('join_room', code);
-  } else {
-    alert("Lütfen 4 haneli oda kodunu gir!");
-  }
-};
-
-document.getElementById('copyBtn').onclick = () => {
-  navigator.clipboard.writeText(document.getElementById('roomCode').textContent);
-  const btn = document.getElementById('copyBtn');
-  btn.textContent = "Kopyalandı!";
-  setTimeout(() => btn.textContent = "Kopyala", 1500);
-};
-
-document.getElementById('leaveRoomBtn').onclick = leaveRoom;
-document.getElementById('cancelSearchBtn').onclick = () => {
-  socket.emit('cancel_search');
-  hideSearching();
-  statusEl.textContent = "Eşleşme iptal edildi.";
-};
-
-// === SOKET OLAYLARI ===
-socket.on('room_created', (code) => {
-  roomId = code;
-  document.getElementById('roomCode').textContent = code;
-  document.getElementById('roomPanel').classList.remove('hidden');
-  statusEl.textContent = `Oda oluşturuldu: ${code}`;
-});
-
-socket.on('match_found', (data) => {
-  roomId = data.roomId;
-  myColor = data.color;
-  hideSearching();
-  startGame(data.board || createInitialBoard(), 'black');
-});
-
-socket.on('start_game', (data) => {
-  roomId = data.roomId || roomId;
-  myColor = data.yourColor || (data.players.indexOf(socket.id) === 0 ? 'black' : 'white');
-  hideRoomPanel();
-  startGame(data.board, data.turn || 'black');
-});
-
-socket.on('error', (msg) => {
-  alert(msg);
-  hideSearching();
-});
-
-socket.on('move', (data) => {
-  applyMove(data.from, data.to, data.captured);
-  if (data.captured) captureSound.play();
-  else moveSound.play();
-});
-
-socket.on('game_over', (winner) => {
-  endGame(winner === myColor ? "Kazandın!" : "Kaybettin!");
-  winSound.play();
-});
-
-// === OYUN BAŞLAT ===
-function startGame(initialBoard, turn) {
-  board = JSON.parse(JSON.stringify(initialBoard));
-  currentTurn = turn;
-  lobbyScreen.classList.remove('active');
-  gameScreen.classList.add('active');
-  renderBoard();
-  updateTurnLights();
-  startTimer();
-}
-
-// === TAHTA OLUŞTUR ===
-function createInitialBoard() {
-  const b = Array(8).fill().map(() => Array(8).fill(null));
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      if ((row + col) % 2 === 1) {
-        if (row < 3) b[row][col] = { color: 'white', king: false };
-        if (row > 4) b[row][col] = { color: 'black', king: false };
-      }
+// Tahta başlatma
+function initBoard() {
+    const board = [];
+    for (let row = 0; row < 8; row++) {
+        board[row] = [];
+        for (let col = 0; col < 8; col++) {
+            if ((row + col) % 2 === 1) {
+                if (row < 3) {
+                    board[row][col] = { color: 'black', king: false };
+                } else if (row > 4) {
+                    board[row][col] = { color: 'white', king: false };
+                } else {
+                    board[row][col] = null;
+                }
+            } else {
+                board[row][col] = null;
+            }
+        }
     }
-  }
-  return b;
+    return board;
 }
 
+// Tahtayı render et
 function renderBoard() {
-  boardEl.innerHTML = '';
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-      if ((row + col) % 2 === 1) cell.classList.add('black');
-      
-      const piece = board[row][col];
-      if (piece) {
-        const p = document.createElement('div');
-        p.className = `piece ${piece.color}`;
-        if (piece.king) p.classList.add('king');
-        p.dataset.row = row;
-        p.dataset.col = col;
-        p.onclick = () => selectPiece(row, col);
-        cell.appendChild(p);
-      }
-      
-      cell.dataset.row = row;
-      cell.dataset.col = col;
-      cell.onclick = () => tryMove(row, col);
-      boardEl.appendChild(cell);
+    const boardElement = document.getElementById('board');
+    boardElement.innerHTML = '';
+    
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const square = document.createElement('div');
+            square.className = 'square ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+            square.dataset.row = row;
+            square.dataset.col = col;
+            
+            const piece = gameState.board[row][col];
+            if (piece) {
+                const pieceElement = document.createElement('div');
+                pieceElement.className = 'piece ' + piece.color;
+                if (piece.king) {
+                    pieceElement.classList.add('king');
+                }
+                square.appendChild(pieceElement);
+            }
+            
+            square.addEventListener('click', () => handleSquareClick(row, col));
+            boardElement.appendChild(square);
+        }
     }
-  }
-  highlightValidMoves();
+    
+    updatePlayerHighlight();
 }
 
-// === TAŞ SEÇİM VE HAREKET ===
+// Kare tıklama işlemi
+function handleSquareClick(row, col) {
+    if (!gameState.gameStarted || gameState.currentPlayer !== gameState.playerColor) {
+        return;
+    }
+    
+    const piece = gameState.board[row][col];
+    
+    // Taş seçme
+    if (piece && piece.color === gameState.playerColor) {
+        selectPiece(row, col);
+    }
+    // Hamle yapma
+    else if (gameState.selectedPiece) {
+        const validMoves = getValidMoves(gameState.selectedPiece.row, gameState.selectedPiece.col);
+        const move = validMoves.find(m => m.row === row && m.col === col);
+        
+        if (move) {
+            makeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col, move.capture);
+        }
+    }
+}
+
+// Taş seçme
 function selectPiece(row, col) {
-  if (!isMyTurn) return;
-  const piece = board[row][col];
-  if (!piece || piece.color !== myColor) return;
-
-  selectedPiece = { row, col };
-  validMoves = calculateValidMoves(row, col);
-  highlightValidMoves();
-}
-
-function tryMove(row, col) {
-  if (!selectedPiece) return;
-
-  const move = validMoves.find(m => m.to.row === row && m.to.col === col);
-  if (!move) {
-    selectedPiece = null;
-    validMoves = [];
+    gameState.selectedPiece = { row, col };
     renderBoard();
-    return;
-  }
-
-  socket.emit('move', {
-    roomId,
-    from: selectedPiece,
-    to: { row, col },
-    captured: move.captured
-  });
-
-  applyMove(selectedPiece, { row, col }, move.captured);
-  if (move.captured) captureSound.play();
-  else moveSound.play();
-
-  selectedPiece = null;
-  validMoves = [];
-  renderBoard();
-}
-
-function applyMove(from, to, captured) {
-  const piece = board[from.row][from.col];
-  board[to.row][to.col] = piece;
-  board[from.row][from.col] = null;
-
-  if (captured) {
-    board[captured.row][captured.col] = null;
-  }
-
-  // Dama olma
-  if ((to.row === 0 && piece.color === 'black') || (to.row === 7 && piece.color === 'white')) {
-    piece.king = true;
-  }
-
-  currentTurn = currentTurn === 'black' ? 'white' : 'black';
-  updateTurnLights();
-  resetTimer();
-  renderBoard();
-
-  // Çoklu yeme kontrolü
-  if (captured && canContinueCapture(to.row, to.col)) {
-    // Aynı oyuncu devam eder
-  } else {
-    checkWin();
-  }
-}
-
-function canContinueCapture(row, col) {
-  const moves = calculateValidMoves(row, col);
-  return moves.some(m => m.captured);
-}
-
-// === GEÇERLİ HAMLELER (TÜRK DAMASI KURALLARI) ===
-function calculateValidMoves(row, col) {
-  const piece = board[row][col];
-  if (!piece || piece.color !== currentTurn) return [];
-
-  const moves = [];
-  const directions = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (piece.color === 'black' ? [[1,-1],[1,1]] : [[-1,-1],[-1,1]]);
-
-  let hasCapture = false;
-
-  // Önce zorunlu yeme var mı kontrol et
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      if (board[r][c] && board[r][c].color === currentTurn) {
-        if (hasCaptureMove(r, c)) hasCapture = true;
-      }
-    }
-  }
-
-  for (const [dr, dc] of directions) {
-    const nr = row + dr;
-    const nc = col + dc;
-
-    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-      if (!board[nr][nc]) {
-        if (!hasCapture) {
-          moves.push({ to: { row: nr, col: nc }, captured: null });
+    
+    // Seçili kareyi vurgula
+    const squares = document.querySelectorAll('.square');
+    squares.forEach(square => {
+        if (parseInt(square.dataset.row) === row && parseInt(square.dataset.col) === col) {
+            square.classList.add('selected');
         }
-      } else if (board[nr][nc].color !== currentTurn) {
-        const jumpR = nr + dr;
-        const jumpC = nc + dc;
-        if (jumpR >= 0 && jumpR < 8 && jumpC >= 0 && jumpC < 8 && !board[jumpR][jumpC]) {
-          moves.push({ to: { row: jumpR, col: jumpC }, captured: { row: nr, col: nc } });
+    });
+    
+    // Geçerli hamleleri göster
+    const validMoves = getValidMoves(row, col);
+    validMoves.forEach(move => {
+        squares.forEach(square => {
+            if (parseInt(square.dataset.row) === move.row && parseInt(square.dataset.col) === move.col) {
+                square.classList.add('valid-move');
+            }
+        });
+    });
+}
+
+// Geçerli hamleleri bul
+function getValidMoves(row, col) {
+    const moves = [];
+    const piece = gameState.board[row][col];
+    if (!piece) return moves;
+    
+    const directions = piece.king ? 
+        [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
+        piece.color === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+    
+    // Normal hamleler
+    directions.forEach(([dRow, dCol]) => {
+        const newRow = row + dRow;
+        const newCol = col + dCol;
+        
+        if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+            if (!gameState.board[newRow][newCol]) {
+                moves.push({ row: newRow, col: newCol, capture: null });
+            }
+            // Yeme hamlesi
+            else if (gameState.board[newRow][newCol].color !== piece.color) {
+                const jumpRow = newRow + dRow;
+                const jumpCol = newCol + dCol;
+                
+                if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
+                    if (!gameState.board[jumpRow][jumpCol]) {
+                        moves.push({ 
+                            row: jumpRow, 
+                            col: jumpCol, 
+                            capture: { row: newRow, col: newCol }
+                        });
+                    }
+                }
+            }
         }
-      }
+    });
+    
+    return moves;
+}
+
+// Hamle yap
+function makeMove(fromRow, fromCol, toRow, toCol, capture) {
+    const piece = gameState.board[fromRow][fromCol];
+    
+    // Taşı taşı
+    gameState.board[toRow][toCol] = piece;
+    gameState.board[fromRow][fromCol] = null;
+    
+    // Yeme varsa taşı kaldır
+    if (capture) {
+        gameState.board[capture.row][capture.col] = null;
     }
-  }
-
-  if (hasCapture) {
-    return moves.filter(m => m.captured);
-  }
-  return moves;
-}
-
-function hasCaptureMove(row, col) {
-  const piece = board[row][col];
-  if (!piece) return false;
-  const directions = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (piece.color === 'black' ? [[1,-1],[1,1]] : [[-1,-1],[-1,1]]);
-  
-  for (const [dr, dc] of directions) {
-    const nr = row + dr;
-    const nc = col + dc;
-    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] && board[nr][nc].color !== piece.color) {
-      const jr = nr + dr;
-      const jc = nc + dc;
-      if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && !board[jr][jc]) return true;
+    
+    // Dama yap
+    if ((piece.color === 'white' && toRow === 0) || (piece.color === 'black' && toRow === 7)) {
+        piece.king = true;
     }
-  }
-  return false;
+    
+    // Hamleyi sunucuya gönder
+    socket.emit('makeMove', {
+        roomCode: gameState.roomCode,
+        from: { row: fromRow, col: fromCol },
+        to: { row: toRow, col: toCol },
+        board: gameState.board,
+        capture: capture
+    });
+    
+    gameState.selectedPiece = null;
+    gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+    renderBoard();
 }
 
-function highlightValidMoves() {
-  if (!selectedPiece) return;
-  document.querySelectorAll('.cell').forEach(cell => {
-    cell.classList.remove('valid', 'capture');
-  });
-
-  validMoves.forEach(move => {
-    const cell = document.querySelector(`.cell[data-row="${move.to.row}"][data-col="${move.to.col}"]`);
-    if (cell) {
-      cell.classList.add(move.captured ? 'capture' : 'valid');
+// Oyuncu vurgusunu güncelle
+function updatePlayerHighlight() {
+    const player1Info = document.getElementById('player1Info');
+    const player2Info = document.getElementById('player2Info');
+    
+    player1Info.classList.remove('active');
+    player2Info.classList.remove('active');
+    
+    if (gameState.currentPlayer === 'white') {
+        player1Info.classList.add('active');
+    } else {
+        player2Info.classList.add('active');
     }
-  });
 }
 
-// === TUR VE TIMER ===
-function updateTurnLights() {
-  isMyTurn = currentTurn === myColor;
-  playerLight.classList.toggle('active', isMyTurn);
-  opponentLight.classList.toggle('active', !isMyTurn);
+// Dereceli oyun başlat
+function startRankedGame() {
+    socket.emit('findMatch');
+    document.getElementById('rankedModal').style.display = 'block';
 }
 
-function startTimer() {
-  clearInterval(timerInterval);
-  timeLeft = 30;
-  timerEl.textContent = timeLeft;
-  timerInterval = setInterval(() => {
-    timeLeft--;
-    timerEl.textContent = timeLeft;
-    if (timeLeft <= 0 && isMyTurn) {
-      socket.emit('timeout', roomId);
-      endGame("Zaman doldu! Kaybettin.");
+// Arama iptal
+function cancelSearch() {
+    socket.emit('cancelSearch');
+    document.getElementById('rankedModal').style.display = 'none';
+}
+
+// Özel oda oluştur
+function createPrivateRoom() {
+    socket.emit('createRoom');
+}
+
+// Özel oda modalını kapat
+function closePrivateModal() {
+    socket.emit('leaveRoom', gameState.roomCode);
+    document.getElementById('privateModal').style.display = 'none';
+}
+
+// Oda kodunu kopyala
+function copyRoomCode() {
+    const roomCode = document.getElementById('roomCode').textContent;
+    navigator.clipboard.writeText(roomCode).then(() => {
+        alert('Oda kodu kopyalandı: ' + roomCode);
+    });
+}
+
+// Katılma modalını göster
+function showJoinModal() {
+    document.getElementById('joinModal').style.display = 'block';
+}
+
+// Katılma modalını kapat
+function closeJoinModal() {
+    document.getElementById('joinModal').style.display = 'none';
+    document.getElementById('joinRoomCode').value = '';
+}
+
+// Odaya katıl
+function joinRoom() {
+    const roomCode = document.getElementById('joinRoomCode').value.trim();
+    if (roomCode.length === 4) {
+        socket.emit('joinRoom', roomCode);
+    } else {
+        alert('Lütfen 4 haneli oda kodunu girin!');
     }
-  }, 1000);
 }
 
-function resetTimer() {
-  clearInterval(timerInterval);
-  startTimer();
-}
-
-// === KAZANMA KONTROLÜ ===
-function checkWin() {
-  let blackPieces = 0, whitePieces = 0;
-  let blackCanMove = false, whiteCanMove = false;
-
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (p) {
-        if (p.color === 'black') {
-          blackPieces++;
-          if (calculateValidMoves(r, c).length > 0) blackCanMove = true;
-        } else {
-          whitePieces++;
-          if (calculateValidMoves(r, c).length > 0) whiteCanMove = true;
-        }
-      }
+// Oyundan çık
+function leaveGame() {
+    if (confirm('Oyundan çıkmak istediğinize emin misiniz?')) {
+        socket.emit('leaveGame', gameState.roomCode);
+        gameState = {
+            board: [],
+            currentPlayer: 'white',
+            selectedPiece: null,
+            playerColor: null,
+            roomCode: null,
+            gameStarted: false
+        };
+        document.getElementById('game').style.display = 'none';
+        document.getElementById('lobby').style.display = 'block';
     }
-  }
-
-  if (blackPieces === 0 || !blackCanMove) {
-    socket.emit('game_over', { roomId, winner: 'white' });
-  } else if (whitePieces === 0 || !whiteCanMove) {
-    socket.emit('game_over', { roomId, winner: 'black' });
-  }
 }
 
-function endGame(message) {
-  clearInterval(timerInterval);
-  resultText.textContent = message;
-  resultOverlay.classList.remove('hidden');
-}
+// Socket olayları
+socket.on('roomCreated', (data) => {
+    gameState.roomCode = data.roomCode;
+    document.getElementById('roomCode').textContent = data.roomCode;
+    document.getElementById('privateModal').style.display = 'block';
+});
 
-// === YARDIMCI FONKSİYONLAR ===
-function showSearching() {
-  document.getElementById('searchPanel').classList.remove('hidden');
-}
-function hideSearching() {
-  document.getElementById('searchPanel').classList.add('hidden');
-}
-function hideRoomPanel() {
-  document.getElementById('roomPanel').classList.add('hidden');
-}
-function leaveRoom() {
-  socket.emit('leave_room', roomId);
-  location.reload();
-}
+socket.on('matchFound', (data) => {
+    document.getElementById('rankedModal').style.display = 'none';
+    startGame(data);
+});
 
-// Pes Et Butonu
-document.getElementById('resignBtn').onclick = () => {
-  if (confirm("Pes etmek istediğine emin misin?")) {
-    socket.emit('resign', roomId);
-    endGame("Pes ettin. Kaybettin.");
-  }
-};
+socket.on('roomJoined', (data) => {
+    document.getElementById('joinModal').style.display = 'none';
+    document.getElementById('privateModal').style.display = 'none';
+    startGame(data);
+});
 
-// Lobiye Dön
-document.getElementById('backToLobby').onclick = () => location.reload();
+socket.on('gameStart', (data) => {
+    gameState.board = data.board;
+    gameState.currentPlayer = data.currentPlayer;
+    gameState.playerColor = data.playerColor;
+    gameState.gameStarted = true;
+    renderBoard();
+});
 
-// Başlat
-renderBoard();
+socket.on('moveMade', (data) => {
+    gameState.board = data.board;
+    gameState.currentPlayer = data.currentPlayer;
+    renderBoard();
+});
+
+socket.on('gameOver', (data) => {
+    alert(`Oyun Bitti! Kazanan: ${data.winner === gameState.playerColor ? 'SİZ' : 'Rakip'}`);
+    leaveGame();
+});
+
+socket.on('opponentLeft', () => {
+    alert('Rakibiniz oyundan ayrıldı!');
+    leaveGame();
+});
+
+socket.on('error', (data) => {
+    alert('Hata: ' + data.message);
+});
+
+// Oyunu başlat
+function startGame(data) {
+    gameState.roomCode = data.roomCode;
+    gameState.playerColor = data.playerColor;
+    gameState.board = initBoard();
+    gameState.currentPlayer = 'white';
+    gameState.gameStarted = true;
+    
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    
+    // Oyuncu bilgilerini güncelle
+    if (gameState.playerColor === 'white') {
+        document.getElementById('player1Info').querySelector('.player-name').textContent = 'Sen';
+        document.getElementById('player2Info').querySelector('.player-name').textContent = 'Rakip';
+    } else {
+        document.getElementById('player1Info').querySelector('.player-name').textContent = 'Rakip';
+        document.getElementById('player2Info').querySelector('.player-name').textContent = 'Sen';
+    }
+    
+    renderBoard();
+    
+    // İlk oyun durumunu sunucuya gönder
+    socket.emit('gameReady', {
+        roomCode: gameState.roomCode,
+        board: gameState.board
+    });
+}
