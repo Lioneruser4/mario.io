@@ -1,641 +1,248 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="az">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ Mario IO Online Checkers ⚡</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <title>Amerikan Damasi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
-        /* === Genel Stil ve Animasyon Temelleri === */
-        :root {
-            --primary-color: #4CAF50; /* Yeşil */
-            --secondary-color: #FF9800; /* Turuncu */
-            --light-bg: #f5f5f5;
-            --dark-bg: #2c3e50;
-            --tile-dark: #3a1f1f;
-            --tile-light: #fce4b3;
-            --piece-red: #d32f2f;
-            --piece-black: #1a1a1a;
-            --highlight-move: #81c784; /* Açık yeşil */
-            --highlight-turn: #ffff00; /* Sarı */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
         }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
+        
+        @keyframes piece-glow {
+            0%, 100% { 
+                box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 25px rgba(255, 255, 255, 0.8);
+                transform: scale(1.05);
+            }
+        }
+        
+        @keyframes valid-move-pulse {
+            0%, 100% { 
+                background-color: rgba(34, 197, 94, 0.4);
+                transform: scale(1);
+            }
+            50% { 
+                background-color: rgba(34, 197, 94, 0.6);
+                transform: scale(1.02);
+            }
+        }
+        
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .cell {
+            width: 60px;
+            height: 60px;
             display: flex;
-            justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, var(--dark-bg), #1a252f);
-            color: var(--light-bg);
-            overflow: hidden; /* Animasyonlar için */
-        }
-
-        .container {
-            width: 90%;
-            max-width: 1000px;
-            text-align: center;
-            padding: 20px;
-            background: rgba(44, 62, 80, 0.85); /* Hafif şeffaf koyu zemin */
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            transition: all 0.5s ease-in-out;
-            border: 3px solid var(--primary-color);
-        }
-
-        /* Başlık Işıklı Animasyon */
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            text-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color);
-            animation: pulse-title 2s infinite alternate;
-        }
-        @keyframes pulse-title {
-            from { text-shadow: 0 0 5px var(--primary-color); }
-            to { text-shadow: 0 0 15px var(--primary-color), 0 0 30px var(--primary-color); }
-        }
-
-        /* Sunucu Bildirim Alanı */
-        #server-status {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        .status-connecting { background-color: var(--secondary-color); }
-        .status-connected { background-color: var(--primary-color); }
-        .status-disconnected { background-color: #e74c3c; }
-
-        /* Lobi Butonları (Animasyonlu ve Işıklı) */
-        .lobby-buttons button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            margin: 10px;
-            border-radius: 8px;
+            justify-content: center;
             cursor: pointer;
-            font-size: 1.1em;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .cell-white {
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .cell-black {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+        }
+        
+        .piece {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
             font-weight: bold;
             transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .lobby-buttons button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 15px var(--primary-color);
-        }
-
-        /* Buton "Parlaklık" Animasyonu */
-        .lobby-buttons button::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.15);
-            transition: all 0.5s;
-            transform: skewX(-20deg);
-        }
-        .lobby-buttons button:hover::after {
-            left: 100%;
-        }
-
-        /* Arkadaşla Oyna / Oda Girişi */
-        #friend-join-section {
-            margin-top: 20px;
-            padding: 15px;
-            border: 1px dashed var(--secondary-color);
-            border-radius: 8px;
-            display: none; /* Varsayılan olarak gizli */
-            background: rgba(255, 152, 0, 0.1);
-        }
-
-        #room-code-display, #room-input {
-            margin-bottom: 10px;
-        }
-
-        #room-input input {
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid var(--secondary-color);
-            background: #34495e;
-            color: white;
-            margin-right: 10px;
-        }
-
-        #copy-room-btn {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
             cursor: pointer;
+            border: 3px solid transparent;
         }
-
-        /* === Oyun Alanı Stilleri === */
-        #game-board-container {
-            display: none; /* Varsayılan olarak gizli */
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        #checkers-board {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            grid-template-rows: repeat(8, 1fr);
-            width: 400px;
-            height: 400px;
-            border: 5px solid #a0522d;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
-        }
-
-        .tile {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-        }
-
-        .tile:nth-child(odd) {
-            background-color: var(--tile-light);
-        }
-
-        .tile:nth-child(even) {
-            background-color: var(--tile-dark);
-        }
-
-        /* Satır çift, Sütun tek ise Koyu; Satır tek, Sütun çift ise Koyu. */
-        .row:nth-child(odd) .tile:nth-child(even),
-        .row:nth-child(even) .tile:nth-child(odd) {
-            background-color: var(--tile-dark);
-        }
-        /* Ters durumlar (oyun taşlarının konduğu kareler) */
-        .row:nth-child(odd) .tile:nth-child(odd),
-        .row:nth-child(even) .tile:nth-child(even) {
-             background-color: var(--tile-light);
-        }
-
-        /* Taşların Stili */
-        .piece {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-            transition: transform 0.2s ease-out;
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .piece-red {
-            background-color: var(--piece-red);
-            border: 3px solid #b71c1c;
-        }
-
+        
         .piece-black {
-            background-color: var(--piece-black);
-            border: 3px solid #000000;
+            background: linear-gradient(135deg, #dc2626, #991b1b);
+            color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
-
-        .piece.king::before {
-            content: '★'; /* Kral sembolü */
-            position: absolute;
-            font-size: 1.2em;
-            color: gold;
-            text-shadow: 0 0 5px #000;
+        
+        .piece-white {
+            background: linear-gradient(135deg, #ffffff, #e5e7eb);
+            color: #374151;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border: 3px solid #9ca3af;
         }
-
-        /* Oynanabilir Kare Vurgusu */
-        .possible-move {
-            background-color: var(--highlight-move) !important;
-            animation: blink-highlight 1s infinite alternate;
+        
+        .piece-king {
+            border: 3px solid #fbbf24;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
         }
-        @keyframes blink-highlight {
-            from { opacity: 0.8; }
-            to { opacity: 1; }
+        
+        .piece-king-black {
+            border: 3px solid #f59e0b;
         }
-
-        /* Sıra Kimdeyse O Tarafın Işıklı Olması */
-        .player-info {
-            padding: 10px;
-            margin: 10px;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: box-shadow 0.5s ease;
+        
+        .piece-king-white {
+            border: 3px solid #fbbf24;
         }
-
-        .turn-active {
-            box-shadow: 0 0 15px var(--highlight-turn), 0 0 20px var(--highlight-turn);
-            background-color: rgba(255, 255, 0, 0.1);
+        
+        .selected {
+            transform: scale(1.1);
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.8);
+            border: 3px solid #3b82f6 !important;
         }
-
-        /* Eşleşme Aranıyor Animasyonu */
-        #matchmaking-info {
-            display: none;
-            padding: 20px;
-            margin-top: 20px;
-            border-radius: 10px;
-            background: rgba(255, 152, 0, 0.2);
-            color: var(--secondary-color);
+        
+        .valid-move {
+            background-color: rgba(34, 197, 94, 0.4) !important;
+            box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.8);
+            animation: valid-move-pulse 1s infinite ease-in-out;
         }
-        .dot-pulse {
-            display: inline-block;
+        
+        .current-turn-piece {
+            animation: piece-glow 2s infinite ease-in-out;
         }
-        .dot-pulse::after {
-            content: '...';
-            display: inline-block;
-            overflow: hidden;
-            vertical-align: bottom;
-            animation: dot-loading 1.5s step-end infinite;
+        
+        .button-red {
+            background: linear-gradient(135deg, #dc2626, #991b1b);
         }
-        @keyframes dot-loading {
-            0% { content: '.'; }
-            33% { content: '..'; }
-            66% { content: '...'; }
+        
+        .button-red:hover {
+            background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+        }
+        
+        @media (max-width: 640px) {
+            .cell {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .piece {
+                width: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
         }
     </style>
 </head>
-<body>
 
-    <div class="container">
-        <h1>🌟 Amerikan Daması Online 🌟</h1>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-2 font-inter overflow-x-hidden">
 
-        <div id="server-status" class="status-connecting">Sunucuya bağlanılıyor... ($https://mario-io-1.onrender.com$)</div>
-
-        <div id="lobby-screen">
-            <h2>Hemen Oyna!</h2>
-            <div class="lobby-buttons">
-                <button id="rated-match-btn">🏆 Dereceli Eşleşme (Çevrim İçi Kim)</button>
-                <button id="friend-game-btn">🤝 Arkadaşla Oyna</button>
-            </div>
-
-            <div id="matchmaking-info">
-                Eşleşme Aranıyor <span class="dot-pulse"></span>
-                <button id="cancel-match-btn" style="margin-left: 20px; background-color: #c0392b;">İptal</button>
-            </div>
-
-            <div id="friend-join-section">
-                <div id="room-code-display" style="display: none;">
-                    Oda Kodun: <span id="room-code" style="font-size: 1.2em; color: var(--highlight-turn);"></span>
-                    <button id="copy-room-btn">Kopyala</button>
-                </div>
-                <div id="room-input">
-                    <input type="text" id="join-room-code" placeholder="4 Rakamlı Oda Kodu" maxlength="4">
-                    <button id="join-room-btn">Odaya Bağlan</button>
-                </div>
-            </div>
+    <!-- Modal Mesaj Kutusu -->
+    <div id="message-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 text-white p-6 rounded-2xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-100">
+            <h3 class="text-xl font-bold mb-4 text-red-400">Bildiriş</h3>
+            <p id="modal-message" class="mb-6 text-gray-300"></p>
+            <button id="modal-close-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">
+                Bağla
+            </button>
         </div>
-
-        <div id="game-screen" style="display: none;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-                <div id="player-top-info" class="player-info">Siyah Oyuncu (Rakip)</div>
-                <div id="player-bottom-info" class="player-info">Kırmızı Oyuncu (Sen)</div>
-            </div>
-
-            <div id="game-board-container">
-                <div id="checkers-board">
-                    </div>
-            </div>
-
-            <h3 id="game-message" style="margin-top: 20px;">Sıra: Kırmızı Oyuncuda</h3>
-        </div>
-
     </div>
 
-    <script>
-        // Sunucu Adresi
-        const SERVER_URL = "https://mario-io-1.onrender.com";
+    <!-- Loading Ekranı -->
+    <div id="loader" class="text-center p-8 bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500 mx-auto mb-4"></div>
+        <p class="text-lg font-semibold">Yuklenir...</p>
+    </div>
 
-        // DOM Elementleri
-        const serverStatusEl = document.getElementById('server-status');
-        const lobbyScreenEl = document.getElementById('lobby-screen');
-        const gameScreenEl = document.getElementById('game-screen');
-        const ratedMatchBtn = document.getElementById('rated-match-btn');
-        const friendGameBtn = document.getElementById('friend-game-btn');
-        const cancelMatchBtn = document.getElementById('cancel-match-btn');
-        const matchmakingInfoEl = document.getElementById('matchmaking-info');
-        const friendJoinSectionEl = document.getElementById('friend-join-section');
-        const roomCodeDisplayEl = document.getElementById('room-code-display');
-        const roomCodeEl = document.getElementById('room-code');
-        const copyRoomBtn = document.getElementById('copy-room-btn');
-        const joinRoomInput = document.getElementById('join-room-code');
-        const joinRoomBtn = document.getElementById('join-room-btn');
-        const boardEl = document.getElementById('checkers-board');
-        const gameMessageEl = document.getElementById('game-message');
-        const playerTopInfoEl = document.getElementById('player-top-info');
-        const playerBottomInfoEl = document.getElementById('player-bottom-info');
-
-        // Global Oyun Durumu
-        let socket;
-        let myColor = null; // 'red' veya 'black'
-        let currentTurn = 'red';
-        let selectedPiece = null; // Seçilen taşın koordinatları
-
-        // ==========================================================
-        // === 1. SUNUCU BAĞLANTISI ve LOBİ MANTIĞI ===
-        // ==========================================================
-
-        function connectToServer() {
-            serverStatusEl.className = 'status-connecting';
-            serverStatusEl.textContent = `Sunucuya bağlanılıyor... (${SERVER_URL})`;
-
-            socket = io(SERVER_URL);
-
-            socket.on('connect', () => {
-                serverStatusEl.className = 'status-connected';
-                serverStatusEl.textContent = '✅ Sunucuya başarıyla bağlandı! Oyun lobisi hazır.';
-            });
-
-            socket.on('disconnect', () => {
-                serverStatusEl.className = 'status-disconnected';
-                serverStatusEl.textContent = '❌ Sunucu bağlantısı kesildi. Yeniden bağlanılıyor...';
-                // Oyun sırasında bağlantı kesilirse kullanıcıya bildirim göster
-            });
-
-            // Sunucudan Eşleşme Bulundu/Oda Kuruldu yanıtları
-            socket.on('matchFound', (data) => {
-                startGame(data.color, data.opponentName);
-            });
-
-            socket.on('roomCreated', (roomCode) => {
-                roomCodeEl.textContent = roomCode;
-                roomCodeDisplayEl.style.display = 'block';
-                // Kullanıcıya bildir
-                alert(`Oda ${roomCode} kodu ile kuruldu. Kodu arkadaşınla paylaş.`);
-            });
-
-            socket.on('gameStart', (data) => {
-                 startGame(data.color, data.opponentName);
-            });
-            
-            socket.on('roomNotFound', () => {
-                alert('Belirtilen oda kodu bulunamadı veya doludur.');
-            });
-
-             socket.on('gameUpdate', (data) => {
-                updateGameState(data.board, data.turn, data.lastMove);
-            });
-        }
-
-        // Lobi Buton İşlevleri
-        ratedMatchBtn.onclick = () => {
-            if (!socket || !socket.connected) {
-                alert("Önce sunucuya bağlanın.");
-                return;
-            }
-            // Eşleşme arama başlat
-            matchmakingInfoEl.style.display = 'block';
-            lobbyScreenEl.querySelectorAll('.lobby-buttons button').forEach(b => b.disabled = true);
-            socket.emit('startMatchmaking');
-        };
-
-        cancelMatchBtn.onclick = () => {
-            matchmakingInfoEl.style.display = 'none';
-            lobbyScreenEl.querySelectorAll('.lobby-buttons button').forEach(b => b.disabled = false);
-            socket.emit('cancelMatchmaking');
-        };
-
-        friendGameBtn.onclick = () => {
-            if (friendJoinSectionEl.style.display === 'block') {
-                friendJoinSectionEl.style.display = 'none';
-            } else {
-                friendJoinSectionEl.style.display = 'block';
-                // Oda kurma isteği
-                socket.emit('createRoom');
-            }
-        };
-
-        copyRoomBtn.onclick = () => {
-            navigator.clipboard.writeText(roomCodeEl.textContent).then(() => {
-                alert('Oda Kodu kopyalandı: ' + roomCodeEl.textContent);
-            });
-        };
-
-        joinRoomBtn.onclick = () => {
-            const code = joinRoomInput.value.trim();
-            if (code.length === 4) {
-                socket.emit('joinRoom', code);
-            } else {
-                alert('Oda kodu 4 haneli olmalıdır.');
-            }
-        };
-
-
-        // ==========================================================
-        // === 2. OYUN BAŞLANGICI ve TAHTA OLUŞTURMA ===
-        // ==========================================================
-
-        function startGame(color, opponentName = "Rakip") {
-            lobbyScreenEl.style.display = 'none';
-            gameScreenEl.style.display = 'block';
-            myColor = color;
-            
-            // Oyuncu bilgilerini güncelle
-            if (myColor === 'red') {
-                playerBottomInfoEl.textContent = 'Kırmızı (Sen)';
-                playerTopInfoEl.textContent = `Siyah (${opponentName})`;
-            } else {
-                playerBottomInfoEl.textContent = `Kırmızı (${opponentName})`;
-                playerTopInfoEl.textContent = 'Siyah (Sen)';
-            }
-
-            // Tahtayı ve başlangıç taşlarını çiz
-            drawBoard();
-            updateTurnDisplay('red'); // Oyun kırmızı ile başlar
-        }
-
-        function drawBoard() {
-            boardEl.innerHTML = '';
-            // Başlangıç tahta durumu (Amerikan Daması)
-            const initialBoardState = [
-                ['', 'black', '', 'black', '', 'black', '', 'black'],
-                ['black', '', 'black', '', 'black', '', 'black', ''],
-                ['', 'black', '', 'black', '', 'black', '', 'black'],
-                ['', '', '', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', ''],
-                ['red', '', 'red', '', 'red', '', 'red', ''],
-                ['', 'red', '', 'red', '', 'red', '', 'red'],
-                ['red', '', 'red', '', 'red', '', 'red', '']
-            ];
-
-            for (let r = 0; r < 8; r++) {
-                const rowEl = document.createElement('div');
-                rowEl.className = 'row';
-                rowEl.style.display = 'contents'; // Grid yapısı için
-
-                for (let c = 0; c < 8; c++) {
-                    const tileEl = document.createElement('div');
-                    tileEl.className = 'tile';
-                    tileEl.dataset.row = r;
-                    tileEl.dataset.col = c;
-                    
-                    // Koyu karelere tıklama işleyici ekle
-                    const isDark = (r % 2) === (c % 2);
-                    if (!isDark) {
-                         // Arka plan rengini CSS hallediyor. Buraya tıklama olayını ekleyelim.
-                    } else {
-                        // Taşların konulduğu koyu karelere tıklama olayı
-                        tileEl.onclick = handleTileClick;
-                    }
-                   
-                    const pieceType = initialBoardState[r][c];
-                    if (pieceType) {
-                        const pieceEl = document.createElement('div');
-                        pieceEl.className = `piece piece-${pieceType}`;
-                        // pieceEl.onclick = handlePieceClick; // Taşı seçmek için tile'a tıkla
-                        tileEl.appendChild(pieceEl);
-                    }
-                    
-                    rowEl.appendChild(tileEl);
-                }
-                boardEl.appendChild(rowEl);
-            }
-        }
-
-        // ==========================================================
-        // === 3. OYUN İÇİ ETKİLEŞİM ve GÜNCELLEME ===
-        // ==========================================================
+    <!-- Ana Lobi Ekranı -->
+    <div id="main-lobby" class="hidden w-full max-w-md bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-8 text-red-400 animate-float">AMERIKAN DAMASI</h2>
         
-        // Taşa/Kareye Tıklama İşleyicisi
-        function handleTileClick(event) {
-            if (currentTurn !== myColor) {
-                gameMessageEl.textContent = `Sıra rakipte! (${currentTurn.toUpperCase()})`;
-                return;
-            }
-
-            const tileEl = event.currentTarget;
-            const r = parseInt(tileEl.dataset.row);
-            const c = parseInt(tileEl.dataset.col);
-            const pieceEl = tileEl.querySelector('.piece');
-
-            // 1. Durum: Taş Seçimi (Taş benimse)
-            if (pieceEl && pieceEl.classList.contains(`piece-${myColor}`)) {
-                // Önceki seçimi ve olası hareketleri temizle
-                clearHighlights(); 
-                
-                selectedPiece = { r, c };
-                // Taşı seç ve olası hareketleri sunucudan iste
-                tileEl.style.boxShadow = `0 0 10px 5px var(--secondary-color)`;
-                
-                // Sunucuya olası hareketleri sor (Bu kritik kısım)
-                socket.emit('requestPossibleMoves', { r, c });
-                return;
-            } 
+        <div class="space-y-4">
+            <button id="dereceli-btn" class="w-full button-red text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl text-lg">
+                🏆 Dereceli Oyna
+            </button>
             
-            // 2. Durum: Hareketi Yapma (Oynanabilir kareye tıklandıysa)
-            else if (selectedPiece && tileEl.classList.contains('possible-move')) {
-                const startR = selectedPiece.r;
-                const startC = selectedPiece.c;
-                const endR = r;
-                const endC = c;
-                
-                // Hareketi sunucuya gönder
-                socket.emit('makeMove', { startR, startC, endR, endC });
+            <button id="friend-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl text-lg">
+                👥 Arkadaşla Oyna
+            </button>
+        </div>
+    </div>
 
-                // İstemci tarafında temizle
-                clearHighlights();
-                selectedPiece = null;
-            } 
-            
-            // 3. Durum: Geçersiz Tıklama
-            else {
-                 clearHighlights();
-                 selectedPiece = null;
-                 gameMessageEl.textContent = `Geçersiz hareket veya kare.`;
-            }
-        }
+    <!-- Dereceli Arama Lobi -->
+    <div id="ranked-lobby" class="hidden w-full max-w-md bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-6 text-red-400 animate-float">🏆 Dereceli Eşleşme</h2>
+        <p id="ranked-status" class="text-center text-yellow-300 mb-8 font-semibold transition-all duration-300 text-lg">
+            Raqib axtarilir...
+        </p>
         
-        // Sunucudan Gelen Olası Hareketleri Gösterme
-        socket.on('showPossibleMoves', (moves) => {
-            // moves: [{ r: 4, c: 3 }, { r: 4, c: 5 }, ...]
-            clearHighlights(false); // Sadece hareketleri temizle
+        <button id="cancel-ranked-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl">
+            ❌ İptal Et
+        </button>
+    </div>
 
-            moves.forEach(move => {
-                const tileEl = document.querySelector(`.tile[data-row='${move.r}'][data-col='${move.c}']`);
-                if (tileEl) {
-                    tileEl.classList.add('possible-move');
-                }
-            });
-        });
-
-        // Sunucudan Gelen Oyun Durumu Güncellemesi
-        function updateGameState(newBoardState, newTurn, lastMove) {
-            currentTurn = newTurn;
-            updateTurnDisplay(newTurn);
-            clearHighlights(); // Her ihtimale karşı temizle
-
-            // Tahtayı güncelleyen kısım
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const tileEl = document.querySelector(`.tile[data-row='${r}'][data-col='${c}']`);
-                    tileEl.innerHTML = ''; // Kareyi temizle
-
-                    const pieceData = newBoardState[r][c]; // Örnek: 'red' veya 'black-king'
-                    if (pieceData) {
-                        const [color, type] = pieceData.split('-');
-                        const pieceEl = document.createElement('div');
-                        pieceEl.className = `piece piece-${color}`;
-                        if (type === 'king') {
-                            pieceEl.classList.add('king');
-                        }
-                        tileEl.appendChild(pieceEl);
-
-                        // Hareket animasyonu (Basit)
-                        if (lastMove && (lastMove.endR === r && lastMove.endC === c)) {
-                            pieceEl.style.transform = 'scale(1.2)';
-                            setTimeout(() => pieceEl.style.transform = 'scale(1)', 200);
-                        }
-                    }
-                }
-            }
-        }
+    <!-- Arkadaş Lobi -->
+    <div id="friend-lobby" class="hidden w-full max-w-md bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center mb-6 text-blue-400 animate-float">👥 Arkadaşla Oyna</h2>
         
-        // Vurguları Temizleme
-        function clearHighlights(clearSelected = true) {
-            document.querySelectorAll('.tile').forEach(tile => {
-                tile.classList.remove('possible-move');
-                if (clearSelected) {
-                    tile.style.boxShadow = 'none';
-                }
-            });
-            if (clearSelected) {
-                selectedPiece = null;
-            }
-        }
+        <div class="space-y-4">
+            <button id="create-room-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
+                🏠 Oda Yarat
+            </button>
+            
+            <div class="bg-gray-700 p-4 rounded-lg">
+                <div class="flex flex-col items-center space-y-2">
+                    <span class="text-sm font-semibold text-gray-300">Oda Kodu:</span>
+                    <span id="room-code-output" class="text-2xl font-mono text-green-400 bg-gray-900 px-4 py-2 rounded-lg shadow-inner select-all">...</span>
+                    <button id="copy-code-btn" class="bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-105">
+                        📋 Kopyala
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-gray-700 p-4 rounded-lg space-y-3">
+                <input id="join-room-input" type="text" placeholder="Oda Kodu (4 Reqem)" maxlength="4" 
+                    class="w-full p-3 rounded-lg border-2 border-gray-600 bg-gray-900 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-center text-lg font-mono">
+                <button id="join-room-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
+                    🔗 Odaya Bağlan
+                </button>
+            </div>
+        </div>
         
-        // Sıra Işıklı Gösterimi
-        function updateTurnDisplay(turn) {
-            currentTurn = turn;
-            gameMessageEl.textContent = `Sıra: ${turn === 'red' ? 'Kırmızı' : 'Siyah'} Oyuncuda`;
-            
-            playerTopInfoEl.classList.remove('turn-active');
-            playerBottomInfoEl.classList.remove('turn-active');
-            
-            // Sıra benim tarafımdayken daha parlak olsun
-            if (myColor === turn) {
-                 (myColor === 'red' ? playerBottomInfoEl : playerTopInfoEl).classList.add('turn-active');
-            } else {
-                 (myColor === 'red' ? playerTopInfoEl : playerBottomInfoEl).classList.add('turn-active');
-            }
-        }
+        <button id="back-to-main-btn" class="w-full mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200">
+            🔙 Ana Menü
+        </button>
+    </div>
 
+    <!-- Oyun Ekranı -->
+    <div id="game-screen" class="hidden w-full flex flex-col items-center max-w-2xl">
+        
+        <!-- Növbə Göstəricisi -->
+        <div id="current-turn-display" class="w-full max-w-md mb-4 p-4 rounded-xl bg-gray-800 shadow-xl text-center">
+            <p class="text-lg sm:text-xl font-bold">Sıra: <span id="turn-text" class="text-yellow-400">Yuklenir...</span></p>
+        </div>
+        
+        <!-- Oyun Tahtası -->
+        <div id="board" class="grid grid-cols-8 gap-0 border-4 border-gray-700 rounded-lg overflow-hidden shadow-2xl bg-white">
+            <!-- Tahta hücreləri JavaScript ilə dinamik olaraq yaradılacaq -->
+        </div>
+        
+        <!-- Oyun Kontrolleri -->
+        <div class="mt-6 w-full max-w-md flex flex-col sm:flex-row gap-3">
+            <button id="leave-game-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg">
+                🚪 Oyundan Çıx
+            </button>
+        </div>
+    </div>
 
-        // ==========================================================
-        // === BAŞLATMA ===
-        // ==========================================================
+    <!-- Bağlantı Statusu -->
+    <div class="fixed top-4 right-4 bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
+        <p id="connection-status" class="text-sm font-semibold">Serverə qoşulur...</p>
+    </div>
 
-        document.addEventListener('DOMContentLoaded', connectToServer);
-
-    </script>
+    <script src="game.js"></script>
 </body>
 </html>
