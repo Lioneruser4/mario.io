@@ -104,6 +104,13 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Oyuncu bilgilerini sakla (fotoğraf dahil)
+        const playerData = {
+            userId: data.userId,
+            userName: data.userName,
+            userPhotoUrl: data.userPhotoUrl || null
+        };
+
         if (waitingPlayers.size > 0) {
             const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
             const opponentSocket = io.sockets.sockets.get(opponentSocketId);
@@ -115,8 +122,8 @@ io.on('connection', (socket) => {
                 
                 rooms.set(roomCode, {
                     players: [
-                        { socketId: socket.id, userId: data.userId, userName: data.userName },
-                        { socketId: opponentSocketId, userId: opponentData.userId, userName: opponentData.userName }
+                        { socketId: socket.id, userId: data.userId, userName: data.userName, userPhotoUrl: data.userPhotoUrl },
+                        { socketId: opponentSocketId, userId: opponentData.userId, userName: opponentData.userName, userPhotoUrl: opponentData.userPhotoUrl }
                     ],
                     board: null,
                     currentPlayer: 'white',
@@ -129,23 +136,25 @@ io.on('connection', (socket) => {
                 socket.emit('matchFound', {
                     roomCode: roomCode,
                     playerColor: 'white',
-                    opponentName: opponentData.userName
+                    opponentName: opponentData.userName,
+                    opponentPhotoUrl: opponentData.userPhotoUrl
                 });
                 
                 opponentSocket.emit('matchFound', {
                     roomCode: roomCode,
                     playerColor: 'black',
-                    opponentName: data.userName
+                    opponentName: data.userName,
+                    opponentPhotoUrl: data.userPhotoUrl
                 });
 
                 console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
             } else {
                 waitingPlayers.delete(opponentSocketId);
-                waitingPlayers.set(socket.id, data);
+                waitingPlayers.set(socket.id, playerData);
                 console.log('⏳ Bekleme listesine eklendi:', data.userName);
             }
         } else {
-            waitingPlayers.set(socket.id, data);
+            waitingPlayers.set(socket.id, playerData);
             console.log('⏳ Bekleme listesine eklendi:', data.userName);
         }
     });
@@ -164,7 +173,7 @@ io.on('connection', (socket) => {
         
         rooms.set(roomCode, {
             players: [
-                { socketId: socket.id, userId: data.userId, userName: data.userName }
+                { socketId: socket.id, userId: data.userId, userName: data.userName, userPhotoUrl: data.userPhotoUrl || null }
             ],
             board: null,
             currentPlayer: 'white',
@@ -202,7 +211,8 @@ io.on('connection', (socket) => {
         room.players.push({ 
             socketId: socket.id, 
             userId: data.userId, 
-            userName: data.userName 
+            userName: data.userName,
+            userPhotoUrl: data.userPhotoUrl || null
         });
         socket.join(data.roomCode);
 
@@ -215,7 +225,8 @@ io.on('connection', (socket) => {
             player1Socket.emit('roomJoined', {
                 roomCode: data.roomCode,
                 playerColor: 'white',
-                opponentName: player2.userName
+                opponentName: player2.userName,
+                opponentPhotoUrl: player2.userPhotoUrl || null
             });
         }
         
@@ -223,7 +234,8 @@ io.on('connection', (socket) => {
             player2Socket.emit('roomJoined', {
                 roomCode: data.roomCode,
                 playerColor: 'black',
-                opponentName: player1.userName
+                opponentName: player1.userName,
+                opponentPhotoUrl: player1.userPhotoUrl || null
             });
         }
 
@@ -248,7 +260,8 @@ io.on('connection', (socket) => {
                         board: room.board,
                         currentPlayer: room.currentPlayer,
                         playerColor: playerColor,
-                        opponentName: opponent ? opponent.userName : 'Rakip'
+                        opponentName: opponent ? opponent.userName : 'Rakip',
+                        opponentPhotoUrl: opponent ? opponent.userPhotoUrl : null
                     });
                 }
             });
