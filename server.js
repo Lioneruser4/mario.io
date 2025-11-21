@@ -21,7 +21,7 @@ const users = new Map();
 const roomTimers = new Map(); // Oda timer'ları
 const searchTimers = new Map(); // Eşleşme timer'ları
 
-console.log('🚀 Sunucu başlatılıyor...');
+console.log('🚀 Server Başladılır / Connect Server..');
 
 // Rastgele 4 haneli oda kodu oluştur
 function generateRoomCode() {
