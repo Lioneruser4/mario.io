@@ -533,6 +533,53 @@ socket.on('searchTimerUpdate', (data) => {
 // Özel oda oluştur
 function createPrivateRoom() {
     socket.emit('createRoom', { userId, userName, userPhotoUrl: userPhotoUrl || null });
+    // Bekleyen lobiye geç
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('waitingLobby').style.display = 'block';
+    
+    // Kullanıcı bilgilerini kopyala
+    document.getElementById('waitingUserName').textContent = userName;
+    const avatarEl = document.getElementById('waitingUserAvatar');
+    avatarEl.innerHTML = '';
+    if (userPhotoUrl) {
+        const img = document.createElement('img');
+        img.src = userPhotoUrl;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.borderRadius = '50%';
+        img.style.objectFit = 'cover';
+        avatarEl.appendChild(img);
+    } else {
+        avatarEl.textContent = userName.charAt(0).toUpperCase();
+    }
+}
+
+// Bekleyen oda kodunu kopyala
+function copyWaitingRoomCode() {
+    const roomCode = document.getElementById('waitingRoomCode').textContent;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(roomCode).then(() => {
+            alert('✅ Oda kodu kopyalandı: ' + roomCode);
+        });
+    } else {
+        const tempInput = document.createElement('input');
+        tempInput.value = roomCode;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        alert('✅ Oda kodu kopyalandı: ' + roomCode);
+    }
+}
+
+// Bekleyen odayı iptal et
+function cancelWaitingRoom() {
+    if (gameState.roomCode) {
+        socket.emit('leaveRoom', { roomCode: gameState.roomCode, userId });
+    }
+    document.getElementById('waitingLobby').style.display = 'none';
+    document.getElementById('lobby').style.display = 'block';
+    gameState.roomCode = null;
 }
 
 // Özel oda modalını kapat
@@ -655,8 +702,8 @@ function resetGame() {
 // Socket olayları
 socket.on('roomCreated', (data) => {
     gameState.roomCode = data.roomCode;
-    document.getElementById('roomCode').textContent = data.roomCode;
-    document.getElementById('privateModal').style.display = 'block';
+    document.getElementById('waitingRoomCode').textContent = data.roomCode;
+    // Bekleyen lobi zaten açık
 });
 
 socket.on('matchFound', (data) => {
