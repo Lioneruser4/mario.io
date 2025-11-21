@@ -1,494 +1,400 @@
-// Socket.io baglantisi
-const socket = io('https://mario-io-1.onrender.com');
+// game.js - Şaşki Online - Tam Profesyonel Türk Daması (2025)
+const socket = io("https://mario-io-1.onrender.com", { transports: ["websocket"] });
 
-// Oyun durumu
-let gameState = {
-    board: [],
-    currentTurn: 'red',
-    selectedPiece: null,
-    myColor: null,
-    isMyTurn: false,
-    roomCode: null,
-    isSearching: false,
-    gameStarted: false
-};
+let board = null;
+let selectedPiece = null;
+let validMoves = [];
+let currentTurn = 'black';
+let myColor = null;
+let roomId = null;
+let isMyTurn = false;
+let timerInterval = null;
+let timeLeft = 30;
 
-// Timer
-let searchTimer = null;
-let searchTime = 0;
+const boardEl = document.getElementById('board');
+const lobbyScreen = document.getElementById('lobby');
+const gameScreen = document.getElementById('gameScreen');
+const statusEl = document.getElementById('connectionStatus');
+const playerLight = document.getElementById('playerLight');
+const opponentLight = document.getElementById('opponentLight');
+const timerEl = document.getElementById('gameTimer');
+const resultOverlay = document.getElementById('gameResult');
+const resultText = document.getElementById('resultText');
 
-// UI elementleri
-const loader = document.getElementById('loader');
-const mainLobby = document.getElementById('main-lobby');
-const rankedLobby = document.getElementById('ranked-lobby');
-const friendLobby = document.getElementById('friend-lobby');
-const gameScreen = document.getElementById('game-screen');
-const connectionStatus = document.getElementById('connection-status');
-const dereceliBtn = document.getElementById('dereceli-btn');
-const friendBtn = document.getElementById('friend-btn');
-const cancelRankedBtn = document.getElementById('cancel-ranked-btn');
-const createRoomBtn = document.getElementById('create-room-btn');
-const backToMainBtn = document.getElementById('back-to-main-btn');
-const rankedStatus = document.getElementById('ranked-status');
-const roomCodeOutput = document.getElementById('room-code-output');
-const copyCodeBtn = document.getElementById('copy-code-btn');
-const joinRoomInput = document.getElementById('join-room-input');
-const joinRoomBtn = document.getElementById('join-room-btn');
-const boardElement = document.getElementById('board');
-const currentTurnDisplay = document.getElementById('current-turn-display');
-const turnText = document.getElementById('turn-text');
-const leaveGameBtn = document.getElementById('leave-game-btn');
+// Sesler
+const moveSound = document.getElementById('moveSound');
+const captureSound = document.getElementById('captureSound');
+const winSound = document.getElementById('winSound');
 
-const BOARD_SIZE = 8;
-
-// --- Socket.io Eventleri ---
-
+// === BAĞLANTI DURUMU ===
 socket.on('connect', () => {
-    console.log('✅ Servere baglandi');
-    console.log('🔗 Socket ID:', socket.id);
-    connectionStatus.textContent = 'Servere baglandi!';
-    connectionStatus.classList.remove('text-yellow-400');
-    connectionStatus.classList.add('text-green-500');
-    showScreen('main');
+  statusEl.textContent = "Bağlandı! Hazır.";
+  statusEl.style.color = "#00ff00";
 });
 
 socket.on('disconnect', () => {
-    connectionStatus.textContent = 'Serverle elaqe kesildi';
-    connectionStatus.classList.remove('text-green-500');
-    connectionStatus.classList.add('text-red-500');
-    turnText.textContent = 'Serverle elaqe kesildi!';
-    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-red-600';
+  status sloppyEl.textContent = "Bağlantı koptu... Yeniden bağlanıyor.";
+  statusEl.style.color = "#ff0000";
 });
 
-socket.on('matchFound', (data) => {
-    console.log('🎉 Raqib tapildi!', data);
-    gameState.roomCode = data.roomCode;
-    gameState.myColor = data.color;
-    gameState.currentTurn = data.currentTurn || 'red';
-    gameState.gameStarted = true;
-    gameState.isSearching = false;
-    gameState.isMyTurn = gameState.currentTurn === gameState.myColor;
-    gameState.board = createInitialBoard();
-    
-    clearInterval(searchTimer);
-    searchTimer = null;
-    
-    showScreen('game');
-    updateGameUI();
+socket.on('connect_error', () => {
+  statusEl.textContent = "Sunucuya bağlanılamıyor...";
+  statusEl.style.color = "#ff0066";
 });
 
-socket.on('searchStatus', (data) => {
-    console.log('🔍 Axtaris statusu:', data);
-    rankedStatus.textContent = data.message;
+// === LOBİ BUTONLARI ===
+document.getElementById('rankedBtn').onclick = () => {
+  socket.emit('ranked');
+  showSearching();
+};
+
+document.getElementById('createRoomBtn').onclick = () => {
+  socket.emit('create_room');
+};
+
+document.getElementById('joinBtn').onclick = () => {
+  const code = document.getElementById('roomInput').value.trim();
+  if (code.length === 4 && /^\d{4}$/.test(code)) {
+    socket.emit('join_room', code);
+  } else {
+    alert("Lütfen 4 haneli oda kodunu gir!");
+  }
+};
+
+document.getElementById('copyBtn').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('roomCode').textContent);
+  const btn = document.getElementById('copyBtn');
+  btn.textContent = "Kopyalandı!";
+  setTimeout(() => btn.textContent = "Kopyala", 1500);
+};
+
+document.getElementById('leaveRoomBtn').onclick = leaveRoom;
+document.getElementById('cancelSearchBtn').onclick = () => {
+  socket.emit('cancel_search');
+  hideSearching();
+  statusEl.textContent = "Eşleşme iptal edildi.";
+};
+
+// === SOKET OLAYLARI ===
+socket.on('room_created', (code) => {
+  roomId = code;
+  document.getElementById('roomCode').textContent = code;
+  document.getElementById('roomPanel').classList.remove('hidden');
+  statusEl.textContent = `Oda oluşturuldu: ${code}`;
 });
 
-socket.on('searchCancelled', (data) => {
-    clearInterval(searchTimer);
-    searchTimer = null;
-    showScreen('main');
+socket.on('match_found', (data) => {
+  roomId = data.roomId;
+  myColor = data.color;
+  hideSearching();
+  startGame(data.board || createInitialBoard(), 'black');
 });
 
-socket.on('roomCreated', (data) => {
-    gameState.roomCode = data.roomCode;
-    gameState.myColor = 'red';
-    roomCodeOutput.textContent = data.roomCode;
-    console.log('🏠 Oda yaradildi:', data.roomCode);
+socket.on('start_game', (data) => {
+  roomId = data.roomId || roomId;
+  myColor = data.yourColor || (data.players.indexOf(socket.id) === 0 ? 'black' : 'white');
+  hideRoomPanel();
+  startGame(data.board, data.turn || 'black');
 });
 
-socket.on('opponentJoined', (data) => {
-    gameState.roomCode = data.roomCode;
-    gameState.currentTurn = data.currentTurn || 'red';
-    gameState.gameStarted = true;
-    gameState.isMyTurn = gameState.currentTurn === gameState.myColor;
-    gameState.board = createInitialBoard();
-    console.log('👥 Raqib qosuldu! Oyun baslayir...');
-    showScreen('game');
-    updateGameUI();
+socket.on('error', (msg) => {
+  alert(msg);
+  hideSearching();
 });
 
-socket.on('gameUpdate', (data) => {
-    console.log('📡 Oyun güncellemesi alındı:', data);
-    gameState.board = data.board;
-    gameState.currentTurn = data.currentTurn;
-    gameState.isMyTurn = gameState.currentTurn === gameState.myColor;
-    console.log('🔄 Sıra güncellendi - Benim sıram mı?', gameState.isMyTurn);
-    updateGameUI();
+socket.on('move', (data) => {
+  applyMove(data.from, data.to, data.captured);
+  if (data.captured) captureSound.play();
+  else moveSound.play();
 });
 
-socket.on('gameOver', (data) => {
-    const isWinner = data.winner === gameState.myColor;
-    turnText.textContent = isWinner ? 'Qazandiniz!' : 'Raqib Qazandi!';
-    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center ' + 
-        (isWinner ? 'bg-blue-600' : 'bg-red-600');
-    setTimeout(() => leaveGame(), 5000);
+socket.on('game_over', (winner) => {
+  endGame(winner === myColor ? "Kazandın!" : "Kaybettin!");
+  winSound.play();
 });
 
-socket.on('error', (message) => {
-    turnText.textContent = 'Xeta: ' + message;
-    currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-red-600';
-    gameState.isSearching = false;
-    clearInterval(searchTimer);
-    searchTimer = null;
-    setTimeout(() => showScreen('main'), 3000);
-});
-
-// --- Yardimci Funksiyalar ---
-
-function showScreen(screen) {
-    loader.classList.add('hidden');
-    mainLobby.classList.add('hidden');
-    rankedLobby.classList.add('hidden');
-    friendLobby.classList.add('hidden');
-    gameScreen.classList.add('hidden');
-
-    if (screen === 'main') {
-        mainLobby.classList.remove('hidden');
-        gameState.isSearching = false;
-        clearInterval(searchTimer);
-        searchTimer = null;
-    } else if (screen === 'ranked') {
-        rankedLobby.classList.remove('hidden');
-        gameState.isSearching = true;
-        searchTime = 0;
-        startSearchTimer();
-    } else if (screen === 'friend') {
-        friendLobby.classList.remove('hidden');
-        gameState.isSearching = false;
-        clearInterval(searchTimer);
-        searchTimer = null;
-    } else if (screen === 'game') {
-        gameScreen.classList.remove('hidden');
-        clearInterval(searchTimer);
-        searchTimer = null;
-    } else {
-        loader.classList.remove('hidden');
-    }
+// === OYUN BAŞLAT ===
+function startGame(initialBoard, turn) {
+  board = JSON.parse(JSON.stringify(initialBoard));
+  currentTurn = turn;
+  lobbyScreen.classList.remove('active');
+  gameScreen.classList.add('active');
+  renderBoard();
+  updateTurnLights();
+  startTimer();
 }
 
-function startSearchTimer() {
-    clearInterval(searchTimer);
-    searchTimer = setInterval(() => {
-        searchTime++;
-        const minutes = Math.floor(searchTime / 60);
-        const seconds = searchTime % 60;
-        const timeString = minutes + ':' + seconds.toString().padStart(2, '0');
-        rankedStatus.textContent = 'Raqib axtarilir... (' + timeString + ')';
-    }, 1000);
-}
-
+// === TAHTA OLUŞTUR ===
 function createInitialBoard() {
-    const board = [];
-    for (let r = 0; r < BOARD_SIZE; r++) {
-        board[r] = new Array(BOARD_SIZE).fill(0);
-        for (let c = 0; c < BOARD_SIZE; c++) {
-            if ((r + c) % 2 !== 0) {
-                if (r < 3) {
-                    board[r][c] = 1; // Kirmizi
-                } else if (r > 4) {
-                    board[r][c] = 2; // Ag
-                }
-            }
+  const b = Array(8).fill().map(() => Array(8).fill(null));
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      if ((row + col) % 2 === 1) {
+        if (row < 3) b[row][col] = { color: 'white', king: false };
+        if (row > 4) b[row][col] = { color: 'black', king: false };
+      }
+    }
+  }
+  return b;
+}
+
+function renderBoard() {
+  boardEl.innerHTML = '';
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if ((row + col) % 2 === 1) cell.classList.add('black');
+      
+      const piece = board[row][col];
+      if (piece) {
+        const p = document.createElement('div');
+        p.className = `piece ${piece.color}`;
+        if (piece.king) p.classList.add('king');
+        p.dataset.row = row;
+        p.dataset.col = col;
+        p.onclick = () => selectPiece(row, col);
+        cell.appendChild(p);
+      }
+      
+      cell.dataset.row = row;
+      cell.dataset.col = col;
+      cell.onclick = () => tryMove(row, col);
+      boardEl.appendChild(cell);
+    }
+  }
+  highlightValidMoves();
+}
+
+// === TAŞ SEÇİM VE HAREKET ===
+function selectPiece(row, col) {
+  if (!isMyTurn) return;
+  const piece = board[row][col];
+  if (!piece || piece.color !== myColor) return;
+
+  selectedPiece = { row, col };
+  validMoves = calculateValidMoves(row, col);
+  highlightValidMoves();
+}
+
+function tryMove(row, col) {
+  if (!selectedPiece) return;
+
+  const move = validMoves.find(m => m.to.row === row && m.to.col === col);
+  if (!move) {
+    selectedPiece = null;
+    validMoves = [];
+    renderBoard();
+    return;
+  }
+
+  socket.emit('move', {
+    roomId,
+    from: selectedPiece,
+    to: { row, col },
+    captured: move.captured
+  });
+
+  applyMove(selectedPiece, { row, col }, move.captured);
+  if (move.captured) captureSound.play();
+  else moveSound.play();
+
+  selectedPiece = null;
+  validMoves = [];
+  renderBoard();
+}
+
+function applyMove(from, to, captured) {
+  const piece = board[from.row][from.col];
+  board[to.row][to.col] = piece;
+  board[from.row][from.col] = null;
+
+  if (captured) {
+    board[captured.row][captured.col] = null;
+  }
+
+  // Dama olma
+  if ((to.row === 0 && piece.color === 'black') || (to.row === 7 && piece.color === 'white')) {
+    piece.king = true;
+  }
+
+  currentTurn = currentTurn === 'black' ? 'white' : 'black';
+  updateTurnLights();
+  resetTimer();
+  renderBoard();
+
+  // Çoklu yeme kontrolü
+  if (captured && canContinueCapture(to.row, to.col)) {
+    // Aynı oyuncu devam eder
+  } else {
+    checkWin();
+  }
+}
+
+function canContinueCapture(row, col) {
+  const moves = calculateValidMoves(row, col);
+  return moves.some(m => m.captured);
+}
+
+// === GEÇERLİ HAMLELER (TÜRK DAMASI KURALLARI) ===
+function calculateValidMoves(row, col) {
+  const piece = board[row][col];
+  if (!piece || piece.color !== currentTurn) return [];
+
+  const moves = [];
+  const directions = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (piece.color === 'black' ? [[1,-1],[1,1]] : [[-1,-1],[-1,1]]);
+
+  let hasCapture = false;
+
+  // Önce zorunlu yeme var mı kontrol et
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c] && board[r][c].color === currentTurn) {
+        if (hasCaptureMove(r, c)) hasCapture = true;
+      }
+    }
+  }
+
+  for (const [dr, dc] of directions) {
+    const nr = row + dr;
+    const nc = col + dc;
+
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+      if (!board[nr][nc]) {
+        if (!hasCapture) {
+          moves.push({ to: { row: nr, col: nc }, captured: null });
         }
-    }
-    return board;
-}
-
-function generateRoomCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-function getPiecePlayer(pieceValue) {
-    if (pieceValue === 1 || pieceValue === 3) return 'red';
-    if (pieceValue === 2 || pieceValue === 4) return 'white';
-    return null;
-}
-
-function isValidCell(r, c) { 
-    return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE; 
-}
-
-function findJumps(board, r, c, player) {
-    const piece = board[r][c];
-    const isKingPiece = piece === 3 || piece === 4;
-    const jumps = [];
-    const directions = isKingPiece ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] :
-        player === 'red' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]];
-
-    for (const [dr, dc] of directions) {
-        const capturedR = r + dr;
-        const capturedC = c + dc;
-        const landR = r + 2 * dr;
-        const landC = c + 2 * dc;
-
-        if (isValidCell(landR, landC) && board[landR][landC] === 0) {
-            const capturedPieceValue = board[capturedR][capturedC];
-            const capturedPlayer = getPiecePlayer(capturedPieceValue);
-
-            if (capturedPlayer && capturedPlayer !== player) {
-                jumps.push({ from: { r, c }, to: { r: landR, c: landC }, captured: { r: capturedR, c: capturedC } });
-            }
+      } else if (board[nr][nc].color !== currentTurn) {
+        const jumpR = nr + dr;
+        const jumpC = nc + dc;
+        if (jumpR >= 0 && jumpR < 8 && jumpC >= 0 && jumpC < 8 && !board[jumpR][jumpC]) {
+          moves.push({ to: { row: jumpR, col: jumpC }, captured: { row: nr, col: nc } });
         }
+      }
     }
-    return jumps;
+  }
+
+  if (hasCapture) {
+    return moves.filter(m => m.captured);
+  }
+  return moves;
 }
 
-function findValidMoves(board, r, c, player) {
-    const moves = [];
-    const piece = board[r][c];
-    const isKingPiece = piece === 3 || piece === 4;
-    
-    const jumps = findJumps(board, r, c, player);
-    if (jumps.length > 0) return jumps;
-    
-    const directions = isKingPiece ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] :
-        player === 'red' ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]];
-
-    for (const [dr, dc] of directions) {
-        const newR = r + dr;
-        const newC = c + dc;
-
-        if (isValidCell(newR, newC) && board[newR][newC] === 0) {
-            moves.push({ from: { r, c }, to: { r: newR, c: newC } });
-        }
+function hasCaptureMove(row, col) {
+  const piece = board[row][col];
+  if (!piece) return false;
+  const directions = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (piece.color === 'black' ? [[1,-1],[1,1]] : [[-1,-1],[-1,1]]);
+  
+  for (const [dr, dc] of directions) {
+    const nr = row + dr;
+    const nc = col + dc;
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] && board[nr][nc].color !== piece.color) {
+      const jr = nr + dr;
+      const jc = nc + dc;
+      if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && !board[jr][jc]) return true;
     }
-    return moves;
+  }
+  return false;
 }
 
-function isValidMove(board, fromR, fromC, toR, toC, player) {
-    const moves = findValidMoves(board, fromR, fromC, player);
-    return moves.some(move => move.to.r === toR && move.to.c === toC);
+function highlightValidMoves() {
+  if (!selectedPiece) return;
+  document.querySelectorAll('.cell').forEach(cell => {
+    cell.classList.remove('valid', 'capture');
+  });
+
+  validMoves.forEach(move => {
+    const cell = document.querySelector(`.cell[data-row="${move.to.row}"][data-col="${move.to.col}"]`);
+    if (cell) {
+      cell.classList.add(move.captured ? 'capture' : 'valid');
+    }
+  });
 }
 
-// --- UI Funksiyalari ---
-
-function drawBoard() {
-    boardElement.innerHTML = '';
-    
-    // Taşı rengine göre ters çevir
-    const shouldFlip = gameState.myColor === 'white';
-    
-    for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) {
-            const cell = document.createElement('div');
-            
-            // Taşı rengine göre koordinatları ters çevir
-            const displayR = shouldFlip ? BOARD_SIZE - 1 - r : r;
-            const displayC = c;
-            const isDark = (r + c) % 2 !== 0;
-
-            cell.className = 'cell ' + (isDark ? 'cell-black' : 'cell-white');
-            cell.dataset.r = r;
-            cell.dataset.c = c;
-            cell.onclick = () => handleCellClick(r, c);
-            
-            // Mobil uyumlu touch olayları
-            cell.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                handleCellClick(r, c);
-            }, { passive: false });
-
-            const pieceValue = gameState.board[r] && gameState.board[r][c];
-            if (pieceValue && pieceValue !== 0) {
-                const pieceElement = document.createElement('div');
-                const piecePlayer = getPiecePlayer(pieceValue);
-                const isKingPiece = pieceValue === 3 || pieceValue === 4;
-
-                pieceElement.className = 'piece ' + 
-                    (piecePlayer === 'red' ? 'piece-black' : 'piece-white') + 
-                    (isKingPiece ? ' piece-king ' + (piecePlayer === 'red' ? 'piece-king-black' : 'piece-king-white') : '');
-
-                pieceElement.innerHTML = isKingPiece ? '👑' : '●';
-
-                if (gameState.selectedPiece && gameState.selectedPiece.r === r && gameState.selectedPiece.c === c) {
-                    pieceElement.classList.add('selected');
-                    pieceElement.style.zIndex = '20';
-                } else {
-                    pieceElement.style.zIndex = '1';
-                }
-
-                if (gameState.currentTurn === piecePlayer && gameState.isMyTurn) {
-                    pieceElement.classList.add('current-turn-piece');
-                }
-
-                cell.appendChild(pieceElement);
-            }
-
-            if (gameState.selectedPiece && gameState.isMyTurn) {
-                const moves = findValidMoves(gameState.board, gameState.selectedPiece.r, gameState.selectedPiece.c, gameState.myColor);
-                const move = moves.find(m => m.to.r === r && m.to.c === c);
-                
-                if (move) {
-                    if (move.captured) {
-                        cell.classList.add('capture-move');
-                    } else {
-                        cell.classList.add('valid-move');
-                    }
-                }
-            }
-
-            boardElement.appendChild(cell);
-        }
-    }
+// === TUR VE TIMER ===
+function updateTurnLights() {
+  isMyTurn = currentTurn === myColor;
+  playerLight.classList.toggle('active', isMyTurn);
+  opponentLight.classList.toggle('active', !isMyTurn);
 }
 
-function updateGameUI() {
-    if (!gameState.gameStarted) return;
-    
-    if (gameState.isMyTurn) {
-        turnText.textContent = 'Sira Sende!';
-        currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-green-600';
-    } else {
-        turnText.textContent = 'Raqib Sirasi';
-        currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-yellow-600';
+function startTimer() {
+  clearInterval(timerInterval);
+  timeLeft = 30;
+  timerEl.textContent = timeLeft;
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    timerEl.textContent = timeLeft;
+    if (timeLeft <= 0 && isMyTurn) {
+      socket.emit('timeout', roomId);
+      endGame("Zaman doldu! Kaybettin.");
     }
-    
-    drawBoard();
+  }, 1000);
 }
 
-// --- Event Handlers ---
+function resetTimer() {
+  clearInterval(timerInterval);
+  startTimer();
+}
 
-function handleCellClick(r, c) {
-    console.log('=== TAŞ TIKLANDI ===');
-    console.log('Pozisyon:', r, c);
-    console.log('Sıra benim mi?', gameState.isMyTurn);
-    console.log('Oyun başladı mı?', gameState.gameStarted);
-    console.log('Benim rengim:', gameState.myColor);
-    console.log('Current turn:', gameState.currentTurn);
-    
-    if (!gameState.isMyTurn || !gameState.gameStarted) {
-        console.log('Sıra sizde değilsiniz veya oyun başlamadı!');
-        return;
-    }
+// === KAZANMA KONTROLÜ ===
+function checkWin() {
+  let blackPieces = 0, whitePieces = 0;
+  let blackCanMove = false, whiteCanMove = false;
 
-    const pieceValue = gameState.board[r][c];
-    const piecePlayer = getPiecePlayer(pieceValue);
-    
-    console.log('Taş değeri:', pieceValue);
-    console.log('Taşın sahibi:', piecePlayer);
-
-    // Eğer kendi taşına tıklandıysa - taşı seç
-    if (piecePlayer === gameState.myColor) {
-        gameState.selectedPiece = { r, c };
-        console.log('Taş seçildi:', gameState.selectedPiece);
-        drawBoard();
-        return;
-    }
-
-    // Eğer bir taş seçiliyse ve boş hücreye tıklandıysa - taşı hareket ettir
-    if (gameState.selectedPiece && pieceValue === 0) {
-        const fromR = gameState.selectedPiece.r;
-        const fromC = gameState.selectedPiece.c;
-
-        console.log('Hamle denemesi:', fromR, fromC, '->', r, c);
-
-        // Hamle geçerli mi kontrol et
-        const moves = findValidMoves(gameState.board, fromR, fromC, gameState.myColor);
-        console.log('Geçerli hamleler:', moves);
-        
-        const validMove = moves.find(move => move.to.r === r && move.to.c === c);
-
-        if (validMove) {
-            console.log('Geçerli hamle! Server gönderiliyor...');
-            // Hamleyi server'a gönder
-            socket.emit('makeMove', {
-                roomCode: gameState.roomCode,
-                from: { r: fromR, c: fromC },
-                to: { r, c }
-            });
-            gameState.selectedPiece = null;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (p) {
+        if (p.color === 'black') {
+          blackPieces++;
+          if (calculateValidMoves(r, c).length > 0) blackCanMove = true;
         } else {
-            console.log('Geçersiz hamle!');
-            // Geçersiz hamle - seçimi iptal et
-            gameState.selectedPiece = null;
-            drawBoard();
+          whitePieces++;
+          if (calculateValidMoves(r, c).length > 0) whiteCanMove = true;
         }
-    } else {
-        console.log('Seçim iptal ediliyor...');
-        // Başka bir yere tıklandı - seçimi iptal et
-        gameState.selectedPiece = null;
-        drawBoard();
+      }
     }
+  }
+
+  if (blackPieces === 0 || !blackCanMove) {
+    socket.emit('game_over', { roomId, winner: 'white' });
+  } else if (whitePieces === 0 || !whiteCanMove) {
+    socket.emit('game_over', { roomId, winner: 'black' });
+  }
 }
 
-// --- Button Eventleri ---
-
-dereceliBtn.onclick = () => {
-    console.log('🎮 Dereceli butona tiklandi');
-    showScreen('ranked');
-    console.log('📡 findMatch gonderiliyor...');
-    socket.emit('findMatch');
-    console.log('✅ findMatch gonderildi!');
-};
-
-friendBtn.onclick = () => {
-    showScreen('friend');
-};
-
-cancelRankedBtn.onclick = () => {
-    gameState.isSearching = false;
-    socket.emit('cancelSearch');
-};
-
-createRoomBtn.onclick = () => {
-    const roomCode = generateRoomCode();
-    gameState.roomCode = roomCode;
-    gameState.myColor = 'red';
-    socket.emit('createRoom', { roomCode });
-};
-
-backToMainBtn.onclick = () => {
-    showScreen('main');
-};
-
-copyCodeBtn.onclick = () => {
-    const code = roomCodeOutput.textContent;
-    if (code && code !== '...') {
-        navigator.clipboard.writeText(code).then(() => {
-            turnText.textContent = 'Otaq kodu (' + code + ') kopyalandi!';
-            currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-green-600';
-        }).catch(() => {
-            turnText.textContent = "Kopyalama xetasi: Kodu el ile kopyalayin.";
-            currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-yellow-600';
-        });
-    }
-};
-
-joinRoomBtn.onclick = () => {
-    const roomCode = joinRoomInput.value.trim();
-    if (roomCode.length !== 4) {
-        turnText.textContent = "Xahis edirik, 4 reqemli otaq kodunu daxil edin.";
-        currentTurnDisplay.className = 'w-full max-w-md mb-4 p-4 rounded-xl shadow-xl text-center bg-yellow-600';
-        return;
-    }
-    
-    gameState.roomCode = roomCode;
-    gameState.myColor = 'white';
-    socket.emit('joinRoom', { roomCode });
-};
-
-leaveGameBtn.onclick = () => leaveGame();
-
-function leaveGame() {
-    if (gameState.roomCode) {
-        socket.emit('leaveGame', { roomCode: gameState.roomCode });
-    }
-    
-    gameState = {
-        board: [],
-        currentTurn: 'red',
-        selectedPiece: null,
-        myColor: null,
-        isMyTurn: false,
-        roomCode: null,
-        isSearching: false,
-        gameStarted: false
-    };
-    
-    showScreen('main');
+function endGame(message) {
+  clearInterval(timerInterval);
+  resultText.textContent = message;
+  resultOverlay.classList.remove('hidden');
 }
 
-// Baslangic
-document.addEventListener('DOMContentLoaded', () => {
-    connectionStatus.textContent = 'Servere qosulur...';
-    connectionStatus.classList.add('text-yellow-400', 'animate-pulse');
-});
+// === YARDIMCI FONKSİYONLAR ===
+function showSearching() {
+  document.getElementById('searchPanel').classList.remove('hidden');
+}
+function hideSearching() {
+  document.getElementById('searchPanel').classList.add('hidden');
+}
+function hideRoomPanel() {
+  document.getElementById('roomPanel').classList.add('hidden');
+}
+function leaveRoom() {
+  socket.emit('leave_room', roomId);
+  location.reload();
+}
+
+// Pes Et Butonu
+document.getElementById('resignBtn').onclick = () => {
+  if (confirm("Pes etmek istediğine emin misin?")) {
+    socket.emit('resign', roomId);
+    endGame("Pes ettin. Kaybettin.");
+  }
+};
+
+// Lobiye Dön
+document.getElementById('backToLobby').onclick = () => location.reload();
+
+// Başlat
+renderBoard();
