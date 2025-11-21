@@ -107,9 +107,11 @@ socket.on('opponentJoined', (data) => {
 });
 
 socket.on('gameUpdate', (data) => {
+    console.log('📡 Oyun güncellemesi alındı:', data);
     gameState.board = data.board;
     gameState.currentTurn = data.currentTurn;
     gameState.isMyTurn = gameState.currentTurn === gameState.myColor;
+    console.log('🔄 Sıra güncellendi - Benim sıram mı?', gameState.isMyTurn);
     updateGameUI();
 });
 
@@ -262,9 +264,16 @@ function isValidMove(board, fromR, fromC, toR, toC, player) {
 function drawBoard() {
     boardElement.innerHTML = '';
     
+    // Taşı rengine göre ters çevir
+    const shouldFlip = gameState.myColor === 'white';
+    
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
             const cell = document.createElement('div');
+            
+            // Taşı rengine göre koordinatları ters çevir
+            const displayR = shouldFlip ? BOARD_SIZE - 1 - r : r;
+            const displayC = c;
             const isDark = (r + c) % 2 !== 0;
 
             cell.className = 'cell ' + (isDark ? 'cell-black' : 'cell-white');
