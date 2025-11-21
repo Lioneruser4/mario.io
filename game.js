@@ -4,19 +4,40 @@ let userId = null;
 let userName = null;
 
 // Telegram WebApp kontrolü
+let userPhotoUrl = null;
+
 if (window.Telegram && window.Telegram.WebApp) {
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
+    
+    // Bildirim ayarları - site linki/ismi olmasın
+    tg.setHeaderColor('#667eea');
+    tg.setBackgroundColor('#1e3c72');
     
     if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         telegramUser = tg.initDataUnsafe.user;
         userId = `TG_${telegramUser.id}`;
         userName = telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : '');
         
-        const avatarEmojis = ['😎', '🎮', '🎯', '🚀', '⚡', '🔥', '💎', '👑'];
-        const avatarIndex = telegramUser.id % avatarEmojis.length;
-        document.getElementById('userAvatar').textContent = avatarEmojis[avatarIndex];
+        // Telegram fotoğrafını al (varsa)
+        if (telegramUser.photo_url) {
+            userPhotoUrl = telegramUser.photo_url;
+            const avatarEl = document.getElementById('userAvatar');
+            avatarEl.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = userPhotoUrl;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.borderRadius = '50%';
+            img.style.objectFit = 'cover';
+            avatarEl.appendChild(img);
+        } else {
+            // Fotoğraf yoksa emoji kullan
+            const avatarEmojis = ['😎', '🎮', '🎯', '🚀', '⚡', '🔥', '💎', '👑'];
+            const avatarIndex = telegramUser.id % avatarEmojis.length;
+            document.getElementById('userAvatar').textContent = avatarEmojis[avatarIndex];
+        }
     }
 }
 
@@ -28,9 +49,9 @@ if (!userId) {
     document.getElementById('userAvatar').textContent = '👤';
 }
 
-// Kullanıcı bilgilerini göster
+// Kullanıcı bilgilerini göster (ID gizli)
 document.getElementById('userName').textContent = userName;
-document.getElementById('userId').textContent = `ID: ${userId}`;
+document.getElementById('userId').style.display = 'none'; // ID'yi gizle
 
 // WebSocket bağlantısı
 const socket = io('https://mario-io-1.onrender.com', {
@@ -50,6 +71,7 @@ let gameState = {
     roomCode: null,
     gameStarted: false,
     opponentName: 'Rakip',
+    opponentPhotoUrl: null,
     mustCapture: false,
     timer: 20,
     timerInterval: null,
@@ -482,10 +504,47 @@ function updatePlayerHighlight() {
     }
 }
 
+// Eşleşme timer'ı
+let searchTimer = 0;
+let searchTimerInterval = null;
+
 // Dereceli oyun başlat
 function startRankedGame() {
-    socket.emit('findMatch', { userId, userName });
+    socket.emit('findMatch', { 
+        userId, 
+        userName, 
+        userPhotoUrl: userPhotoUrl || null 
+    });
     document.getElementById('rankedModal').style.display = 'block';
+    
+    // Eşleşme timer'ını başlat
+    searchTimer = 0;
+    updateSearchTimer();
+    if (searchTimerInterval) clearInterval(searchTimerInterval);
+    searchTimerInterval = setInterval(() => {
+        searchTimer++;
+        updateSearchTimer();
+    }, 1000);
+}
+
+// Eşleşme timer'ını güncelle
+function updateSearchTimer() {
+    const timerEl = document.getElementById('searchTimer');
+    if (timerEl) {
+        const minutes = Math.floor(searchTimer / 60);
+        const seconds = searchTimer % 60;
+        timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
+// Arama iptal
+function cancelSearch() {
+    socket.emit('cancelSearch', { userId });
+    document.getElementById('rankedModal').style.display = 'none';
+    if (searchTimerInterval) {
+        clearInterval(searchTimerInterval);
+        searchTimerInterval = null;
+    }
 }
 
 // Arama iptal
@@ -496,7 +555,7 @@ function cancelSearch() {
 
 // Özel oda oluştur
 function createPrivateRoom() {
-    socket.emit('createRoom', { userId, userName });
+    socket.emit('createRoom', { userId, userName, userPhotoUrl: userPhotoUrl || null });
 }
 
 // Özel oda modalını kapat
@@ -544,7 +603,7 @@ function closeJoinModal() {
 function joinRoom() {
     const roomCode = document.getElementById('joinRoomCode').value.trim();
     if (roomCode.length === 4) {
-        socket.emit('joinRoom', { roomCode, userId, userName });
+        socket.emit('joinRoom', { roomCode, userId, userName, userPhotoUrl: userPhotoUrl || null });
     } else {
         alert('⚠️ Lütfen 4 haneli oda kodunu girin!');
     }
@@ -592,6 +651,10 @@ function leaveGame() {
 // Oyunu sıfırla
 function resetGame() {
     stopTimer();
+    if (searchTimerInterval) {
+        clearInterval(searchTimerInterval);
+        searchTimerInterval = null;
+    }
     gameState = {
         board: [],
         currentPlayer: 'white',
@@ -600,6 +663,7 @@ function resetGame() {
         roomCode: null,
         gameStarted: false,
         opponentName: 'Rakip',
+        opponentPhotoUrl: null,
         mustCapture: false,
         timer: 20,
         timerInterval: null,
@@ -619,13 +683,60 @@ socket.on('roomCreated', (data) => {
 });
 
 socket.on('matchFound', (data) => {
-    document.getElementById('rankedModal').style.display = 'none';
-    startGame(data);
+    // Eşleşme timer'ını durdur
+    if (searchTimerInterval) {
+        clearInterval(searchTimerInterval);
+        searchTimerInterval = null;
+    }
+    
+    // Eşleşme modalını güncelle - oyuncu bilgilerini göster
+    updateMatchModal(data);
+    
+    // 2 saniye sonra oyunu başlat
+    setTimeout(() => {
+        document.getElementById('rankedModal').style.display = 'none';
+        startGame(data);
+    }, 2000);
 });
+
+// Eşleşme modalını güncelle
+function updateMatchModal(data) {
+    const modalContent = document.querySelector('#rankedModal .modal-content');
+    if (!modalContent) return;
+    
+    modalContent.innerHTML = `
+        <h2>🎮 Eşleşme Bulundu!</h2>
+        <div style="display: flex; gap: 20px; justify-content: center; align-items: center; margin: 20px 0;">
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(102, 126, 234, 0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; overflow: hidden; border: 3px solid #667eea;">
+                    ${userPhotoUrl ? 
+                        `<img src="${userPhotoUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />` :
+                        `<span style="font-size: 2em;">${userName.charAt(0).toUpperCase()}</span>`
+                    }
+                </div>
+                <div style="font-weight: bold; color: #667eea;">${userName}</div>
+            </div>
+            <div style="font-size: 2em;">VS</div>
+            <div style="text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(102, 126, 234, 0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; overflow: hidden; border: 3px solid #667eea;">
+                    ${data.opponentPhotoUrl ? 
+                        `<img src="${data.opponentPhotoUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />` :
+                        `<span style="font-size: 2em;">${data.opponentName ? data.opponentName.charAt(0).toUpperCase() : '?'}</span>`
+                    }
+                </div>
+                <div style="font-weight: bold; color: #667eea;">${data.opponentName || 'Rakip'}</div>
+            </div>
+        </div>
+        <p style="text-align: center; color: #666; font-size: 0.9em;">Oyun başlatılıyor...</p>
+    `;
+}
 
 socket.on('roomJoined', (data) => {
     document.getElementById('joinModal').style.display = 'none';
     document.getElementById('privateModal').style.display = 'none';
+    if (data.opponentPhotoUrl) {
+        gameState.opponentPhotoUrl = data.opponentPhotoUrl;
+    }
     startGame(data);
 });
 
@@ -637,6 +748,10 @@ socket.on('gameStart', (data) => {
     
     if (data.opponentName) {
         gameState.opponentName = data.opponentName;
+    }
+    
+    if (data.opponentPhotoUrl) {
+        gameState.opponentPhotoUrl = data.opponentPhotoUrl;
     }
     
     updatePlayerNames();
@@ -715,6 +830,7 @@ function startGame(data) {
     gameState.currentPlayer = 'white';
     gameState.gameStarted = true;
     gameState.opponentName = data.opponentName || 'Rakip';
+    gameState.opponentPhotoUrl = data.opponentPhotoUrl || null;
     gameState.afkCount = 0;
     
     document.getElementById('lobby').style.display = 'none';
@@ -744,12 +860,41 @@ function startGame(data) {
 function updatePlayerNames() {
     const player1Name = document.getElementById('player1Name');
     const player2Name = document.getElementById('player2Name');
+    const player1Avatar = document.getElementById('player1Avatar');
+    const player2Avatar = document.getElementById('player2Avatar');
     
     if (gameState.playerColor === 'white') {
         player1Name.textContent = userName;
         player2Name.textContent = gameState.opponentName;
+        
+        // Avatar'ları güncelle
+        updatePlayerAvatar(player1Avatar, userPhotoUrl, userName);
+        updatePlayerAvatar(player2Avatar, gameState.opponentPhotoUrl, gameState.opponentName);
     } else {
         player1Name.textContent = gameState.opponentName;
         player2Name.textContent = userName;
+        
+        // Avatar'ları güncelle
+        updatePlayerAvatar(player1Avatar, gameState.opponentPhotoUrl, gameState.opponentName);
+        updatePlayerAvatar(player2Avatar, userPhotoUrl, userName);
+    }
+}
+
+// Oyuncu avatar'ını güncelle
+function updatePlayerAvatar(avatarEl, photoUrl, name) {
+    if (!avatarEl) return;
+    
+    avatarEl.innerHTML = '';
+    if (photoUrl) {
+        const img = document.createElement('img');
+        img.src = photoUrl;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '50%';
+        avatarEl.appendChild(img);
+    } else {
+        avatarEl.textContent = name ? name.charAt(0).toUpperCase() : '👤';
+        avatarEl.style.fontSize = '1em';
     }
 }
