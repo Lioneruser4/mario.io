@@ -1,364 +1,190 @@
-/* ============================================= */
-/* ŞAŞKİ ONLINE - NEON STİL             */
-/* ============================================= */
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-    background-attachment: fixed;
-    color: #ffffff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-    /* Dokunmatik cihazlarda gereksiz kaydırmayı önler */
-    touch-action: manipulation; 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  background: linear-gradient(135deg, #0a0028 0%, #1a0033 50%, #000 100%);
+  color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  touch-action: manipulation;
 }
 
-/* ============== EKRANLAR ============== */
-.screen {
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 100vh;
-    padding: 20px;
-    text-align: center;
+#app {
+  max-width: 500px;
+  margin: 0 auto;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  position: relative;
 }
 
-.screen.active {
-    display: flex;
+.screen { display: none; animation: fadeIn 0.8s ease; }
+.screen.active { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; }}
+
+/* === LOBİ === */
+.logo {
+  text-align: center;
+  margin-bottom: 50px;
+}
+.neon-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 4.5rem;
+  font-weight: 800;
+  background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px #ff00ff, 0 0 80px #00ffff;
+  animation: titleGlow 3s infinite alternate;
+}
+@keyframes titleGlow {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(60deg); }
+}
+.neon-subtitle {
+  font-size: 1.6rem;
+  color: #00ffff;
+  text-shadow: 0 0 20px #00ffff;
+  letter-spacing: 8px;
 }
 
-/* ============== BAŞLIK ============== */
-.title {
-    font-size: clamp(3rem, 10vw, 5rem);
-    font-weight: 900;
-    background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00, #00ff00);
-    background-size: 300% 300%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: neonGradient 6s ease infinite, pulseTitle 4s infinite;
-    text-shadow: 0 0 40px rgba(0, 255, 255, 0.8);
-    margin-bottom: 20px;
-    letter-spacing: 4px;
+.menu-container { width: 100%; max-width: 360px; }
+.menu-btn {
+  width: 100%;
+  padding: 20px;
+  margin: 12px 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  border: 3px solid;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.4);
+  color: white;
+  cursor: pointer;
+  transition: all 0.4s;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+.menu-btn.ranked { border-color: #00ffff; box-shadow: 0 0 30px #00ffff; }
+.menu-btn.private { border-color: #ff00ff; box-shadow: 0 0 30px #ff00ff; }
+.menu-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 60px currentColor;
 }
 
-@keyframes neonGradient {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
+/* Oda Giriş */
+.join-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.room-input {
+  flex: 1;
+  padding: 18px;
+  text-align: center;
+  font-size: 2rem;
+  letter-spacing: 10px;
+  background: rgba(0,255,255,0.1);
+  border: 3px solid #00ffff;
+  border-radius: 20px;
+  color: #00ffff;
+  box-shadow: 0 0 30px #00ffff;
+}
+.join-btn {
+  padding: 18px 30px;
+  background: #00ff99;
+  color: black;
+  border: none;
+  border-radius: 20px;
+  font-weight: bold;
+  box-shadow: 0 0 40px #00ff99;
 }
 
-@keyframes pulseTitle {
-    0%, 100% { opacity: 0.9; }
-    50% { opacity: 1; }
+/* Tahta */
+.game-board {
+  width: 92vw;
+  max-width: 460px;
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  background: #000;
+  padding: 8px;
+  border-radius: 20px;
+  box-shadow: 0 0 60px rgba(0,255,255,0.6), inset 0 0 40px rgba(0,0,0,0.8);
+  margin: 20px 0;
 }
-
-/* ============== BUTONLAR ============== */
-.buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 90%;
-    max-width: 400px;
-    margin: 40px 0;
+.cell {
+  background: #16213e;
+  border-radius: 8px;
+  position: relative;
+  transition: all 0.3s;
 }
+.cell.black { background: #0f0f1e; }
+.cell.valid { background: #00ff88 !important; animation: pulse 1s infinite; box-shadow: 0 0 30px #00ff88; }
+.cell.capture { background: #ff0066 !important; animation: pulseRed 0.8s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes pulseRed { 0% { box-shadow: 0 0 20px #f00; } 50% { box-shadow: 0 0 50px #f00; } 100% { box-shadow: 0 0 20px #f00; } }
 
-.btn {
-    padding: 20px 30px;
-    font-size: 1.4rem;
-    font-weight: 700;
-    border: none;
-    border-radius: 50px;
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.4s ease;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 2px;
+.piece {
+  width: 80%;
+  height: 80%;
+  margin: 10%;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
 }
-
-.btn.small {
-    padding: 10px 20px;
-    font-size: 1rem;
-    margin-top: 15px;
+.piece.white { background: radial-gradient(circle at 30% 30%, #fff, #aaa); box-shadow: 0 0 30px #fff; }
+.piece.black { background: radial-gradient(circle at 30% 30%, #333, #000); box-shadow: 0 0 30px #00ffff; }
+.piece.king::after {
+  content: "★";
+  position: absolute;
+  top: 50%; left: 서로50%;
+  transform: translate(-50%,-50%);
+  font-size: 28px;
+  color: gold;
+  text-shadow: 0 0 20px gold;
+  animation: crown 2s infinite;
 }
+@keyframes crown { 0%,100% { transform: translate(-50%,-50%) rotate(0); } 50% { transform: translate(-50%,-50%) rotate(15deg); }}
 
-.btn:not(:disabled):before {
-    content: '';
-    position: absolute;
-    top: 0; left: -100%;
-    width: 100%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    transition: 0.7s;
+/* Işık Efektleri */
+.turn-light {
+  width: 16px; height: 16px; background: #333; border-radius: 50%; margin: 0 10px;
+  transition: all 0.5s;
 }
-
-.btn:not(:disabled):hover:before {
-    left: 100%;
+.turn-light.active {
+  background: #00ff00;
+  box-shadow: 0 0 40px #00ff00, 0 0 80px #00ff00;
+  animation: blink 1.5s infinite;
 }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.7; }}
 
-.btn:not(:disabled):hover {
-    transform: translateY(-6px) scale(1.05);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+/* Sonuç Ekranı */
+.result-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 1s;
 }
-
-.btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+.result-content h2 {
+  font-size: 4rem;
+  background: linear-gradient(45deg, #00ff00, #00ffff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
-
-/* Renk sınıfları */
-.cyan   { border: 4px solid #00ffff; background: rgba(0, 255, 255, 0.15); color: #fff; }
-.pink   { border: 4px solid #ff00ff; background: rgba(255, 0, 255, 0.15); color: #fff; }
-.green  { border: 4px solid #00ff88; background: rgba(0, 255, 136, 0.15); color: #fff; }
-.purple { border: 4px solid #aa00ff; background: rgba(170, 0, 255, 0.15); color: #fff; }
-.yellow { border: 4px solid #ffff00; background: rgba(255, 255, 0, 0.25); color: #000; }
-.red    { border: 4px solid #ff0055; background: rgba(255, 0, 85, 0.2); color: #fff; }
-
-/* ============== INPUT & ODA BİLGİSİ ============== */
-#joinBox {
-    display: flex;
-    margin-top: 15px;
-    gap: 10px;
-    align-items: center;
-    width: 90%;
-    max-width: 400px;
-}
-
-#codeInput {
-    flex-grow: 1;
-    padding: 15px;
-    font-size: 1.4rem;
-    text-align: center;
-    background: rgba(255, 255, 255, 0.1);
-    border: 3px solid #00ffff;
-    border-radius: 10px;
-    color: white;
-    outline: none;
-    transition: 0.3s;
-}
-
-#codeInput:focus {
-    box-shadow: 0 0 30px #00ffff;
-    border-color: #00ffea;
-}
-
-#joinBtn {
-    flex-basis: 120px;
-    padding: 15px 10px;
-    font-size: 1rem;
-}
-
-#roomInfo {
-    margin-top: 20px;
-    padding: 20px;
-    border: 2px solid #ff00ff;
-    border-radius: 15px;
-    background: rgba(255, 0, 255, 0.1);
-    backdrop-filter: blur(5px);
-    width: 90%;
-    max-width: 400px;
-}
-
-#roomCode {
-    font-size: 3rem;
-    font-weight: bold;
-    display: block;
-    margin: 10px 0;
-    background: linear-gradient(45deg, #00ffff, #ff00ff);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-/* ============== YÜKLEME & DURUM ============== */
-.loader {
-    width: 70px;
-    height: 70px;
-    border: 8px solid rgba(0, 255, 255, 0.3);
-    border-top: 8px solid #00ffff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 30px auto;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.status-text, .status-text-game {
-    font-weight: bold;
-    font-size: 1.1rem;
-    padding: 10px 20px;
-    border-radius: 10px;
-    margin-top: 15px;
-}
-
-#status {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 255, 255, 0.2);
-    border: 2px solid #00ffff;
-    border-radius: 50px;
-    backdrop-filter: blur(10px);
-    font-size: 1rem;
-    z-index: 100;
-}
-
-.status-text-game {
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px solid #ffcc00;
-    color: #ffcc00;
-    margin-bottom: 20px;
-}
-
-/* ============== OYUN EKRANI ============== */
-.game-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 10px;
-    width: 100%;
-}
-
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 95%;
-    max-width: 680px; 
-    padding: 15px 20px;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 20px;
-    backdrop-filter: blur(10px);
-    margin-bottom: 20px;
-    border: 2px solid #00ffff;
-}
-
-.p {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: clamp(1rem, 4vw, 1.3rem);
-    font-weight: 600;
-}
-
-.light {
-    width: 24px;
-    height: 24px;
-    min-width: 15px; /* Küçük ekranlarda küçülmeyi engeller */
-    min-height: 15px;
-    border-radius: 50%;
-    background: #333;
-    box-shadow: 0 0 10px #000;
-    transition: all 0.4s;
-}
-
-.light.active {
-    background: #00ff00;
-    box-shadow: 0 0 40px #00ff00, 0 0 60px #00ff00;
-    animation: glowLight 1.5s infinite alternate;
-}
-
-@keyframes glowLight {
-    from { box-shadow: 0 0 30px #00ff00; }
-    to   { box-shadow: 0 0 60px #00ff00; }
-}
-
-#board {
-    display: block;
-    border: 6px solid #00ffff;
-    border-radius: 20px;
-    box-shadow: 
-        0 0 40px rgba(0, 255, 255, 0.8),
-        inset 0 0 40px rgba(0, 0, 0, 0.5);
-    background: #000;
-    touch-action: none; 
-}
-
-#gameControls {
-    position: relative; 
-    display: inline-block;
-}
-
-#centralTimer {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    font-weight: 800; 
-    color: #f44336; 
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 5px 15px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-    z-index: 100;
-    pointer-events: none;
-    transition: color 0.3s, background-color 0.3s;
-}
-
-#centralTimer.critical {
-    color: #ff0000;
-    background-color: #ffdddd;
-    animation: pulseTimer 1s infinite;
-}
-
-@keyframes pulseTimer {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-    50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.8; }
-    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-}
-
-#gameOverMessage {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: clamp(2rem, 8vw, 4rem);
-    font-weight: bold;
-    color: white;
-    padding: 20px 40px;
-    border-radius: 15px;
-    background-color: rgba(0, 0, 0, 0.9);
-    z-index: 200;
-    display: none;
-    text-align: center;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
-}
-
-/* Uyarı Mesajı Modalı */
-#customModal {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: rgba(255, 0, 85, 0.95); color: white; padding: 20px;
-    border-radius: 10px; box-shadow: 0 0 20px rgba(255, 0, 85, 0.8);
-    font-size: 1.5rem; text-align: center; z-index: 9999;
-    transition: opacity 0.3s;
-    opacity: 0;
-    pointer-events: none;
-}
-#customModal.show {
-    opacity: 1;
-}
-
-
-/* ============== GİZLE ============== */
-.hidden {
-    display: none !important;
+.big-btn {
+  margin-top: 30px;
+  padding: 20px 60px;
+  font-size: 1.5rem;
+  background: #00ff99;
+  color: black;
+  border: none;
+  border-radius: 50px;
+  font-weight: bold;
 }
