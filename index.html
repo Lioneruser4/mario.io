@@ -69,6 +69,12 @@
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
+        .cell:active {
+            transform: scale(0.95);
         }
         
         .cell-white {
@@ -94,9 +100,15 @@
             cursor: pointer;
             border: 3px solid transparent;
             position: relative;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
         
         .piece:hover {
+            transform: translateY(-2px) scale(1.05);
+        }
+        
+        .piece:active {
             transform: translateY(-2px) scale(1.05);
         }
         
@@ -196,6 +208,21 @@
                 width: 32px;
                 height: 32px;
                 font-size: 16px;
+            }
+            
+            .piece:hover {
+                transform: translateY(-1px) scale(1.03);
+            }
+            
+            .selected {
+                animation: piece-select-glow 1.5s infinite ease-in-out;
+                border: 2px solid #3b82f6 !important;
+                z-index: 10;
+            }
+            
+            .valid-move::before {
+                width: 15px;
+                height: 15px;
             }
         }
     </style>
