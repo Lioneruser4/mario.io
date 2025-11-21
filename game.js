@@ -135,28 +135,14 @@ function initBoard() {
     return board;
 }
 
-// Timer başlat
+// Timer başlat (artık sunucu yönetiyor, bu fonksiyon kullanılmıyor)
 function startTimer() {
-    stopTimer();
-    gameState.timer = 20;
-    updateTimerDisplay();
-    
-    gameState.timerInterval = setInterval(() => {
-        gameState.timer--;
-        updateTimerDisplay();
-        
-        if (gameState.timer <= 0) {
-            handleTimeout();
-        }
-    }, 1000);
+    // Sunucu timer'ı yönetiyor, client sadece gösteriyor
 }
 
 // Timer durdur
 function stopTimer() {
-    if (gameState.timerInterval) {
-        clearInterval(gameState.timerInterval);
-        gameState.timerInterval = null;
-    }
+    // Sunucu timer'ı yönetiyor, client sadece gösteriyor
 }
 
 // Timer gösterimini güncelle
@@ -180,7 +166,6 @@ function updateTimerDisplay() {
 
 // Süre dolduğunda
 function handleTimeout() {
-    stopTimer();
     gameState.afkCount++;
     
     if (gameState.afkCount >= 2) {
@@ -242,13 +227,15 @@ function renderBoard() {
     }
     
     // Siyah oyuncu için tahtayı ters çevir (kendini en altta görsün)
+    // Sadece satırları ters çevir, sütunları değil
     const isFlipped = gameState.playerColor === 'black';
     
     for (let displayRow = 0; displayRow < 8; displayRow++) {
         for (let displayCol = 0; displayCol < 8; displayCol++) {
             // Görüntüleme koordinatlarından gerçek koordinatlara çevir
+            // Sadece satırları ters çevir
             const realRow = isFlipped ? 7 - displayRow : displayRow;
-            const realCol = isFlipped ? 7 - displayCol : displayCol;
+            const realCol = displayCol; // Sütunlar aynı kalır
             
             const square = document.createElement('div');
             square.className = 'square ' + ((realRow + realCol) % 2 === 0 ? 'light' : 'dark');
@@ -425,6 +412,7 @@ function getValidMoves(row, col) {
 function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     const piece = gameState.board[fromRow][fromCol];
     
+    // Optimistik update - hemen render et
     gameState.board[toRow][toCol] = piece;
     gameState.board[fromRow][fromCol] = null;
     
@@ -438,6 +426,9 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
             piece.king = true;
         }
     }
+    
+    // Hemen render et (gecikme olmasın)
+    renderBoard();
     
     // Çoklu yeme kontrolü - aynı taş tekrar yeme yapabilir mi?
     let canContinueCapture = false;
@@ -462,9 +453,6 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
             userId: userId,
             continueCapture: true
         });
-        
-        // Timer sıfırlanmaz, çoklu yeme sırasında
-        renderBoard();
     } else {
         // Normal hamle veya çoklu yeme bitti
         gameState.canContinueCapture = false;
@@ -480,12 +468,6 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
             capture: capture,
             userId: userId
         });
-        
-        // Timer'ı sıfırla - sunucudan gelen moveMade event'i timer'ı başlatacak
-        stopTimer();
-        gameState.timer = 20;
-        updateTimerDisplay();
-        renderBoard();
     }
 }
 
@@ -517,14 +499,9 @@ function startRankedGame() {
     });
     document.getElementById('rankedModal').style.display = 'block';
     
-    // Eşleşme timer'ını başlat
+    // Timer sunucudan gelecek
     searchTimer = 0;
     updateSearchTimer();
-    if (searchTimerInterval) clearInterval(searchTimerInterval);
-    searchTimerInterval = setInterval(() => {
-        searchTimer++;
-        updateSearchTimer();
-    }, 1000);
 }
 
 // Eşleşme timer'ını güncelle
@@ -547,11 +524,11 @@ function cancelSearch() {
     }
 }
 
-// Arama iptal
-function cancelSearch() {
-    socket.emit('cancelSearch', { userId });
-    document.getElementById('rankedModal').style.display = 'none';
-}
+// Sunucudan eşleşme timer güncellemesi
+socket.on('searchTimerUpdate', (data) => {
+    searchTimer = data.timeElapsed;
+    updateSearchTimer();
+});
 
 // Özel oda oluştur
 function createPrivateRoom() {
@@ -650,7 +627,7 @@ function leaveGame() {
 
 // Oyunu sıfırla
 function resetGame() {
-    stopTimer();
+    // Timer sunucu tarafında yönetiliyor, client tarafında durdurmaya gerek yok
     if (searchTimerInterval) {
         clearInterval(searchTimerInterval);
         searchTimerInterval = null;
@@ -683,11 +660,9 @@ socket.on('roomCreated', (data) => {
 });
 
 socket.on('matchFound', (data) => {
-    // Eşleşme timer'ını durdur
-    if (searchTimerInterval) {
-        clearInterval(searchTimerInterval);
-        searchTimerInterval = null;
-    }
+    // Eşleşme timer'ını durdur (sunucu zaten durdurdu)
+    searchTimer = 0;
+    updateSearchTimer();
     
     // Eşleşme modalını güncelle - oyuncu bilgilerini göster
     updateMatchModal(data);
@@ -757,18 +732,27 @@ socket.on('gameStart', (data) => {
     updatePlayerNames();
     renderBoard();
     
-    // Timer'ı her iki tarafta da sıfırla
-    stopTimer();
+    // Timer sunucudan gelecek (timerUpdate event'i)
     gameState.timer = 20;
     updateTimerDisplay();
-    
-    // Sıra kendisindeyse timer başlat
-    if (gameState.currentPlayer === gameState.playerColor) {
-        startTimer();
+});
+
+// Sunucudan timer güncellemesi
+socket.on('timerUpdate', (data) => {
+    gameState.timer = data.timeLeft;
+    gameState.currentPlayer = data.currentPlayer;
+    updateTimerDisplay();
+});
+
+// Timer süresi doldu
+socket.on('timerTimeout', (data) => {
+    if (data.currentPlayer === gameState.playerColor) {
+        handleTimeout();
     }
 });
 
 socket.on('moveMade', (data) => {
+    // Sunucudan gelen hamleyi hemen uygula (gecikme olmasın)
     gameState.board = data.board;
     
     // Çoklu yeme devam ediyorsa sıra değişmez
@@ -778,25 +762,13 @@ socket.on('moveMade', (data) => {
         gameState.capturingPiece = null;
     }
     
+    // Hemen render et
     renderBoard();
-    
-    // Çoklu yeme sırasında timer sıfırlanmaz
-    if (!data.continueCapture) {
-        // Her hamle sonrası timer'ı her iki tarafta da sıfırla ve başlat (senkronizasyon için)
-        stopTimer();
-        if (gameState.currentPlayer === gameState.playerColor) {
-            // Sıra kendisindeyse timer başlat
-            startTimer();
-        } else {
-            // Sıra rakibindeyse timer'ı sıfırla ama başlatma (rakibin sırası)
-            gameState.timer = 20;
-            updateTimerDisplay();
-        }
-    }
+    // Timer sunucudan gelecek (timerUpdate event'i)
 });
 
 socket.on('gameOver', (data) => {
-    stopTimer();
+    // Timer sunucu tarafında durduruldu
     setTimeout(() => {
         const winnerText = data.winner === gameState.playerColor ? 
             '🎉 TEBRİKLER! KAZANDINIZ! 🎉' : 
@@ -807,13 +779,13 @@ socket.on('gameOver', (data) => {
 });
 
 socket.on('opponentLeft', () => {
-    stopTimer();
+    // Timer sunucu tarafında durduruldu
     alert('⚠️ Rakibiniz oyundan ayrıldı!');
     resetGame();
 });
 
 socket.on('gameAbandoned', () => {
-    stopTimer();
+    // Timer sunucu tarafında durduruldu
     alert('⚠️ Oyun 2 kez süre aşımı nedeniyle sonlandırıldı!');
     resetGame();
 });
@@ -845,15 +817,9 @@ function startGame(data) {
         userId: userId
     });
     
-    // Timer'ı sıfırla
-    stopTimer();
+    // Timer sunucudan yönetiliyor
     gameState.timer = 20;
     updateTimerDisplay();
-    
-    // Beyaz başlar, sıra kendisindeyse timer başlat
-    if (gameState.playerColor === 'white') {
-        startTimer();
-    }
 }
 
 // Oyuncu isimlerini güncelle
