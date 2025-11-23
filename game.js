@@ -847,7 +847,7 @@ function addAdminButton() {
         showAdminPanel();
     };
     
-    // Lobiye ekle
+    // SADECE lobiye ekle (oyun ekranında gösterme)
     const lobby = document.getElementById('lobby');
     if (lobby) {
         const header = lobby.querySelector('.header');
@@ -855,15 +855,6 @@ function addAdminButton() {
             header.appendChild(adminBtn);
         } else {
             lobby.insertBefore(adminBtn, lobby.firstChild);
-        }
-    }
-    
-    // Oyun ekranına da ekle
-    const game = document.getElementById('game');
-    if (game) {
-        const gameHeader = game.querySelector('.game-header') || game.querySelector('h1');
-        if (gameHeader) {
-            gameHeader.appendChild(adminBtn.cloneNode(true));
         }
     }
 }
@@ -935,6 +926,16 @@ function showAdminPanel() {
                 </div>
                 
                 <div class="admin-section">
+                    <h3>🏆 Liderlik Tablosu</h3>
+                    <div class="admin-controls">
+                        <button class="btn" onclick="loadLeaderboard()">🔄 Liderlik Tablosu Yükle</button>
+                        <div id="adminLeaderboard" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                            <!-- Liderlik tablosu burada gösterilecek -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="admin-section">
                     <h3>📋 Kullanıcı Listesi</h3>
                     <div class="admin-controls">
                         <button class="btn" onclick="loadUserList()">🔄 Kullanıcı Listesi Yükle</button>
@@ -988,6 +989,9 @@ function loadAdminStats() {
             
             // Bekleyen odaları göster
             updateWaitingRooms();
+            
+            // Liderlik tablosunu yükle
+            loadLeaderboard();
         });
 }
 
@@ -1051,6 +1055,18 @@ function loadUserList() {
 // Kullanıcıyı sil
 function deleteUser(userId) {
     if (confirm(`Kullanıcı ${userId} silinsin mi?`)) {
+        socket.emit('adminUserAction', { userId, action: 'deleteUser' });
+    }
+}
+
+// Liderlik tablosunu yükle
+function loadLeaderboard() {
+    socket.emit('getLeaderboard');
+}
+
+// Liderlik tablosundan kullanıcı sil
+function deleteFromLeaderboard(userId) {
+    if (confirm(`Kullanıcı ${userId} liderlik tablosundan ve veritabanından silinsin mi?`)) {
         socket.emit('adminUserAction', { userId, action: 'deleteUser' });
     }
 }
@@ -1259,8 +1275,30 @@ socket.on('userStats', (data) => {
 });
 
 // Liderlik tablosu güncelleme
-socket.on('leaderboardUpdate', (data) => {
-    updateLeaderboardDisplay(data);
+socket.on('leaderboardUpdate', (leaderboard) => {
+    updateLeaderboardDisplay(leaderboard);
+    
+    // Admin panelindeki liderlik tablosunu da güncelle
+    const adminLeaderboardEl = document.getElementById('adminLeaderboard');
+    if (adminLeaderboardEl) {
+        if (leaderboard.length === 0) {
+            adminLeaderboardEl.innerHTML = '<p style="color: #999; text-align: center;">Liderlik tablosu boş</p>';
+        } else {
+            const leaderboardHTML = leaderboard.map((player, index) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 5px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: bold; color: #ffd700;">#${index + 1}</span>
+                        <div>
+                            <strong>${player.userName}</strong><br>
+                            <small style="color: #999;">${player.userId} | Elo: ${player.elo}</small>
+                        </div>
+                    </div>
+                    <button class="btn danger" style="padding: 5px 10px; font-size: 0.8em;" onclick="deleteFromLeaderboard('${player.userId}')">Sil</button>
+                </div>
+            `).join('');
+            adminLeaderboardEl.innerHTML = leaderboardHTML;
+        }
+    }
 });
 
 // Kullanıcı sıralaması güncelleme
