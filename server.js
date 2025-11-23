@@ -390,16 +390,28 @@ io.on('connection', (socket) => {
         });
         console.log('👤 Kullanıcı kaydedildi:', data.userName, '| ID:', data.userId);
         
-        // MongoDB'ye kullanıcıyı kaydet veya bul
-        const user = await findOrCreateUser(data.userId, data.userName);
-        if (user) {
-            // Kullanıcıya elo ve seviye bilgisini gönder
+        // Sadece Telegram kullanıcıları için MongoDB'ye kaydet
+        if (data.userId.startsWith('TG_')) {
+            const user = await findOrCreateUser(data.userId, data.userName);
+            if (user) {
+                // Kullanıcıya elo ve seviye bilgisini gönder
+                socket.emit('userStats', {
+                    elo: user.elo,
+                    level: user.level,
+                    levelIcon: getLevelIcon(user.level),
+                    wins: user.wins,
+                    losses: user.losses
+                });
+            }
+        } else {
+            // Guest kullanıcılar için varsayılan değerler (elo yok)
             socket.emit('userStats', {
-                elo: user.elo,
-                level: user.level,
-                levelIcon: getLevelIcon(user.level),
-                wins: user.wins,
-                losses: user.losses
+                elo: 0,
+                level: 0,
+                levelIcon: 'guest',
+                wins: 0,
+                losses: 0,
+                isGuest: true
             });
         }
     });
@@ -425,26 +437,27 @@ io.on('connection', (socket) => {
         };
 
         if (waitingPlayers.size > 0) {
-            const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
-            const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+            // Kendisiyle eşleşmeyi engelle
+            let foundOpponent = false;
             
-            // Kendisiyle eşleşmesin
-            if (opponentSocketId === socket.id) {
-                console.log('⚠️ Aynı kullanıcı, atlanıyor');
-                waitingPlayers.delete(opponentSocketId);
-                waitingPlayers.set(socket.id, playerData);
-                startSearchTimer(socket.id);
-                return;
-            }
-            
-            if (opponentSocket) {
-                // Eşleşme bulundu - timer'ları durdur
-                stopSearchTimer(socket.id);
-                stopSearchTimer(opponentSocketId);
+            for (const [opponentSocketId, opponentData] of waitingPlayers.entries()) {
+                // Aynı kullanıcı ID'si veya aynı socket ID'si ise atla
+                if (opponentSocketId === socket.id || opponentData.userId === data.userId) {
+                    console.log('⚠️ Aynı kullanıcı, atlanıyor');
+                    continue;
+                }
                 
-                waitingPlayers.delete(opponentSocketId);
-                
-                const roomCode = generateRoomCode();
+                const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+                if (opponentSocket) {
+                    foundOpponent = true;
+                    
+                    // Eşleşme bulundu - timer'ları durdur
+                    stopSearchTimer(socket.id);
+                    stopSearchTimer(opponentSocketId);
+                    
+                    waitingPlayers.delete(opponentSocketId);
+                    
+                    const roomCode = generateRoomCode();
                 
                 rooms.set(roomCode, {
                     players: [
@@ -496,8 +509,14 @@ io.on('connection', (socket) => {
                 });
 
                 console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
-            } else {
-                waitingPlayers.delete(opponentSocketId);
+                    break; // Eşleşme bulundu, döngüden çık
+                } else {
+                    waitingPlayers.delete(opponentSocketId);
+                }
+            }
+            
+            // Eşleşme bulunamadıysa bekleme listesine ekle
+            if (!foundOpponent) {
                 waitingPlayers.set(socket.id, playerData);
                 startSearchTimer(socket.id);
                 console.log('⏳ Bekleme listesine eklendi:', data.userName);
