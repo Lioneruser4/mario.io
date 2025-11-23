@@ -825,7 +825,229 @@ socket.on('timerTimeout', (data) => {
     }
 });
 
-// Admin bildirimleri
+// Admin paneli kontrolü
+function checkAdminAccess() {
+    // Sadece bu Telegram ID'ye admin paneli göster
+    const adminTelegramId = '976640409';
+    return userId === `TG_${adminTelegramId}`;
+}
+
+// Admin paneli butonunu ekle
+function addAdminButton() {
+    if (!checkAdminAccess()) return;
+    
+    // Eğer admin butonu zaten varsa ekleme
+    if (document.getElementById('adminBtn')) return;
+    
+    const adminBtn = document.createElement('button');
+    adminBtn.id = 'adminBtn';
+    adminBtn.className = 'btn admin-btn';
+    adminBtn.innerHTML = '🔧 Admin';
+    adminBtn.onclick = () => {
+        showAdminPanel();
+    };
+    
+    // Lobiye ekle
+    const lobby = document.getElementById('lobby');
+    if (lobby) {
+        const header = lobby.querySelector('.header');
+        if (header) {
+            header.appendChild(adminBtn);
+        } else {
+            lobby.insertBefore(adminBtn, lobby.firstChild);
+        }
+    }
+    
+    // Oyun ekranına da ekle
+    const game = document.getElementById('game');
+    if (game) {
+        const gameHeader = game.querySelector('.game-header') || game.querySelector('h1');
+        if (gameHeader) {
+            gameHeader.appendChild(adminBtn.cloneNode(true));
+        }
+    }
+}
+
+// Admin panelini göster
+function showAdminPanel() {
+    // Admin panel modal'ı oluştur
+    const existingModal = document.getElementById('adminModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'adminModal';
+    modal.className = 'admin-modal';
+    modal.innerHTML = `
+        <div class="admin-modal-content">
+            <div class="admin-modal-header">
+                <h2>🔧 Admin Panel</h2>
+                <button class="admin-close-btn" onclick="closeAdminPanel()">×</button>
+            </div>
+            <div class="admin-modal-body">
+                <div class="admin-section">
+                    <h3>📊 İstatistikler</h3>
+                    <div class="admin-stats">
+                        <div class="stat-item">
+                            <label>Aktif Oda:</label>
+                            <span id="adminActiveRooms">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Bekleyen Oyuncu:</label>
+                            <span id="adminWaitingPlayers">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Toplam Kullanıcı:</label>
+                            <span id="adminTotalUsers">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>👥 Kullanıcı İşlemleri</h3>
+                    <div class="admin-controls">
+                        <input type="text" id="adminUserId" placeholder="Kullanıcı ID (TG_123456789)">
+                        <select id="adminAction">
+                            <option value="giveElo">Elo Ver (+100)</option>
+                            <option value="takeElo">Elo Al (-100)</option>
+                            <option value="deleteUser">Kullanıcı Sil</option>
+                            <option value="resetUser">Sıfırla</option>
+                        </select>
+                        <button class="btn" onclick="executeAdminAction()">Uygula</button>
+                    </div>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>⚙️ Sistem İşlemleri</h3>
+                    <div class="admin-controls">
+                        <button class="btn danger" onclick="adminResetAllElo()">🔄 Tüm Elo'yu Sıfırla</button>
+                        <button class="btn warning" onclick="adminClearRooms()">🏠 Odaları Temizle</button>
+                        <button class="btn success" onclick="adminKickAll()">👟 Herkesi At</button>
+                    </div>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>📢 Bildirim Gönder</h3>
+                    <div class="admin-controls">
+                        <input type="text" id="adminNotification" placeholder="Bildirim mesajı...">
+                        <button class="btn" onclick="sendAdminNotification()">Gönder</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // İstatistikleri yükle
+    loadAdminStats();
+    
+    // 5 saniyede bir istatistikleri güncelle
+    window.adminStatsInterval = setInterval(loadAdminStats, 5000);
+}
+
+// Admin panelini kapat
+function closeAdminPanel() {
+    const modal = document.getElementById('adminModal');
+    if (modal) {
+        modal.remove();
+    }
+    if (window.adminStatsInterval) {
+        clearInterval(window.adminStatsInterval);
+    }
+}
+
+// Admin istatistiklerini yükle
+function loadAdminStats() {
+    fetch('/status')
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('adminActiveRooms').textContent = data.activeRooms;
+            document.getElementById('adminWaitingPlayers').textContent = data.waitingPlayers;
+            
+            // Toplam kullanıcı sayısını al
+            socket.emit('adminGetUsers');
+        });
+}
+
+// Admin işlemi yap
+function executeAdminAction() {
+    const userId = document.getElementById('adminUserId').value;
+    const action = document.getElementById('adminAction').value;
+    
+    if (!userId) {
+        alert('Kullanıcı ID girin!');
+        return;
+    }
+    
+    socket.emit('adminUserAction', { userId, action, amount: 100 });
+}
+
+// Tüm elo'yu sıfırla
+function adminResetAllElo() {
+    if (confirm('Tüm elo puanlarını sıfırlamak istediğinizden emin misiniz?')) {
+        socket.emit('adminResetAllElo');
+    }
+}
+
+// Odaları temizle
+function adminClearRooms() {
+    if (confirm('Tüm odaları temizlemek istediğinizden emin misiniz?')) {
+        socket.emit('adminClearAllRooms');
+    }
+}
+
+// Herkesi at
+function adminKickAll() {
+    if (confirm('Tüm kullanıcıları atmak istediğinizden emin misiniz?')) {
+        socket.emit('adminKickAll');
+    }
+}
+
+// Bildirim gönder
+function sendAdminNotification() {
+    const message = document.getElementById('adminNotification').value;
+    if (message) {
+        socket.emit('adminNotification', { message, type: 'info' });
+        document.getElementById('adminNotification').value = '';
+    }
+}
+
+// Sayfa yüklendiğinde kontrol et
+document.addEventListener('DOMContentLoaded', () => {
+    addAdminButton();
+});
+
+// Kullanıcı bilgileri geldiğinde kontrol et
+socket.on('userStats', (data) => {
+    setTimeout(() => addAdminButton(), 100);
+});
+
+socket.on('gameStart', () => {
+    // Oyun ekranında da admin butonu olsun
+    setTimeout(() => addAdminButton(), 100);
+});
+
+socket.on('matchFound', () => {
+    setTimeout(() => addAdminButton(), 100);
+});
+socket.on('adminUsers', (users) => {
+    const totalUsersEl = document.getElementById('adminTotalUsers');
+    if (totalUsersEl) {
+        totalUsersEl.textContent = users.length;
+    }
+});
+
+socket.on('adminResponse', (data) => {
+    // Admin bildirimini göster
+    showCustomNotification(data.message, data.type);
+    
+    if (data.refresh) {
+        loadAdminStats();
+    }
+});
+
 socket.on('adminNotification', (data) => {
     showCustomNotification(data.message, data.type);
 });
@@ -1096,6 +1318,10 @@ function startGame(data) {
     gameState.opponentElo = data.opponentElo || 0;
     gameState.afkCount = 0;
     
+    // Sunucuya hazır olduğumuzu bildir
+    socket.emit('gameReady', { roomCode: gameState.roomCode, board: gameState.board, userId: userId });
+    
+    // Oyun arayüzünü göster
     document.getElementById('lobby').style.display = 'none';
     document.getElementById('leaderboard').style.display = 'none';
     document.getElementById('game').style.display = 'block';
@@ -1103,13 +1329,7 @@ function startGame(data) {
     updatePlayerNames();
     renderBoard();
     
-    socket.emit('gameReady', {
-        roomCode: gameState.roomCode,
-        board: gameState.board,
-        userId: userId
-    });
-    
-    // Timer sunucudan yönetiliyor
+    // Timer sunucudan gelecek (timerUpdate event'i)
     gameState.timer = 20;
     updateTimerDisplay();
     
