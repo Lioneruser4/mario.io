@@ -544,6 +544,17 @@
             to { box-shadow: 0 0 20px rgba(251, 191, 36, 0.8); }
         }
 
+        @keyframes levelGlow {
+            0%, 100% { 
+                transform: scale(1); 
+                filter: brightness(1);
+            }
+            50% { 
+                transform: scale(1.1); 
+                filter: brightness(1.3);
+            }
+        }
+
         /* Oyun Ekranı */
         #game { display: none; }
 
