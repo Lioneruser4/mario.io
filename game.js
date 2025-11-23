@@ -905,10 +905,12 @@ function showAdminPanel() {
                 <div class="admin-section">
                     <h3>👥 Kullanıcı İşlemleri</h3>
                     <div class="admin-controls">
-                        <input type="text" id="adminUserId" placeholder="Kullanıcı ID (TG_123456789)">
+                        <input type="text" id="adminUserId" placeholder="Kullanıcı ID (1840079939 veya TG_1840079939)">
                         <select id="adminAction">
                             <option value="giveElo">Elo Ver (+100)</option>
                             <option value="takeElo">Elo Al (-100)</option>
+                            <option value="giveElo500">Elo Ver (+500)</option>
+                            <option value="giveElo1000">Elo Ver (+1000)</option>
                             <option value="deleteUser">Kullanıcı Sil</option>
                             <option value="resetUser">Sıfırla</option>
                         </select>
@@ -1006,7 +1008,7 @@ function updateWaitingRooms() {
 
 // Admin işlemi yap
 function executeAdminAction() {
-    const userId = document.getElementById('adminUserId').value;
+    let userId = document.getElementById('adminUserId').value.trim();
     const action = document.getElementById('adminAction').value;
     
     if (!userId) {
@@ -1014,7 +1016,18 @@ function executeAdminAction() {
         return;
     }
     
-    socket.emit('adminUserAction', { userId, action, amount: 100 });
+    // Eğer sadece sayı ise TG_ prefix ekle
+    if (/^\d+$/.test(userId)) {
+        userId = `TG_${userId}`;
+    }
+    
+    // Action'a göre amount belirle
+    let amount = 100;
+    if (action === 'giveElo500') amount = 500;
+    if (action === 'giveElo1000') amount = 1000;
+    if (action === 'takeElo') amount = -100;
+    
+    socket.emit('adminUserAction', { userId, action, amount });
 }
 
 // Tüm elo'yu sıfırla
