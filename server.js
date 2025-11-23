@@ -769,35 +769,10 @@ io.on('connection', (socket) => {
                 opponentName: player1.userName,
                 opponentPhotoUrl: player1.userPhotoUrl || null // Rakibin resmi
             });
-        // Oyunu başlat
-        const firstPlayer = room.players[0];
-        const secondPlayer = room.players[1];
+        }
         
-        // Beyaz başlar
-        io.to(firstPlayer.socketId).emit('gameStart', {
-            roomCode: data.roomCode,
-            playerColor: 'white',
-            board: firstPlayer.board || data.board,
-            currentPlayer: 'white',
-            opponentName: secondPlayer.userName,
-            opponentPhotoUrl: secondPlayer.userPhotoUrl,
-            opponentLevel: secondPlayer.userLevel,
-            opponentElo: secondPlayer.userElo
-        });
-        
-        io.to(secondPlayer.socketId).emit('gameStart', {
-            roomCode: data.roomCode,
-            playerColor: 'black',
-            board: secondPlayer.board || data.board,
-            currentPlayer: 'white',
-            opponentName: firstPlayer.userName,
-            opponentPhotoUrl: firstPlayer.userPhotoUrl,
-            opponentLevel: firstPlayer.userLevel,
-            opponentElo: firstPlayer.userElo
-        });
-        
-        room.gameStarted = true;
-        startRoomTimer(data.roomCode);
+        // Oyun başlatma kodunu KALDIR - sadece gameReady ile başlayacak
+        console.log(`👥 İkinci oyuncu katıldı: ${player2.userName} - Oda: ${data.roomCode}`);
         }
         
         // Sıra kontrolü
@@ -1494,15 +1469,11 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// Sunucu durumu
+// Sunucu durumu endpoint'i
 app.get('/status', (req, res) => {
     res.json({
-        status: 'online',
         activeRooms: rooms.size,
-        waitingPlayers: waitingPlayers.size,
-        connectedUsers: users.size,
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        waitingPlayers: waitingPlayers.size
     });
 });
 
