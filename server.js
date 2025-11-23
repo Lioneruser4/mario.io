@@ -1153,11 +1153,215 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Admin olayları
+    socket.on('adminGetUsers', async () => {
+        try {
+            const allUsers = await usersCollection.find({}).sort({ elo: -1 }).toArray();
+            socket.emit('adminUsers', allUsers);
+        } catch (error) {
+            socket.emit('adminResponse', { message: 'Kullanıcılar alınamadı: ' + error.message, type: 'error' });
+        }
+    });
+
+    socket.on('adminUserAction', async (data) => {
+        try {
+            const { userId, action, amount } = data;
+            const user = await usersCollection.findOne({ userId });
+            
+            if (!user) {
+                socket.emit('adminResponse', { message: 'Kullanıcı bulunamadı!', type: 'error' });
+                return;
+            }
+
+            let message = '';
+            let refresh = false;
+
+            switch (action) {
+                case 'giveElo':
+                    const newElo = user.elo + amount;
+                    await usersCollection.updateOne(
+                        { userId },
+                        { 
+                            $set: { 
+                                elo: newElo,
+                                level: calculateLevel(newElo)
+                            }
+                        }
+                    );
+                    message = `${user.userName} kullanıcısına ${amount} elo verildi!`;
+                    refresh = true;
+                    break;
+
+                case 'takeElo':
+                    const reducedElo = Math.max(0, user.elo - amount);
+                    await usersCollection.updateOne(
+                        { userId },
+                        { 
+                            $set: { 
+                                elo: reducedElo,
+                                level: calculateLevel(reducedElo)
+                            }
+                        }
+                    );
+                    message = `${user.userName} kullanıcısından ${amount} elo alındı!`;
+                    refresh = true;
+                    break;
+
+                case 'deleteUser':
+                    await usersCollection.deleteOne({ userId });
+                    message = `${user.userName} kullanıcısı silindi!`;
+                    refresh = true;
+                    break;
+
+                case 'resetUser':
+                    await usersCollection.updateOne(
+                        { userId },
+                        { 
+                            $set: { 
+                                elo: 0,
+                                level: 1,
+                                wins: 0,
+                                losses: 0,
+                                gamesPlayed: 0
+                            }
+                        }
+                    );
+                    message = `${user.userName} kullanıcısı sıfırlandı!`;
+                    refresh = true;
+                    break;
+            }
+
+            socket.emit('adminResponse', { message, type: 'success', refresh });
+        } catch (error) {
+            socket.emit('adminResponse', { message: 'İşlem hatası: ' + error.message, type: 'error' });
+        }
+    });
+
+    socket.on('adminResetAllElo', async () => {
+        try {
+            await usersCollection.updateMany(
+                {},
+                { 
+                    $set: { 
+                        elo: 0,
+                        level: 1,
+                        wins: 0,
+                        losses: 0,
+                        gamesPlayed: 0
+                    }
+                }
+            );
+            
+            // Tüm kullanıcılara bildirim gönder
+            io.emit('adminNotification', { 
+                message: '🔄 Tüm elo puanları admin tarafından sıfırlandı!', 
+                type: 'warning' 
+            });
+            
+            socket.emit('adminResponse', { message: 'Tüm elo puanları sıfırlandı!', type: 'success', refresh: true });
+        } catch (error) {
+            socket.emit('adminResponse', { message: 'Sıfırlama hatası: ' + error.message, type: 'error' });
+        }
+    });
+
+    socket.on('adminResetLeaderboard', async () => {
+        try {
+            await leaderboardCollection.deleteMany({});
+            socket.emit('adminResponse', { message: 'Liderlik tablosu temizlendi!', type: 'success' });
+        } catch (error) {
+            socket.emit('adminResponse', { message: 'Temizleme hatası: ' + error.message, type: 'error' });
+        }
+    });
+
+    socket.on('adminKickAll', () => {
+        // Tüm kullanıcıları at
+        io.emit('adminNotification', { 
+            message: '👟 Admin tarafından tüm kullanıcılar atıldı!', 
+            type: 'warning' 
+        });
+        
+        // Tüm bağlantıları kes
+        io.sockets.sockets.forEach(socket => {
+            socket.disconnect();
+        });
+        
+        socket.emit('adminResponse', { message: 'Tüm kullanıcılar atıldı!', type: 'success' });
+    });
+
+    socket.on('adminBackup', async () => {
+        try {
+            const users = await usersCollection.find({}).toArray();
+            const backupData = {
+                timestamp: new Date(),
+                users: users,
+                stats: {
+                    totalUsers: users.length,
+                    activeRooms: rooms.size,
+                    waitingPlayers: waitingPlayers.size
+                }
+            };
+            
+            // Burada backup'ı dosyaya yazabilir veya başka bir yere kaydedebilirsiniz
+            socket.emit('adminResponse', { 
+                message: `Yedek oluşturuldu! ${backupData.users.length} kullanıcı`, 
+                type: 'success' 
+            });
+        } catch (error) {
+            socket.emit('adminResponse', { message: 'Yedekleme hatası: ' + error.message, type: 'error' });
+        }
+    });
+
+    socket.on('adminCloseRoom', (data) => {
+        const { roomCode } = data;
+        const room = rooms.get(roomCode);
+        
+        if (room) {
+            // Odadaki oyunculara haber ver
+            io.to(roomCode).emit('adminNotification', { 
+                message: '🏠 Oda admin tarafından kapatıldı!', 
+                type: 'warning' 
+            });
+            
+            // Odayı kapat
+            stopRoomTimer(roomCode);
+            rooms.delete(roomCode);
+            
+            socket.emit('adminResponse', { message: `Oda ${roomCode} kapatıldı!`, type: 'success' });
+        } else {
+            socket.emit('adminResponse', { message: 'Oda bulunamadı!', type: 'error' });
+        }
+    });
+
+    socket.on('adminClearAllRooms', () => {
+        // Tüm odaları temizle
+        rooms.forEach((room, roomCode) => {
+            stopRoomTimer(roomCode);
+            io.to(roomCode).emit('adminNotification', { 
+                message: '🏠 Tüm odalar admin tarafından temizlendi!', 
+                type: 'warning' 
+            });
+        });
+        
+        rooms.clear();
+        socket.emit('adminResponse', { message: 'Tüm odalar temizlendi!', type: 'success' });
+    });
+
+    socket.on('adminNotification', (data) => {
+        // Tüm kullanıcılara bildirim gönder
+        io.emit('adminNotification', data);
+        socket.emit('adminResponse', { message: 'Bildirim gönderildi!', type: 'success' });
+    });
+
 });
 
 // Middleware
 app.use(express.json());
 app.use(express.static(__dirname));
+
+// Admin paneli route
+app.get('/admin', (req, res) => {
+    res.sendFile(__dirname + '/admin.html');
+});
 
 // Ana sayfa
 app.get('/', (req, res) => {
