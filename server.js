@@ -574,22 +574,41 @@ io.on('connection', (socket) => {
             let opponentSocketId = null;
             let opponentData = null;
             
-            // Önce son eşleşme olmayan oyuncuyu bul
-            for (const [waitingId, waitingData] of waitingArray) {
+            // Eğer sadece 1 kişi beklemedeyse ve o kişi son eşleştiğimiz ise beklemede kal
+            if (waitingArray.length === 1) {
+                const [waitingId, waitingData] = waitingArray[0];
                 const lastMatchKey = `${data.userId}_${waitingData.userId}`;
                 const reverseLastMatchKey = `${waitingData.userId}_${data.userId}`;
                 
-                // Eğer bu iki oyuncu daha önce eşleşmemişse veya başka oyuncu varsa
-                if (!lastMatches.has(lastMatchKey) && !lastMatches.has(reverseLastMatchKey)) {
-                    opponentSocketId = waitingId;
-                    opponentData = waitingData;
-                    break;
+                // Eğer son eşleştiğimiz kişi ise, eşleşme yapma ve beklemede kal
+                if (lastMatches.has(lastMatchKey) || lastMatches.has(reverseLastMatchKey)) {
+                    console.log('⏳ Son eşleştiğiniz kişi beklemede, yeni rakip bekleniyor:', data.userName);
+                    waitingPlayers.set(socket.id, playerData);
+                    startSearchTimer(socket.id);
+                    return;
                 }
-            }
-            
-            // Eğer son eşleşme olmayan oyuncu bulunamazsa, ilk bekleyeni al (son çare)
-            if (!opponentSocketId && waitingArray.length > 0) {
-                [opponentSocketId, opponentData] = waitingArray[0];
+                
+                // Son eşleşme olmadıysa eşleş
+                opponentSocketId = waitingId;
+                opponentData = waitingData;
+            } else {
+                // Çok kişi beklemedeyse, son eşleşme olmayan ilk kişiyi bul
+                for (const [waitingId, waitingData] of waitingArray) {
+                    const lastMatchKey = `${data.userId}_${waitingData.userId}`;
+                    const reverseLastMatchKey = `${waitingData.userId}_${data.userId}`;
+                    
+                    // Eğer bu iki oyuncu daha önce eşleşmemişse
+                    if (!lastMatches.has(lastMatchKey) && !lastMatches.has(reverseLastMatchKey)) {
+                        opponentSocketId = waitingId;
+                        opponentData = waitingData;
+                        break;
+                    }
+                }
+                
+                // Eğer son eşleşme olmayan oyuncu bulunamazsa, en eski bekleyeni al (son çare)
+                if (!opponentSocketId && waitingArray.length > 0) {
+                    [opponentSocketId, opponentData] = waitingArray[0];
+                }
             }
             
             const opponentSocket = io.sockets.sockets.get(opponentSocketId);
@@ -1014,11 +1033,26 @@ io.on('connection', (socket) => {
 
     // Oyundan çık
     socket.on('leaveGame', (data) => {
+        const userId = users.get(socket.id)?.userId;
+        
         // Bekleme listesinden çıkar
         if (waitingPlayers.has(socket.id)) {
             stopSearchTimer(socket.id);
             waitingPlayers.delete(socket.id);
             console.log('⏳ Oyuncu bekleme listesinden çıkarıldı:', socket.id);
+        }
+        
+        // Oyuncunun son eşleşmelerini temizle (isteğe bağlı - 5 dakika bekle)
+        if (userId) {
+            setTimeout(() => {
+                // Bu userId ile ilgili tüm son eşleşmeleri temizle
+                for (const [key, timestamp] of lastMatches.entries()) {
+                    if (key.includes(userId)) {
+                        lastMatches.delete(key);
+                        console.log('🧹 Son eşleşmeler temizlendi (çıkış sonrası):', userId);
+                    }
+                }
+            }, 5 * 60 * 1000); // 5 dakika sonra temizle
         }
         
         const room = rooms.get(data.roomCode);
@@ -1128,72 +1162,29 @@ try {
 }
 }
 
-// Oyundan çık
-socket.on('leaveGame', (data) => {
-// Bekleme listesinden çıkar
-if (waitingPlayers.has(socket.id)) {
-    stopSearchTimer(socket.id);
-    waitingPlayers.delete(socket.id);
-    console.log('⏳ Oyuncu bekleme listesinden çıkarıldı:', socket.id);
-}
-        
-const room = rooms.get(data.roomCode);
-if (room) {
-    const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
-    if (playerIndex !== -1) {
-        const player = room.players[playerIndex];
-                
-        // Diğer oyuncuya haber ver
-        const remainingPlayer = room.players.find(p => p.socketId !== socket.id);
-        if (remainingPlayer) {
-            const remainingSocket = io.sockets.sockets.get(remainingPlayer.socketId);
-            if (remainingSocket) {
-                remainingSocket.emit('opponentLeft', {
-                    message: 'Rakip oyundan ayrıldı! Kazandınız! 🎉',
-                    eloChange: 10
-                });
-            }
-        }
-                
-        // Oyuncuyu odadan çıkar
-        room.players.splice(playerIndex, 1);
-                
-        // Elo güncelle (sadece dereceli maçlarda)
-        if (!room.isPrivate) {
-            updateEloForGameLeave(room, data.userId);
-        }
-                
-        // Odayı temizle
-        stopRoomTimer(data.roomCode);
-        rooms.delete(data.roomCode);
-        console.log('🚪 Oyuncu oyundan çıktı:', data.roomCode, '-', player.userName);
-    }
-}
-});
-
 // Odadan çık
 socket.on('leaveRoom', (data) => {
-const room = rooms.get(data.roomCode);
-if (room) {
-    const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
-    if (playerIndex !== -1) {
-        const player = room.players[playerIndex];
-        room.players.splice(playerIndex, 1);
-                
-        // Bekleme listesinden de çıkar
-        if (waitingPlayers.has(socket.id)) {
-            stopSearchTimer(socket.id);
-            waitingPlayers.delete(socket.id);
-            console.log('🧹 Oyuncu bekleme listesinden çıkarıldı:', player.userName);
+    const room = rooms.get(data.roomCode);
+    if (room) {
+        const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+        if (playerIndex !== -1) {
+            const player = room.players[playerIndex];
+            room.players.splice(playerIndex, 1);
+            
+            // Bekleme listesinden de çıkar
+            if (waitingPlayers.has(socket.id)) {
+                stopSearchTimer(socket.id);
+                waitingPlayers.delete(socket.id);
+                console.log('🧹 Oyuncu bekleme listesinden çıkarıldı:', player.userName);
+            }
+        }
+        
+        if (room.players.length === 0) {
+            stopRoomTimer(data.roomCode);
+            rooms.delete(data.roomCode);
+            console.log('🗑️ Boş oda silindi:', data.roomCode);
         }
     }
-            
-    if (room.players.length === 0) {
-        stopRoomTimer(data.roomCode);
-        rooms.delete(data.roomCode);
-        console.log('🗑️ Boş oda silindi:', data.roomCode);
-    }
-}
 });
 
 // Bağlantı kesildi
