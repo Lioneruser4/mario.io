@@ -48,7 +48,8 @@ function calculateEloChange(winnerElo, loserElo, isRankedMatch = true) {
 // Seviye hesaplama fonksiyonu
 function calculateLevel(elo) {
     // 100 puanda bir seviye atlama
-    return Math.min(10, Math.floor(elo / 100) + 1);
+    const level = Math.floor(elo / 100) + 1;
+    return Math.min(10, Math.max(1, level)); // Minimum 1, maksimum 10
 }
 
 // Seviye ikonu belirleme
@@ -80,7 +81,7 @@ async function findOrCreateUser(userId, userName) {
             user = {
                 userId: userId,
                 userName: userName,
-                elo: 1000, // Başlangıç elo puanı
+                elo: 0, // Başlangıç elo puanı
                 level: 1,
                 wins: 0,
                 losses: 0,
@@ -395,8 +396,22 @@ io.on('connection', (socket) => {
                 
                 rooms.set(roomCode, {
                     players: [
-                        { socketId: socket.id, userId: data.userId, userName: data.userName, userPhotoUrl: data.userPhotoUrl },
-                        { socketId: opponentSocketId, userId: opponentData.userId, userName: opponentData.userName, userPhotoUrl: opponentData.userPhotoUrl }
+                        { 
+                            socketId: socket.id, 
+                            userId: data.userId, 
+                            userName: data.userName, 
+                            userPhotoUrl: data.userPhotoUrl,
+                            userLevel: data.userLevel || 1,
+                            userElo: data.userElo || 0
+                        },
+                        { 
+                            socketId: opponentSocketId, 
+                            userId: opponentData.userId, 
+                            userName: opponentData.userName, 
+                            userPhotoUrl: opponentData.userPhotoUrl,
+                            userLevel: opponentData.userLevel || 1,
+                            userElo: opponentData.userElo || 0
+                        }
                     ],
                     board: null,
                     currentPlayer: 'white',
@@ -414,14 +429,18 @@ io.on('connection', (socket) => {
                     roomCode: roomCode,
                     playerColor: 'white',
                     opponentName: opponentData.userName,
-                    opponentPhotoUrl: opponentData.userPhotoUrl
+                    opponentPhotoUrl: opponentData.userPhotoUrl,
+                    opponentLevel: opponentData.userLevel || 1,
+                    opponentElo: opponentData.userElo || 0
                 });
                 
                 opponentSocket.emit('matchFound', {
                     roomCode: roomCode,
                     playerColor: 'black',
                     opponentName: data.userName,
-                    opponentPhotoUrl: data.userPhotoUrl
+                    opponentPhotoUrl: data.userPhotoUrl,
+                    opponentLevel: data.userLevel || 1,
+                    opponentElo: data.userElo || 0
                 });
 
                 console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
