@@ -169,7 +169,8 @@ function handleTimeout() {
     gameState.afkCount++;
     
     if (gameState.afkCount >= 2) {
-        alert('⚠️ 2 kez süre aşımı! Oyun sonlandırılıyor...');
+        // Alert yerine custom notification kullan
+        showCustomNotification('⚠️ 2 kez süre aşımı! Oyun sonlandırılıyor...');
         socket.emit('gameAbandoned', { roomCode: gameState.roomCode, userId });
         resetGame();
         return;
@@ -349,6 +350,85 @@ function selectPiece(row, col) {
             }
         });
     });
+    
+    // Çoklu yeme durumunda seçenek sun
+    if (gameState.canContinueCapture && gameState.capturingPiece && 
+        row === gameState.capturingPiece.row && col === gameState.capturingPiece.col) {
+        showContinueCaptureOptions(row, col);
+    }
+}
+
+// Çoklu yeme seçeneklerini göster
+function showContinueCaptureOptions(row, col) {
+    // Önceki butonları kaldır
+    const existingContinueBtn = document.getElementById('continueCaptureBtn');
+    const existingFinishBtn = document.getElementById('finishCaptureBtn');
+    if (existingContinueBtn) existingContinueBtn.remove();
+    if (existingFinishBtn) existingFinishBtn.remove();
+    
+    // Oyun tahtasında bir buton veya seçenek göster
+    const boardElement = document.getElementById('board');
+    
+    // Devam et butonu - başka taş seçmeye izin ver
+    const continueBtn = document.createElement('div');
+    continueBtn.id = 'continueCaptureBtn';
+    continueBtn.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(34, 197, 94, 0.9);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        backdrop-filter: blur(10px);
+        border: 2px solid white;
+    `;
+    continueBtn.textContent = '⏭️ Devam Et (Başka taş seç)';
+    continueBtn.onclick = () => {
+        // Çoklu yeme durumunu bitir ve diğer taşları seçmeye izin ver
+        gameState.canContinueCapture = false;
+        gameState.capturingPiece = null;
+        gameState.selectedPiece = null;
+        renderBoard();
+        continueBtn.remove();
+        if (finishBtn) finishBtn.remove();
+    };
+    
+    // Bitir butonu - aynı taşla devam et
+    const finishBtn = document.createElement('div');
+    finishBtn.id = 'finishCaptureBtn';
+    finishBtn.style.cssText = `
+        position: absolute;
+        bottom: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(239, 68, 68, 0.9);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        backdrop-filter: blur(10px);
+        border: 2px solid white;
+    `;
+    finishBtn.textContent = '🏁 Bitir (Aynı taşla devam et)';
+    finishBtn.onclick = () => {
+        // Aynı taşla devam et - butonları kaldır
+        continueBtn.remove();
+        finishBtn.remove();
+    };
+    
+    // Butonları ekle
+    boardElement.parentElement.style.position = 'relative';
+    boardElement.parentElement.appendChild(continueBtn);
+    boardElement.parentElement.appendChild(finishBtn);
 }
 
 // Geçerli hamleleri bul - Amerikan Daması kuralları
@@ -437,6 +517,12 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
         const nextCaptures = nextMoves.filter(m => m.capture);
         canContinueCapture = nextCaptures.length > 0;
     }
+    
+    // Önceki butonları kaldır
+    const existingContinueBtn = document.getElementById('continueCaptureBtn');
+    const existingFinishBtn = document.getElementById('finishCaptureBtn');
+    if (existingContinueBtn) existingContinueBtn.remove();
+    if (existingFinishBtn) existingFinishBtn.remove();
     
     if (canContinueCapture) {
         // Çoklu yeme devam ediyor - aynı taş seçili kalır, sıra değişmez
@@ -679,6 +765,13 @@ function resetGame() {
         clearInterval(searchTimerInterval);
         searchTimerInterval = null;
     }
+    
+    // Önceki butonları kaldır
+    const existingContinueBtn = document.getElementById('continueCaptureBtn');
+    const existingFinishBtn = document.getElementById('finishCaptureBtn');
+    if (existingContinueBtn) existingContinueBtn.remove();
+    if (existingFinishBtn) existingFinishBtn.remove();
+    
     gameState = {
         board: [],
         currentPlayer: 'white',
@@ -697,6 +790,8 @@ function resetGame() {
     };
     document.getElementById('game').style.display = 'none';
     document.getElementById('lobby').style.display = 'block';
+    // Custom notification'ı kaldır
+    hideCustomNotification();
 }
 
 // Socket olayları
@@ -827,18 +922,25 @@ socket.on('gameOver', (data) => {
 
 socket.on('opponentLeft', () => {
     // Timer sunucu tarafında durduruldu
-    alert('⚠️ Rakibiniz oyundan ayrıldı!');
-    resetGame();
+    // Alert yerine custom notification kullan
+    showCustomNotification('⚠️ Rakibiniz oyundan ayrıldı!');
+    setTimeout(() => {
+        resetGame();
+    }, 3000);
 });
 
 socket.on('gameAbandoned', () => {
     // Timer sunucu tarafında durduruldu
-    alert('⚠️ Oyun 2 kez süre aşımı nedeniyle sonlandırıldı!');
-    resetGame();
+    // Alert yerine custom notification kullan
+    showCustomNotification('⚠️ Oyun 2 kez süre aşımı nedeniyle sonlandırıldı!');
+    setTimeout(() => {
+        resetGame();
+    }, 3000);
 });
 
 socket.on('error', (data) => {
-    alert('❌ Hata: ' + data.message);
+    // Alert yerine custom notification kullan
+    showCustomNotification('❌ Hata: ' + data.message);
 });
 
 // Oyunu başlat
@@ -909,5 +1011,46 @@ function updatePlayerAvatar(avatarEl, photoUrl, name) {
     } else {
         avatarEl.textContent = name ? name.charAt(0).toUpperCase() : '👤';
         avatarEl.style.fontSize = '1em';
+    }
+}
+
+// Custom notification fonksiyonları
+function showCustomNotification(message) {
+    // Bildirim elementini oluştur veya güncelle
+    let notification = document.getElementById('customNotification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'customNotification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 9999;
+            font-weight: 600;
+            border-left: 4px solid #667eea;
+            max-width: 300px;
+            backdrop-filter: blur(10px);
+        `;
+        document.body.appendChild(notification);
+    }
+    
+    notification.textContent = message;
+    notification.style.display = 'block';
+    
+    // 3 saniye sonra bildirimi gizle
+    setTimeout(() => {
+        hideCustomNotification();
+    }, 3000);
+}
+
+function hideCustomNotification() {
+    const notification = document.getElementById('customNotification');
+    if (notification) {
+        notification.style.display = 'none';
     }
 }
