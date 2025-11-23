@@ -416,6 +416,20 @@ io.on('connection', (socket) => {
 
     // Kullanıcı kaydı
     socket.on('registerUser', async (data) => {
+        // Aynı userId ile zaten bağlı olan kullanıcı varsa eski bağlantıyı kes
+        for (const [existingSocketId, existingUser] of users.entries()) {
+            if (existingUser.userId === data.userId && existingSocketId !== socket.id) {
+                console.log('⚠️ Aynı kullanıcı tekrar bağlandı, eski bağlantı kesiliyor:', data.userId);
+                const existingSocket = io.sockets.sockets.get(existingSocketId);
+                if (existingSocket) {
+                    existingSocket.emit('error', { message: 'Başka bir cihazdan giriş yapıldı!' });
+                    existingSocket.disconnect();
+                }
+                users.delete(existingSocketId);
+                break;
+            }
+        }
+        
         users.set(socket.id, {
             userId: data.userId,
             userName: data.userName,
@@ -441,6 +455,16 @@ io.on('connection', (socket) => {
     socket.on('findMatch', (data) => {
         console.log('🔍 Oyuncu arama yapıyor:', data.userName);
         
+        // Aynı userId ile zaten beklemede olan kullanıcıyı temizle
+        for (const [waitingSocketId, waitingData] of waitingPlayers.entries()) {
+            if (waitingData.userId === data.userId && waitingSocketId !== socket.id) {
+                console.log('⚠️ Aynı kullanıcı tekrar arama yapıyor, eski arama iptal ediliyor:', data.userId);
+                stopSearchTimer(waitingSocketId);
+                waitingPlayers.delete(waitingSocketId);
+                break;
+            }
+        }
+        
         // Eğer zaten beklemedeyse veya oyundaysa, öncekini temizle
         if (waitingPlayers.has(socket.id)) {
             console.log('⚠️ Oyuncu zaten beklemede, yenileniyor');
@@ -461,10 +485,12 @@ io.on('connection', (socket) => {
             const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
             const opponentSocket = io.sockets.sockets.get(opponentSocketId);
             
-            // Kendisiyle eşleşmesin
-            if (opponentSocketId === socket.id) {
-                console.log('⚠️ Aynı kullanıcı, atlanıyor');
+            // Aynı Telegram ID ile eşleşmeyi engelle
+            if (opponentSocketId === socket.id || data.userId === opponentData.userId) {
+                console.log('⚠️ Aynı kullanıcı ile eşleşme engellendi:', data.userName, 'vs', opponentData.userName);
+                // Her iki kaydı da temizle
                 waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.delete(socket.id);
                 waitingPlayers.set(socket.id, playerData);
                 startSearchTimer(socket.id);
                 return;
@@ -475,6 +501,8 @@ io.on('connection', (socket) => {
                 stopSearchTimer(socket.id);
                 stopSearchTimer(opponentSocketId);
                 
+                // Her iki oyuncuyu da bekleme listesinden çıkar
+                waitingPlayers.delete(socket.id);
                 waitingPlayers.delete(opponentSocketId);
                 
                 const roomCode = generateRoomCode();
@@ -485,7 +513,7 @@ io.on('connection', (socket) => {
                             socketId: socket.id, 
                             userId: data.userId, 
                             userName: data.userName, 
-                            userPhotoUrl: data.userPhotoUrl,
+                            userPhotoUrl: data.userPhotoUrl || null, // Doğru resmi kullan
                             userLevel: data.userLevel || 1,
                             userElo: data.userElo || 0
                         },
@@ -493,7 +521,7 @@ io.on('connection', (socket) => {
                             socketId: opponentSocketId, 
                             userId: opponentData.userId, 
                             userName: opponentData.userName, 
-                            userPhotoUrl: opponentData.userPhotoUrl,
+                            userPhotoUrl: opponentData.userPhotoUrl || null, // Doğru resmi kullan
                             userLevel: opponentData.userLevel || 1,
                             userElo: opponentData.userElo || 0
                         }
@@ -514,7 +542,7 @@ io.on('connection', (socket) => {
                     roomCode: roomCode,
                     playerColor: 'white',
                     opponentName: opponentData.userName,
-                    opponentPhotoUrl: opponentData.userPhotoUrl,
+                    opponentPhotoUrl: opponentData.userPhotoUrl || null, // Rakibin resmi
                     opponentLevel: opponentData.userLevel || 1,
                     opponentElo: opponentData.userElo || 0
                 });
@@ -523,7 +551,7 @@ io.on('connection', (socket) => {
                     roomCode: roomCode,
                     playerColor: 'black',
                     opponentName: data.userName,
-                    opponentPhotoUrl: data.userPhotoUrl,
+                    opponentPhotoUrl: data.userPhotoUrl || null, // Rakibin resmi
                     opponentLevel: data.userLevel || 1,
                     opponentElo: data.userElo || 0
                 });
@@ -590,7 +618,12 @@ io.on('connection', (socket) => {
         
         rooms.set(roomCode, {
             players: [
-                { socketId: socket.id, userId: data.userId, userName: data.userName, userPhotoUrl: data.userPhotoUrl || null }
+                { 
+                    socketId: socket.id, 
+                    userId: data.userId, 
+                    userName: data.userName,
+                    userPhotoUrl: data.userPhotoUrl // Doğru resmi kullan
+                }
             ],
             board: null,
             currentPlayer: 'white',
@@ -622,8 +655,10 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Aynı Telegram ID ile odaya katılmayı engelle
         if (room.players.some(p => p.userId === data.userId)) {
-            socket.emit('error', { message: 'Zaten bu odasınız!' });
+            socket.emit('error', { message: 'Bu odada zaten varsınız!' });
+            console.log('⚠️ Aynı kullanıcı odaya katılmaya çalıştı:', data.userName, 'Oda:', data.roomCode);
             return;
         }
 
@@ -631,7 +666,7 @@ io.on('connection', (socket) => {
             socketId: socket.id, 
             userId: data.userId, 
             userName: data.userName,
-            userPhotoUrl: data.userPhotoUrl || null
+            userPhotoUrl: data.userPhotoUrl || null // Doğru resmi kullan
         });
         socket.join(data.roomCode);
 
@@ -645,7 +680,7 @@ io.on('connection', (socket) => {
                 roomCode: data.roomCode,
                 playerColor: 'white',
                 opponentName: player2.userName,
-                opponentPhotoUrl: player2.userPhotoUrl || null
+                opponentPhotoUrl: player2.userPhotoUrl || null // Rakibin resmi
             });
         }
         
@@ -654,7 +689,7 @@ io.on('connection', (socket) => {
                 roomCode: data.roomCode,
                 playerColor: 'black',
                 opponentName: player1.userName,
-                opponentPhotoUrl: player1.userPhotoUrl || null
+                opponentPhotoUrl: player1.userPhotoUrl || null // Rakibin resmi
             });
         }
 
@@ -680,7 +715,7 @@ io.on('connection', (socket) => {
                         currentPlayer: room.currentPlayer,
                         playerColor: playerColor,
                         opponentName: opponent ? opponent.userName : 'Rakip',
-                        opponentPhotoUrl: opponent ? opponent.userPhotoUrl : null
+                        opponentPhotoUrl: opponent ? opponent.userPhotoUrl : null // Rakibin resmi
                     });
                 }
             });
@@ -776,6 +811,16 @@ io.on('connection', (socket) => {
         if (whitePieces.length === 0 || blackPieces.length === 0) {
             stopRoomTimer(data.roomCode);
             const winner = whitePieces.length > 0 ? 'white' : 'black';
+            
+            // Oyuncuların bekleme listesinde olup olmadığını kontrol et ve temizle
+            room.players.forEach(player => {
+                if (waitingPlayers.has(player.socketId)) {
+                    stopSearchTimer(player.socketId);
+                    waitingPlayers.delete(player.socketId);
+                    console.log('🧹 Oyuncu bekleme listesinden temizlendi:', player.userName);
+                }
+            });
+            
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             console.log('🏆 Oyun bitti (taş bitti):', data.roomCode, '- Kazanan:', winner);
             
@@ -784,9 +829,8 @@ io.on('connection', (socket) => {
                 updateEloForGameEnd(room, winner);
             }
             
-            setTimeout(() => {
-                rooms.delete(data.roomCode);
-            }, 5000);
+            // Odayı hemen sil (bekleme yapma)
+            rooms.delete(data.roomCode);
             return;
         }
 
@@ -829,6 +873,16 @@ io.on('connection', (socket) => {
         if (!hasValidMoves) {
             stopRoomTimer(data.roomCode);
             const winner = room.currentPlayer === 'white' ? 'black' : 'white';
+            
+            // Oyuncuların bekleme listesinde olup olmadığını kontrol et ve temizle
+            room.players.forEach(player => {
+                if (waitingPlayers.has(player.socketId)) {
+                    stopSearchTimer(player.socketId);
+                    waitingPlayers.delete(player.socketId);
+                    console.log('🧹 Oyuncu bekleme listesinden temizlendi:', player.userName);
+                }
+            });
+            
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             console.log('🏆 Oyun bitti (hamle yok):', data.roomCode, '- Kazanan:', winner);
             
@@ -837,9 +891,8 @@ io.on('connection', (socket) => {
                 updateEloForGameEnd(room, winner);
             }
             
-            setTimeout(() => {
-                rooms.delete(data.roomCode);
-            }, 5000);
+            // Odayı hemen sil (bekleme yapma)
+            rooms.delete(data.roomCode);
         }
     });
 
@@ -904,23 +957,6 @@ io.on('connection', (socket) => {
             }
             
             rooms.delete(data.roomCode);
-            console.log('⚠️ Oyun terk edildi:', data.roomCode);
-        }
-    });
-
-    // Oyundan çık
-    socket.on('leaveGame', (data) => {
-        const room = rooms.get(data.roomCode);
-        if (room) {
-            stopRoomTimer(data.roomCode);
-            socket.to(data.roomCode).emit('opponentLeft');
-            
-            // Elo puanlarını güncelle (sadece dereceli maçlarda)
-            if (!room.isPrivate) {
-                updateEloForGameLeave(room, data.userId);
-            }
-            
-            rooms.delete(data.roomCode);
             console.log('🚪 Oyundan çıkıldı:', data.roomCode);
         }
     });
@@ -981,7 +1017,15 @@ io.on('connection', (socket) => {
         if (room) {
             const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
             if (playerIndex !== -1) {
+                const player = room.players[playerIndex];
                 room.players.splice(playerIndex, 1);
+                
+                // Bekleme listesinden de çıkar
+                if (waitingPlayers.has(socket.id)) {
+                    stopSearchTimer(socket.id);
+                    waitingPlayers.delete(socket.id);
+                    console.log('🧹 Oyuncu bekleme listesinden çıkarıldı:', player.userName);
+                }
             }
             
             if (room.players.length === 0) {
@@ -996,26 +1040,44 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('❌ Bağlantı kesildi:', socket.id);
         
+        // Bekleme listesinden çıkar
+        if (waitingPlayers.has(socket.id)) {
+            stopSearchTimer(socket.id);
+            waitingPlayers.delete(socket.id);
+            console.log('⏳ Bekleme listesinden çıkarıldı:', socket.id);
+        }
+        
+        // Odadan çıkar
+        for (const [roomCode, room] of rooms.entries()) {
+            const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+            if (playerIndex !== -1) {
+                const player = room.players[playerIndex];
+                room.players.splice(playerIndex, 1);
+                
+                // Diğer oyuncuya haber ver
+                const remainingPlayer = room.players[0];
+                if (remainingPlayer) {
+                    const remainingSocket = io.sockets.sockets.get(remainingPlayer.socketId);
+                    if (remainingSocket) {
+                        remainingSocket.emit('opponentLeft');
+                        remainingSocket.emit('error', { message: 'Rakip oyundan ayrıldı!' });
+                    }
+                }
+                
+                // Odayı temizle
+                stopRoomTimer(roomCode);
+                rooms.delete(roomCode);
+                console.log('� Oyuncu odadan ayrıldı:', roomCode, '-', player.userName);
+                break;
+            }
+        }
+        
+        // Kullanıcı listesinden çıkar
         const user = users.get(socket.id);
         if (user) {
             console.log('👤 Kullanıcı ayrıldı:', user.userName);
             users.delete(socket.id);
         }
-        
-        if (waitingPlayers.has(socket.id)) {
-            stopSearchTimer(socket.id);
-            waitingPlayers.delete(socket.id);
-        }
-
-        rooms.forEach((room, roomCode) => {
-            const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
-            if (playerIndex !== -1) {
-                stopRoomTimer(roomCode);
-                socket.to(roomCode).emit('opponentLeft');
-                rooms.delete(roomCode);
-                console.log('🗑️ Oda silindi:', roomCode);
-            }
-        });
     });
 
     // Liderlik tablosu isteği
