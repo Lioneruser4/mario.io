@@ -825,6 +825,11 @@ socket.on('timerTimeout', (data) => {
     }
 });
 
+// Admin bildirimleri
+socket.on('adminNotification', (data) => {
+    showCustomNotification(data.message, data.type);
+});
+
 socket.on('moveMade', (data) => {
     // Sunucudan gelen hamleyi hemen uygula (gecikme olmasın)
     gameState.board = data.board;
