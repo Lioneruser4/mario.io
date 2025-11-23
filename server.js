@@ -54,16 +54,17 @@ function calculateLevel(elo) {
 
 // Seviye ikonu belirleme
 function getLevelIcon(level) {
+    // SVG icon path'leri level'a göre
     if (level >= 1 && level <= 3) {
-        return '🥉'; // Bronz
+        return 'bronze'; // Bronz
     } else if (level >= 4 && level <= 6) {
-        return '🥈'; // Gümüş
+        return 'silver'; // Gümüş
     } else if (level >= 7 && level <= 9) {
-        return '🥇'; // Altın
+        return 'gold'; // Altın
     } else if (level === 10) {
-        return '🏆'; // Kupa (Maksimum seviye)
+        return 'diamond'; // Elmas (Maksimum seviye)
     }
-    return '新人玩家'; // Yeni oyuncu
+    return 'bronze';
 }
 
 // Kullanıcıyı veritabanında bul veya oluştur
