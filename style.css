@@ -1,6 +1,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  background: linear-gradient(135deg, #0a0028 0%, #1a0033 50%, #000 100%);
+  /* Arka planı görsel ile değiştir ve göz yormayan tema oluştur */
+  background: 
+    linear-gradient(rgba(10, 20, 30, 0.85), rgba(10, 20, 30, 0.95)),
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%230a141e"/><path d="M0 0L100 100M100 0L0 100" stroke="%231a2a3a" stroke-width="1"/></svg>');
+  background-size: cover, 300px;
   color: #fff;
   font-family: 'Rajdhani', sans-serif;
   height: 100vh;
@@ -141,9 +145,9 @@ body {
 .piece.white { background: radial-gradient(circle at 30% 30%, #fff, #aaa); box-shadow: 0 0 30px #fff; }
 .piece.black { background: radial-gradient(circle at 30% 30%, #333, #000); box-shadow: 0 0 30px #00ffff; }
 .piece.king::after {
-  content: "★";
+  content: "♔";
   position: absolute;
-  top: 50%; left: 서로50%;
+  top: 50%; left: 50%;
   transform: translate(-50%,-50%);
   font-size: 28px;
   color: gold;
