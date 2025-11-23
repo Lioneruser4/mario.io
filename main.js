@@ -33,7 +33,7 @@ socket.on('connect', () => {
 });
 
 socket.on('disconnect', () => {
-  status sloppyEl.textContent = "Bağlantı koptu... Yeniden bağlanıyor.";
+  statusEl.textContent = "Bağlantı koptu... Yeniden bağlanıyor.";
   statusEl.style.color = "#ff0000";
 });
 
@@ -57,7 +57,7 @@ document.getElementById('joinBtn').onclick = () => {
   if (code.length === 4 && /^\d{4}$/.test(code)) {
     socket.emit('join_room', code);
   } else {
-    alert("Lütfen 4 haneli oda kodunu gir!");
+    showCustomNotification("Lütfen 4 haneli oda kodunu gir!");
   }
 };
 
@@ -98,7 +98,7 @@ socket.on('start_game', (data) => {
 });
 
 socket.on('error', (msg) => {
-  alert(msg);
+  showCustomNotification(msg);
   hideSearching();
 });
 
@@ -175,6 +175,12 @@ function selectPiece(row, col) {
   selectedPiece = { row, col };
   validMoves = calculateValidMoves(row, col);
   highlightValidMoves();
+  
+  // Çoklu yeme durumunda seçenek sun
+  const canContinueCapture = validMoves.some(m => m.captured);
+  if (canContinueCapture) {
+    showContinueCaptureOptions(row, col);
+  }
 }
 
 function tryMove(row, col) {
@@ -224,16 +230,92 @@ function applyMove(from, to, captured) {
   renderBoard();
 
   // Çoklu yeme kontrolü
-  if (captured && canContinueCapture(to.row, to.col)) {
-    // Aynı oyuncu devam eder
-  } else {
-    checkWin();
+  if (captured) {
+    const nextMoves = calculateValidMoves(to.row, to.col);
+    const nextCaptures = nextMoves.filter(m => m.captured);
+    if (nextCaptures.length > 0) {
+      // Aynı taşla devam edebilir
+      selectedPiece = { row: to.row, col: to.col };
+      validMoves = nextCaptures;
+      highlightValidMoves();
+      showContinueCaptureOptions(to.row, to.col);
+      return;
+    }
   }
+  
+  checkWin();
 }
 
-function canContinueCapture(row, col) {
-  const moves = calculateValidMoves(row, col);
-  return moves.some(m => m.captured);
+// Çoklu yeme seçeneklerini göster
+function showContinueCaptureOptions(row, col) {
+  // Önceki butonları kaldır
+  const existingContinueBtn = document.getElementById('continueCaptureBtn');
+  const existingFinishBtn = document.getElementById('finishCaptureBtn');
+  if (existingContinueBtn) existingContinueBtn.remove();
+  if (existingFinishBtn) existingFinishBtn.remove();
+  
+  // Oyun tahtasında bir buton veya seçenek göster
+  const gameBoard = document.querySelector('.game-board');
+  
+  // Devam et butonu - başka taş seçmeye izin ver
+  const continueBtn = document.createElement('div');
+  continueBtn.id = 'continueCaptureBtn';
+  continueBtn.style.cssText = `
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    backdrop-filter: blur(10px);
+    border: 2px solid white;
+  `;
+  continueBtn.textContent = '⏭️ Devam Et (Başka taş seç)';
+  continueBtn.onclick = () => {
+    // Çoklu yeme durumunu bitir ve diğer taşları seçmeye izin ver
+    selectedPiece = null;
+    validMoves = [];
+    renderBoard();
+    continueBtn.remove();
+    if (finishBtn) finishBtn.remove();
+  };
+  
+  // Bitir butonu - aynı taşla devam et
+  const finishBtn = document.createElement('div');
+  finishBtn.id = 'finishCaptureBtn';
+  finishBtn.style.cssText = `
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    backdrop-filter: blur(10px);
+    border: 2px solid white;
+  `;
+  finishBtn.textContent = '🏁 Bitir (Aynı taşla devam et)';
+  finishBtn.onclick = () => {
+    // Aynı taşla devam et - butonları kaldır
+    continueBtn.remove();
+    finishBtn.remove();
+  };
+  
+  // Butonları ekle
+  gameBoard.parentElement.style.position = 'relative';
+  gameBoard.parentElement.appendChild(continueBtn);
+  gameBoard.parentElement.appendChild(finishBtn);
 }
 
 // === GEÇERLİ HAMLELER (TÜRK DAMASI KURALLARI) ===
@@ -366,6 +448,12 @@ function checkWin() {
 
 function endGame(message) {
   clearInterval(timerInterval);
+  // Önceki butonları kaldır
+  const existingContinueBtn = document.getElementById('continueCaptureBtn');
+  const existingFinishBtn = document.getElementById('finishCaptureBtn');
+  if (existingContinueBtn) existingContinueBtn.remove();
+  if (existingFinishBtn) existingFinishBtn.remove();
+  
   resultText.textContent = message;
   resultOverlay.classList.remove('hidden');
 }
@@ -383,6 +471,40 @@ function hideRoomPanel() {
 function leaveRoom() {
   socket.emit('leave_room', roomId);
   location.reload();
+}
+
+// Custom notification fonksiyonu
+function showCustomNotification(message) {
+  // Bildirim elementini oluştur veya güncelle
+  let notification = document.getElementById('customNotification');
+  if (!notification) {
+    notification = document.createElement('div');
+    notification.id = 'customNotification';
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 9999;
+      font-weight: 600;
+      border-left: 4px solid #667eea;
+      max-width: 300px;
+      backdrop-filter: blur(10px);
+    `;
+    document.body.appendChild(notification);
+  }
+  
+  notification.textContent = message;
+  notification.style.display = 'block';
+  
+  // 3 saniye sonra bildirimi gizle
+  setTimeout(() => {
+    notification.style.display = 'none';
+  }, 3000);
 }
 
 // Pes Et Butonu
