@@ -679,7 +679,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // Oyundan çık
 function leaveGame() {
     if (confirm('❓ Oyundan çıkmak istediğinize emin misiniz?')) {
+        // Sunucuya oyunu terk etme haberini gönder
         socket.emit('leaveGame', { roomCode: gameState.roomCode, userId });
+        
+        // Hemen oyunu bitir ve lobiye dön
         resetGame();
     }
 }
