@@ -1221,13 +1221,60 @@ function updatePlayerAvatars() {
 
 socket.on('gameOver', (data) => {
     // Timer sunucu tarafında durduruldu
+    const isWin = data.winner === gameState.playerColor;
+    const eloChange = data.eloChange || 0;
+    
+    // Şeffaf overlay oluştur
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        backdrop-filter: blur(5px);
+    `;
+    
+    const messageBox = document.createElement('div');
+    messageBox.style.cssText = `
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 40px;
+        border-radius: 20px;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        max-width: 400px;
+        animation: slideIn 0.5s ease-out;
+    `;
+    
+    const title = isWin ? '🎉 TEBRİKLER! KAZANDINIZ! 🎉' : '😔 MALESEF KAYBETTİNİZ!';
+    const eloText = eloChange > 0 ? `+${eloChange} Elo` : eloChange < 0 ? `${eloChange} Elo` : '';
+    const eloColor = eloChange > 0 ? '#4ade80' : eloChange < 0 ? '#f87171' : '#fff';
+    
+    messageBox.innerHTML = `
+        <h2 style="margin: 0 0 20px 0; font-size: 1.8em;">${title}</h2>
+        <div style="font-size: 1.5em; font-weight: bold; color: ${eloColor}; margin: 15px 0;">
+            ${eloText}
+        </div>
+        <div style="font-size: 1.1em; opacity: 0.9;">
+            Yeni Elo: ${data.newElo || 'Bilinmiyor'}
+        </div>
+    `;
+    
+    overlay.appendChild(messageBox);
+    document.body.appendChild(overlay);
+    
+    // 4 saniye sonra kaldır ve oyunu sıfırla
     setTimeout(() => {
-        const winnerText = data.winner === gameState.playerColor ? 
-            '🎉 TEBRİKLER! KAZANDINIZ! 🎉' : 
-            '😔 Maalesef kaybettiniz!';
-        alert(winnerText);
+        overlay.remove();
         resetGame();
-    }, 500);
+    }, 4000);
 });
 
 socket.on('opponentLeft', (data) => {
