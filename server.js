@@ -117,28 +117,61 @@ async function updateElo(userId, eloChange, isWin) {
             return;
         }
         
-        const user = await usersCollection.findOne({ userId: userId });
-        if (!user) return;
+        // Önce mevcut kullanıcıyı al
+        const currentUser = await usersCollection.findOne({ userId: userId });
+        if (!currentUser) return;
         
-        const newElo = Math.max(0, user.elo + eloChange); // Elo puanı negatif olmasın
+        // Yeni elo puanını hesapla
+        const newElo = currentUser.elo + eloChange;
         const newLevel = calculateLevel(newElo);
         
-        await usersCollection.updateOne(
+        // Veritabanını güncelle
+        const result = await usersCollection.updateOne(
             { userId: userId },
             { 
+                $inc: { elo: eloChange },
                 $set: { 
-                    elo: newElo,
+                    lastLoginAt: new Date(),
                     level: newLevel
-                },
-                $inc: { 
-                    wins: isWin ? 1 : 0,
-                    losses: isWin ? 0 : 1,
-                    gamesPlayed: 1
                 }
             }
         );
         
-        console.log(`Elo güncellendi: ${userId} - ${eloChange} puan`);
+        if (result.matchedCount > 0) {
+            // Kazanma/kaybetme istatistiklerini güncelle
+            if (isWin) {
+                await usersCollection.updateOne(
+                    { userId: userId },
+                    { $inc: { wins: 1, gamesPlayed: 1 } }
+                );
+            } else {
+                await usersCollection.updateOne(
+                    { userId: userId },
+                    { $inc: { losses: 1, gamesPlayed: 1 } }
+                );
+            }
+            
+            // Güncellenmiş kullanıcı bilgilerini gönder
+            const updatedUser = await usersCollection.findOne({ userId: userId });
+            if (updatedUser) {
+                const socket = Array.from(io.sockets.sockets.values()).find(s => {
+                    const user = users.get(s.id);
+                    return user && user.userId === userId;
+                });
+                
+                if (socket) {
+                    socket.emit('userStats', {
+                        elo: updatedUser.elo,
+                        level: updatedUser.level,
+                        levelIcon: getLevelIcon(updatedUser.level),
+                        wins: updatedUser.wins,
+                        losses: updatedUser.losses
+                    });
+                    
+                    console.log(`📊 Elo güncellendi: ${updatedUser.userName} - ${eloChange} puan (Yeni Elo: ${updatedUser.elo}, Level: ${updatedUser.level})`);
+                }
+            }
+        }
     } catch (error) {
         console.error('Elo güncellenirken hata:', error);
     }
