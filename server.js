@@ -33,10 +33,6 @@ const searchTimers = new Map(); // Eşleşme timer'ları
 function calculateEloChange(winnerElo, loserElo, isRankedMatch = true) {
     if (!isRankedMatch) return { winnerChange: 0, loserChange: 0 };
     
-    const K = 32; // Elo değişimi katsayısı
-    const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
-    const expectedLoser = 1 / (1 + Math.pow(10, (winnerElo - loserElo) / 400));
-    
     // Kazanan için 12-20 arası puan (rastgele)
     const winnerChange = Math.floor(12 + Math.random() * 9);
     // Kaybeden için -12-20 arası puan (rastgele)
@@ -82,7 +78,7 @@ async function findOrCreateUser(userId, userName) {
             user = {
                 userId: userId,
                 userName: userName,
-                elo: 0, // Başlangıç elo puanı
+                elo: 0, // Başlangıç elo puanı 0
                 level: 1,
                 wins: 0,
                 losses: 0,
@@ -91,6 +87,7 @@ async function findOrCreateUser(userId, userName) {
                 lastLoginAt: new Date()
             };
             await usersCollection.insertOne(user);
+            console.log(`👤 Yeni kullanıcı oluşturuldu: ${userName} (${userId})`);
         } else {
             // Son giriş tarihini güncelle
             await usersCollection.updateOne(
@@ -102,6 +99,7 @@ async function findOrCreateUser(userId, userName) {
                     }
                 }
             );
+            console.log(`🔄 Kullanıcı güncellendi: ${userName} (${userId})`);
         }
         
         return user;
@@ -146,13 +144,16 @@ async function updateElo(userId, eloChange, isWin) {
     }
 }
 
-// Liderlik tablosunu al
+// Liderlik tablosunu al (sadece top 10)
 async function getLeaderboard() {
     try {
+        // Önce eski ve düşük puanlı oyuncuları temizle
+        await cleanupLowRankedUsers();
+        
         const leaderboard = await usersCollection
             .find({ userId: { $regex: /^TG_/ } }) // Sadece Telegram kullanıcıları
             .sort({ elo: -1 })
-            .limit(10)
+            .limit(10) // Sadece top 10
             .toArray();
         
         return leaderboard.map((user, index) => ({
@@ -168,6 +169,38 @@ async function getLeaderboard() {
     } catch (error) {
         console.error('Liderlik tablosu alınırken hata:', error);
         return [];
+    }
+}
+
+// Düşük puanlı ve eski oyuncuları temizle (top 10 dışındakiler)
+async function cleanupLowRankedUsers() {
+    try {
+        // Top 10 dışındakileri bul
+        const top10Users = await usersCollection
+            .find({ userId: { $regex: /^TG_/ } })
+            .sort({ elo: -1 })
+            .limit(10)
+            .toArray();
+        
+        const top10Ids = top10Users.map(u => u.userId);
+        
+        // Top 10 dışında kalan ve 1 aydan fazla giriş yapmamış kullanıcıları temizle
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        
+        const result = await usersCollection.deleteMany({
+            userId: { $regex: /^TG_/ },
+            $and: [
+                { userId: { $nin: top10Ids } }, // Top 10'da olmayanlar
+                { lastLoginAt: { $lt: oneMonthAgo } } // 1 aydan fazla giriş yapmamışlar
+            ]
+        });
+        
+        if (result.deletedCount > 0) {
+            console.log(`🧹 ${result.deletedCount} düşük puanlı/aktif olmayan kullanıcı temizlendi`);
+        }
+    } catch (error) {
+        console.error('Düşük puanlı kullanıcı temizleme hatası:', error);
     }
 }
 
@@ -390,28 +423,16 @@ io.on('connection', (socket) => {
         });
         console.log('👤 Kullanıcı kaydedildi:', data.userName, '| ID:', data.userId);
         
-        // Sadece Telegram kullanıcıları için MongoDB'ye kaydet
-        if (data.userId.startsWith('TG_')) {
-            const user = await findOrCreateUser(data.userId, data.userName);
-            if (user) {
-                // Kullanıcıya elo ve seviye bilgisini gönder
-                socket.emit('userStats', {
-                    elo: user.elo,
-                    level: user.level,
-                    levelIcon: getLevelIcon(user.level),
-                    wins: user.wins,
-                    losses: user.losses
-                });
-            }
-        } else {
-            // Guest kullanıcılar için varsayılan değerler (elo yok)
+        // MongoDB'ye kullanıcıyı kaydet veya bul
+        const user = await findOrCreateUser(data.userId, data.userName);
+        if (user) {
+            // Kullanıcıya elo ve seviye bilgisini gönder
             socket.emit('userStats', {
-                elo: 0,
-                level: 0,
-                levelIcon: 'guest',
-                wins: 0,
-                losses: 0,
-                isGuest: true
+                elo: user.elo,
+                level: user.level,
+                levelIcon: getLevelIcon(user.level),
+                wins: user.wins,
+                losses: user.losses
             });
         }
     });
@@ -437,27 +458,26 @@ io.on('connection', (socket) => {
         };
 
         if (waitingPlayers.size > 0) {
-            // Kendisiyle eşleşmeyi engelle
-            let foundOpponent = false;
+            const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
+            const opponentSocket = io.sockets.sockets.get(opponentSocketId);
             
-            for (const [opponentSocketId, opponentData] of waitingPlayers.entries()) {
-                // Aynı kullanıcı ID'si veya aynı socket ID'si ise atla
-                if (opponentSocketId === socket.id || opponentData.userId === data.userId) {
-                    console.log('⚠️ Aynı kullanıcı, atlanıyor');
-                    continue;
-                }
+            // Kendisiyle eşleşmesin
+            if (opponentSocketId === socket.id) {
+                console.log('⚠️ Aynı kullanıcı, atlanıyor');
+                waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.set(socket.id, playerData);
+                startSearchTimer(socket.id);
+                return;
+            }
+            
+            if (opponentSocket) {
+                // Eşleşme bulundu - timer'ları durdur
+                stopSearchTimer(socket.id);
+                stopSearchTimer(opponentSocketId);
                 
-                const opponentSocket = io.sockets.sockets.get(opponentSocketId);
-                if (opponentSocket) {
-                    foundOpponent = true;
-                    
-                    // Eşleşme bulundu - timer'ları durdur
-                    stopSearchTimer(socket.id);
-                    stopSearchTimer(opponentSocketId);
-                    
-                    waitingPlayers.delete(opponentSocketId);
-                    
-                    const roomCode = generateRoomCode();
+                waitingPlayers.delete(opponentSocketId);
+                
+                const roomCode = generateRoomCode();
                 
                 rooms.set(roomCode, {
                     players: [
@@ -509,14 +529,8 @@ io.on('connection', (socket) => {
                 });
 
                 console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
-                    break; // Eşleşme bulundu, döngüden çık
-                } else {
-                    waitingPlayers.delete(opponentSocketId);
-                }
-            }
-            
-            // Eşleşme bulunamadıysa bekleme listesine ekle
-            if (!foundOpponent) {
+            } else {
+                waitingPlayers.delete(opponentSocketId);
                 waitingPlayers.set(socket.id, playerData);
                 startSearchTimer(socket.id);
                 console.log('⏳ Bekleme listesine eklendi:', data.userName);
