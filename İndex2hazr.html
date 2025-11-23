@@ -1,430 +1,815 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Gamepad2, Users, Copy, X, Search, Crown } from 'lucide-react';
-
-const CheckersGame = () => {
-  const [screen, setScreen] = useState('lobby'); // lobby, searching, game
-  const [gameMode, setGameMode] = useState(null); // ranked, friend
-  const [roomCode, setRoomCode] = useState('');
-  const [inputCode, setInputCode] = useState('');
-  const [board, setBoard] = useState([]);
-  const [selectedPiece, setSelectedPiece] = useState(null);
-  const [validMoves, setValidMoves] = useState([]);
-  const [currentPlayer, setCurrentPlayer] = useState('red');
-  const [myColor, setMyColor] = useState(null);
-  const [opponent, setOpponent] = useState(null);
-  const [serverConnected, setServerConnected] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [gameInfo, setGameInfo] = useState({ redScore: 12, blackScore: 12 });
-  const wsRef = useRef(null);
-
-  // Sunucu bağlantısı
-  useEffect(() => {
-    connectToServer();
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
-
-  const connectToServer = () => {
-    try {
-      const ws = new WebSocket('wss://mario-io-1.onrender.com');
-      
-      ws.onopen = () => {
-        setServerConnected(true);
-        console.log('Sunucuya bağlandı');
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleServerMessage(data);
-      };
-
-      ws.onerror = () => {
-        setServerConnected(false);
-      };
-
-      ws.onclose = () => {
-        setServerConnected(false);
-        setTimeout(connectToServer, 3000);
-      };
-
-      wsRef.current = ws;
-    } catch (error) {
-      setServerConnected(false);
-      setTimeout(connectToServer, 3000);
-    }
-  };
-
-  const handleServerMessage = (data) => {
-    switch(data.type) {
-      case 'matched':
-        setOpponent(data.opponent);
-        setMyColor(data.yourColor);
-        setScreen('game');
-        setSearching(false);
-        initBoard();
-        break;
-      case 'move':
-        updateBoard(data.board);
-        setCurrentPlayer(data.currentPlayer);
-        setGameInfo(data.gameInfo);
-        break;
-      case 'roomCreated':
-        setRoomCode(data.roomCode);
-        break;
-      case 'joinedRoom':
-        setOpponent(data.opponent);
-        setMyColor(data.yourColor);
-        setScreen('game');
-        initBoard();
-        break;
-    }
-  };
-
-  const initBoard = () => {
-    const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
-    
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 8; col++) {
-        if ((row + col) % 2 === 1) {
-          newBoard[row][col] = { color: 'black', king: false };
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🌐 Onlayn Dama - 🌐 Online Checkers</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
-      }
-    }
-    
-    for (let row = 5; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        if ((row + col) % 2 === 1) {
-          newBoard[row][col] = { color: 'red', king: false };
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            overflow-x: hidden;
+            color: #ffffff;
         }
-      }
-    }
-    
-    setBoard(newBoard);
-  };
 
-  const updateBoard = (newBoard) => {
-    setBoard(newBoard);
-  };
-
-  const startRanked = () => {
-    setGameMode('ranked');
-    setSearching(true);
-    setScreen('searching');
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'findMatch' }));
-    }
-  };
-
-  const cancelSearch = () => {
-    setSearching(false);
-    setScreen('lobby');
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'cancelSearch' }));
-    }
-  };
-
-  const createRoom = () => {
-    setGameMode('friend');
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setRoomCode(code);
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'createRoom', roomCode: code }));
-    }
-  };
-
-  const joinRoom = () => {
-    if (inputCode.length === 4) {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'joinRoom', roomCode: inputCode }));
-      }
-    }
-  };
-
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(roomCode);
-  };
-
-  const calculateValidMoves = (row, col, piece) => {
-    const moves = [];
-    const direction = piece.color === 'red' ? -1 : 1;
-    
-    // Normal hareket
-    const checkMove = (newRow, newCol) => {
-      if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
-        if (!board[newRow][newCol]) {
-          moves.push({ row: newRow, col: newCol, capture: false });
+        .container {
+            width: 100%;
+            max-width: 600px;
         }
-      }
-    };
 
-    // Atlama hareketi
-    const checkJump = (newRow, newCol, jumpRow, jumpCol) => {
-      if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 &&
-          jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
-        const jumpedPiece = board[jumpRow][jumpCol];
-        if (jumpedPiece && jumpedPiece.color !== piece.color && !board[newRow][newCol]) {
-          moves.push({ row: newRow, col: newCol, capture: true, capturePos: { row: jumpRow, col: jumpCol } });
+        /* Lobi Ekranı */
+        #lobby {
+            background: #1a1a1a;
+            border-radius: 25px;
+            padding: 30px 20px;
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            animation: slideUp 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
-      }
-    };
+        
+        #waitingLobby {
+            display: none;
+            background: #1a1a1a;
+            border-radius: 25px;
+            padding: 30px 20px;
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            animation: slideUp 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
 
-    if (piece.king) {
-      // Dama tüm yönlere gidebilir
-      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([dr, dc]) => {
-        checkMove(row + dr, col + dc);
-        checkJump(row + 2*dr, col + 2*dc, row + dr, col + dc);
-      });
-    } else {
-      // Normal taş
-      checkMove(row + direction, col - 1);
-      checkMove(row + direction, col + 1);
-      checkJump(row + 2*direction, col - 2, row + direction, col - 1);
-      checkJump(row + 2*direction, col + 2, row + direction, col + 1);
-    }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-    return moves;
-  };
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
 
-  const handleSquareClick = (row, col) => {
-    if (currentPlayer !== myColor) return;
+        .logo {
+            font-size: 4em;
+            margin-bottom: 10px;
+            animation: bounce 2s ease-in-out infinite;
+        }
 
-    const piece = board[row][col];
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
 
-    if (selectedPiece) {
-      const move = validMoves.find(m => m.row === row && m.col === col);
-      if (move) {
-        makeMove(selectedPiece, move);
-        setSelectedPiece(null);
-        setValidMoves([]);
-      } else if (piece && piece.color === myColor) {
-        setSelectedPiece({ row, col });
-        setValidMoves(calculateValidMoves(row, col, piece));
-      } else {
-        setSelectedPiece(null);
-        setValidMoves([]);
-      }
-    } else if (piece && piece.color === myColor) {
-      setSelectedPiece({ row, col });
-      setValidMoves(calculateValidMoves(row, col, piece));
-    }
-  };
+        h1 {
+            font-size: 2em;
+            color: #ffffff;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
 
-  const makeMove = (from, to) => {
-    const newBoard = board.map(row => [...row]);
-    const piece = newBoard[from.row][from.col];
-    
-    newBoard[to.row][to.col] = piece;
-    newBoard[from.row][from.col] = null;
+        .subtitle {
+            color: #aaa;
+            font-size: 0.95em;
+        }
 
-    if (to.capture) {
-      newBoard[to.capturePos.row][to.capturePos.col] = null;
-    }
+        /* Kullanıcı Bilgisi */
+        .user-info {
+            background: #252525;
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+        }
 
-    // Dama olma kontrolü
-    if ((piece.color === 'red' && to.row === 0) || (piece.color === 'black' && to.row === 7)) {
-      newBoard[to.row][to.col].king = true;
-    }
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            border: 3px solid rgba(255, 255, 255, 0.4);
+        }
 
-    const newCurrentPlayer = currentPlayer === 'red' ? 'black' : 'red';
-    
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'move',
-        board: newBoard,
-        currentPlayer: newCurrentPlayer
-      }));
-    }
+        .user-details {
+            flex: 1;
+        }
 
-    setBoard(newBoard);
-    setCurrentPlayer(newCurrentPlayer);
-  };
+        .user-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 3px;
+        }
 
-  if (screen === 'lobby') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse top-0 left-0"></div>
-          <div className="absolute w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse bottom-0 right-0 animation-delay-2000"></div>
-        </div>
+        .user-id {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
 
-        <div className="relative z-10 max-w-md w-full">
-          <div className="text-center mb-8 animate-fade-in">
-            <h1 className="text-6xl font-bold text-white mb-4 drop-shadow-2xl" style={{
-              textShadow: '0 0 30px rgba(255,255,255,0.5), 0 0 60px rgba(138,43,226,0.3)'
-            }}>
-              DAMA
-            </h1>
-            <div className="flex items-center justify-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${serverConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
-              <p className="text-gray-300">{serverConnected ? 'Sunucuya Bağlı' : 'Bağlanıyor...'}</p>
+        /* Bağlantı Durumu */
+        .connection-status {
+            text-align: center;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .connection-status.hidden {
+            display: none;
+        }
+
+        .status-spinner {
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
+        }
+
+        .connected {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+
+        .connected .status-dot {
+            background: #28a745;
+        }
+
+        .disconnected {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            color: #856404;
+            border: 2px solid #ffc107;
+        }
+
+        /* Butonlar */
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .game-button {
+            padding: 18px 25px;
+            font-size: 1.1em;
+            font-weight: 700;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .game-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .game-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.25);
+            transform: translate(-50%, -50%);
+            transition: width 0.5s, height 0.5s;
+        }
+
+        .game-button:not(:disabled):active::before {
+            width: 400px;
+            height: 400px;
+        }
+
+        .game-button:not(:disabled):active {
+            transform: scale(0.95);
+        }
+
+        .btn-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: currentColor;
+        }
+
+        .btn-text {
+            position: relative;
+            z-index: 1;
+        }
+
+        .ranked-btn {
+            background: #8B0000;
+            color: white;
+            border: 2px solid #A52A2A;
+        }
+
+        .ranked-btn:not(:disabled):hover {
+            background: #A52A2A;
+            box-shadow: 0 12px 30px rgba(139, 0, 0, 0.6);
+            transform: translateY(-3px);
+        }
+        
+        .ranked-btn .btn-icon {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        .friend-btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .friend-btn:not(:disabled):hover {
+            box-shadow: 0 12px 30px rgba(79, 172, 254, 0.4);
+            transform: translateY(-3px);
+        }
+
+        .join-btn {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+        }
+
+        .join-btn:not(:disabled):hover {
+            box-shadow: 0 12px 30px rgba(67, 233, 123, 0.4);
+            transform: translateY(-3px);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 400px;
+            animation: modalSlide 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+            border: 1px solid #333;
+            color: #ffffff;
+        }
+
+        @keyframes modalSlide {
+            from { transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
+            to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .modal h2 {
+            color: #ffffff;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .room-code {
+            font-size: 2.2em;
+            text-align: center;
+            color: #667eea;
+            font-weight: 800;
+            margin: 20px 0;
+            letter-spacing: 10px;
+        }
+
+        .input-group {
+            margin: 20px 0;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.3em;
+            border: 3px solid #333;
+            border-radius: 12px;
+            text-align: center;
+            letter-spacing: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            background: #252525;
+            color: #ffffff;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .primary-btn {
+            background: #667eea;
+            color: white;
+            border: 1px solid #764ba2;
+        }
+        
+        .primary-btn:hover {
+            background: #764ba2;
+        }
+
+        .primary-btn:active {
+            transform: scale(0.95);
+        }
+
+        .cancel-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .cancel-btn:active {
+            transform: scale(0.95);
+        }
+
+        .searching {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        /* Oyun Ekranı */
+        #game {
+            display: none;
+        }
+
+        .game-header {
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+        }
+
+        .players-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .player-card {
+            padding: 15px;
+            border-radius: 15px;
+            background: #252525;
+            transition: all 0.4s ease;
+            border: 2px solid #333;
+            color: #ffffff;
+        }
+
+        .player-card.active {
+            background: #2a2a2a;
+            border-color: #667eea;
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.6);
+            animation: activeGlow 1.5s ease-in-out infinite;
+        }
+
+        @keyframes activeGlow {
+            0%, 100% { box-shadow: 0 0 30px rgba(253, 203, 110, 0.8); }
+            50% { box-shadow: 0 0 40px rgba(253, 203, 110, 1); }
+        }
+
+        .player-name {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-badge {
+            font-size: 1.3em;
+        }
+
+        .player-color {
+            font-size: 0.9em;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .turn-indicator {
+            text-align: center;
+            margin-top: 15px;
+            font-weight: 700;
+            font-size: 1.2em;
+            color: #667eea;
+            padding: 10px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+        }
+
+        .board-container {
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            margin: 0 auto;
+            background: #1a1a1a;
+            padding: 3px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            max-width: 500px;
+        }
+
+        .square {
+            aspect-ratio: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .square.light {
+            background: #f0d9b5;
+        }
+
+        .square.dark {
+            background: #b58863;
+        }
+
+        .square.selected {
+            background: #7fc97f !important;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+        }
+
+        .square.valid-move {
+            background: #9fdfb0 !important;
+        }
+
+        .square.valid-move::after {
+            content: '';
+            position: absolute;
+            width: 35%;
+            height: 35%;
+            background: rgba(34, 139, 34, 0.7);
+            border-radius: 50%;
+            animation: moveDot 1.2s ease-in-out infinite;
+        }
+
+        @keyframes moveDot {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.4); opacity: 1; }
+        }
+
+        .square.playable {
+            animation: glowPiece 2s ease-in-out infinite;
+        }
+
+        @keyframes glowPiece {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.6); }
+            50% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.9); }
+        }
+
+        .piece {
+            width: 85%;
+            height: 85%;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .piece:active {
+            transform: scale(0.9);
+        }
+
+        .piece.white {
+            background: radial-gradient(circle, #ffffff, #e0e0e0);
+            color: #333;
+            border: 3px solid #999;
+        }
+
+        .piece.black {
+            background: radial-gradient(circle, #2c2c2c, #000000);
+            color: #fff;
+            border: 3px solid #555;
+        }
+
+        .piece.king::after {
+            content: '♔';
+            position: absolute;
+            font-size: 1.2em;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .game-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .leave-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .leave-btn:active {
+            transform: scale(0.95);
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1.6em; }
+            .logo { font-size: 3em; }
+            .game-button { padding: 15px 20px; font-size: 1em; }
+            .modal-content { padding: 20px; }
+            #board { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Lobi Ekranı -->
+        <div id="lobby">
+            <div class="header">
+                <div class="logo">🎲</div>
+                <h1>Şaşki - Dama - Checkers</h1>
+                <p class="subtitle">Online Rəqabətçi Oyun/ Online Multiplayer Game</p>
             </div>
-          </div>
 
-          <div className="space-y-4">
-            <button
-              onClick={startRanked}
-              disabled={!serverConnected}
-              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-6 px-8 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
-              style={{
-                boxShadow: '0 0 30px rgba(255,165,0,0.5), 0 10px 40px rgba(0,0,0,0.3)'
-              }}
-            >
-              <Crown className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-              <span className="text-xl">Dereceli Oyun</span>
-            </button>
-
-            <button
-              onClick={createRoom}
-              disabled={!serverConnected}
-              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold py-6 px-8 rounded-2xl shadow-2xl transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
-              style={{
-                boxShadow: '0 0 30px rgba(0,191,255,0.5), 0 10px 40px rgba(0,0,0,0.3)'
-              }}
-            >
-              <Users className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-              <span className="text-xl">Arkadaşla Oyna</span>
-            </button>
-
-            {roomCode && (
-              <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl animate-fade-in border border-white/20">
-                <p className="text-white mb-3 text-center font-semibold">Oda Kodu</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={roomCode}
-                    readOnly
-                    className="flex-1 bg-white/20 text-white text-center text-2xl font-bold py-3 px-4 rounded-xl border-2 border-white/30"
-                  />
-                  <button
-                    onClick={copyRoomCode}
-                    className="bg-green-500 hover:bg-green-600 text-white p-3 rounded-xl transition-all duration-300 transform hover:scale-110"
-                  >
-                    <Copy className="w-6 h-6" />
-                  </button>
+            <!-- Kullanıcı Bilgisi -->
+            <div class="user-info" id="userInfo">
+                <div class="user-avatar" id="userAvatar">👤</div>
+                <div class="user-details">
+                    <div class="user-name" id="userName">Yüklənir... / Loading...</div>
+                    <div class="user-id" id="userId">ID: ...</div>
                 </div>
-              </div>
-            )}
-
-            <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl border border-white/20">
-              <input
-                type="text"
-                placeholder="Oda Kodunu Girin"
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value.slice(0, 4))}
-                maxLength={4}
-                className="w-full bg-white/20 text-white placeholder-white/50 text-center text-xl font-bold py-3 px-4 rounded-xl mb-3 border-2 border-white/30 focus:border-cyan-400 focus:outline-none transition-all"
-              />
-              <button
-                onClick={joinRoom}
-                disabled={!serverConnected || inputCode.length !== 4}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Odaya Katıl
-              </button>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (screen === 'searching') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="relative w-32 h-32 mx-auto mb-8">
-            <div className="absolute inset-0 border-8 border-blue-500/30 rounded-full"></div>
-            <div className="absolute inset-0 border-8 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
-            <Search className="w-16 h-16 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-          </div>
-          <h2 className="text-3xl font-bold text-white mb-4">Rakip Aranıyor...</h2>
-          <p className="text-gray-300 mb-8">Lütfen bekleyin</p>
-          <button
-            onClick={cancelSearch}
-            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center gap-2 mx-auto"
-          >
-            <X className="w-5 h-5" />
-            İptal
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-4xl w-full">
-        <div className="flex justify-between items-center mb-6 bg-white/10 backdrop-blur-lg p-4 rounded-2xl border border-white/20">
-          <div className={`flex items-center gap-3 ${currentPlayer === 'black' ? 'opacity-100' : 'opacity-50'}`}>
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-black rounded-full shadow-lg border-4 border-white/50"></div>
-            <div>
-              <p className="text-white font-bold">Siyah</p>
-              <p className="text-gray-300 text-sm">{gameInfo.blackScore} taş</p>
+            
+            <div id="connectionStatus" class="connection-status disconnected">
+                <div class="status-spinner"></div>
+                <span>Serverə qoşulur... / Connecting to server...</span>
             </div>
-            {currentPlayer === 'black' && (
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            )}
-          </div>
 
-          <div className="text-white text-center">
-            <p className="text-2xl font-bold">
-              {currentPlayer === myColor ? 'Sizin Sıranız' : 'Rakip Oynuyor'}
-            </p>
-          </div>
-
-          <div className={`flex items-center gap-3 ${currentPlayer === 'red' ? 'opacity-100' : 'opacity-50'}`}>
-            {currentPlayer === 'red' && (
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            )}
-            <div className="text-right">
-              <p className="text-white font-bold">Kırmızı</p>
-              <p className="text-gray-300 text-sm">{gameInfo.redScore} taş</p>
+            <div class="button-container">
+                <button class="game-button ranked-btn" id="rankedBtn" onclick="startRankedGame()" disabled>
+                    <span class="btn-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M6 9v6M18 9v6M6 15H4.5a2.5 2.5 0 0 0 0 5H6M18 15h1.5a2.5 2.5 0 0 1 0 5H18M12 3v18M9 3h6"/>
+                        </svg>
+                    </span>
+                    <span class="btn-text"> Online Play </span>
+                </button>
+                <button class="game-button friend-btn" id="friendBtn" onclick="createPrivateRoom()" disabled>
+                    <span class="btn-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </span>
+                    <span class="btn-text">DOSTUNLA OYNA / PLAY WITH FRIEND</span>
+                </button>
+                <button class="game-button join-btn" id="joinBtn" onclick="showJoinModal()" disabled>
+                    <span class="btn-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                        </svg>
+                    </span>
+                    <span class="btn-text">OTAGA QOŞUL / JOIN ROOM</span>
+                </button>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-700 rounded-full shadow-lg border-4 border-white/50"></div>
-          </div>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-lg p-6 rounded-3xl shadow-2xl border border-white/20">
-          <div className="grid grid-cols-8 gap-1 bg-amber-900 p-2 rounded-2xl">
-            {board.map((row, rowIndex) => (
-              row.map((cell, colIndex) => {
-                const isLight = (rowIndex + colIndex) % 2 === 0;
-                const isSelected = selectedPiece?.row === rowIndex && selectedPiece?.col === colIndex;
-                const isValidMove = validMoves.some(m => m.row === rowIndex && m.col === colIndex);
+        <!-- Bekleyen Lobi Ekranı -->
+        <div id="waitingLobby">
+            <div class="header">
+                <div class="logo">🎲</div>
+                <h1>DOSTUNLA OYNA / PLAY WITH FRIEND</h1>
+                <p class="subtitle">Oda yaradılır... / Creating room...</p>
+            </div>
+
+            <div class="user-info" id="waitingUserInfo">
+                <div class="user-avatar" id="waitingUserAvatar">👤</div>
+                <div class="user-details">
+                    <div class="user-name" id="waitingUserName">Yüklənir... / Loading...</div>
+                </div>
+            </div>
+            
+            <div id="waitingConnectionStatus" class="connection-status connected">
+                <div class="status-dot"></div>
+                <span>✅ Serverə qoşuldu / Connected</span>
+            </div>
+
+            <div style="text-align: center; padding: 30px 20px;">
+                <div style="font-size: 2.5em; font-weight: 800; color: #667eea; letter-spacing: 15px; margin: 20px 0;" id="waitingRoomCode">----</div>
+                <p style="color: #aaa; margin-bottom: 20px;">Oda kodunu dostunla paylaş / Share code with friend</p>
                 
-                return (
-                  <div
-                    key={`${rowIndex}-${colIndex}`}
-                    onClick={() => handleSquareClick(rowIndex, colIndex)}
-                    className={`aspect-square flex items-center justify-center rounded-lg cursor-pointer transition-all duration-300 ${
-                      isLight ? 'bg-amber-100' : 'bg-amber-800'
-                    } ${isSelected ? 'ring-4 ring-yellow-400 scale-95' : ''} ${
-                      isValidMove ? 'ring-4 ring-green-400 animate-pulse' : ''
-                    } hover:scale-95`}
-                  >
-                    {cell && (
-                      <div className={`w-4/5 h-4/5 rounded-full shadow-2xl transform transition-all duration-300 hover:scale-110 ${
-                        cell.color === 'red'
-                          ? 'bg-gradient-to-br from-red-400 to-red-700 border-4 border-red-900'
-                          : 'bg-gradient-to-br from-gray-700 to-black border-4 border-gray-900'
-                      } ${currentPlayer === cell.color ? 'animate-pulse' : ''} flex items-center justify-center`}>
-                        {cell.king && (
-                          <Crown className="w-1/2 h-1/2 text-yellow-300 animate-bounce" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ))}
-          </div>
+                <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+                    <button class="modal-btn primary-btn" onclick="copyWaitingRoomCode()" style="flex: 1; max-width: 200px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M14 2H10a2 2 0 0 0-2 2v2h8V4a2 2 0 0 0-2-2z"/>
+                        </svg>
+                        Kopyala / Copy
+                    </button>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <div class="spinner" style="margin: 20px auto;"></div>
+                    <p style="color: #667eea; font-weight: 600; margin-top: 10px;">Rəqib gözlənilir... / Waiting for opponent...</p>
+                </div>
+                
+                <button class="modal-btn cancel-btn" onclick="cancelWaitingRoom()" style="margin-top: 30px; width: 100%;">
+                    Ləğv et / Cancel
+                </button>
+            </div>
         </div>
-      </div>
-    </div>
-  );
-};
 
-export default CheckersGame;
+        <!-- Oyun Ekranı -->
+        <div id="game">
+            <div class="game-header">
+                <div class="players-container">
+                    <div id="player1Card" class="player-card">
+                        <div class="player-name">
+                            <div id="player1Avatar" class="player-avatar-small" style="width: 30px; height: 30px; border-radius: 50%; background: rgba(102, 126, 234, 0.2); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; overflow: hidden; border: 2px solid #667eea; font-size: 0.8em;">👤</div>
+                            <span id="player1Name">Oyunçu 1 / Player 1</span>
+                        </div>
+                        <div class="player-color">⚪ Ağ / White</div>
+                    </div>
+                    <div id="player2Card" class="player-card">
+                        <div class="player-name">
+                            <div id="player2Avatar" class="player-avatar-small" style="width: 30px; height: 30px; border-radius: 50%; background: rgba(102, 126, 234, 0.2); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; overflow: hidden; border: 2px solid #667eea; font-size: 0.8em;">👤</div>
+                            <span id="player2Name">Oyunçu 2 / Player 2</span>
+                        </div>
+                        <div class="player-color">⚫ Qara / Black</div>
+                    </div>
+                </div>
+                <div class="turn-indicator" id="turnIndicator">Sıra: Ağ / Turn: White - ⏰ 20s</div>
+            </div>
+            <div class="board-container">
+                <div id="board"></div>
+                <div class="game-actions">
+                    <button class="leave-btn" onclick="leaveGame()">
+                        🚪 Oyundan Çıx / Leave Game
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dereceli Oyun Modal -->
+    <div id="rankedModal" class="modal">
+        <div class="modal-content">
+            <h2>🌐 Online Search 🔍</h2>
+            <div class="searching">
+                <div class="spinner"></div>
+                <p style="font-size: 1.1em; color: #667eea; font-weight: 600;">Rəqib axtarılır... / Searching...</p>
+                <p id="searchTimer" style="font-size: 1.5em; color: #667eea; font-weight: 700; margin-top: 10px;">0:00</p>
+            </div>
+            <button class="modal-btn cancel-btn" onclick="cancelSearch()">Ləğv et / Cancel</button>
+        </div>
+    </div>
+
+    <!-- Özel Oda Modal -->
+    <div id="privateModal" class="modal">
+        <div class="modal-content">
+            <h2>👥 Özəl Oda / Private Room</h2>
+            <p style="text-align: center; color: #666; margin-bottom: 10px;">Oda Kodu / Room Code:</p>
+            <div class="room-code" id="roomCode">----</div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary-btn" onclick="copyRoomCode()">📋 Kopyala / Copy</button>
+                <button class="modal-btn cancel-btn" onclick="closePrivateModal()">İptal / Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Odaya Katılma Modal -->
+    <div id="joinModal" class="modal">
+        <div class="modal-content">
+            <h2>🔗 Odaya Qoşul / Join Room</h2>
+            <div class="input-group">
+                <input type="text" id="joinRoomCode" placeholder="----" maxlength="4" inputmode="numeric">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn primary-btn" onclick="joinRoom()">Qoşul / Join</button>
+                <button class="modal-btn cancel-btn" onclick="closeJoinModal()">İptal / Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
