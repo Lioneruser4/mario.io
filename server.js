@@ -1026,12 +1026,35 @@ io.on('connection', (socket) => {
             if (room.isPrivate) return;
             
             // Oyundan çıkan oyuncuya -10 puan, diğerine +10 puan
-            await updateElo(leaverUserId, -10, false);
+            const leaverSocket = Array.from(io.sockets.sockets.values()).find(s => {
+                const user = users.get(s.id);
+                return user && user.userId === leaverUserId;
+            });
             
             // Diğer oyuncuyu bul
             const otherPlayer = room.players.find(p => p.userId !== leaverUserId);
             if (otherPlayer) {
+                const otherSocket = io.sockets.sockets.get(otherPlayer.socketId);
+                
+                // Elo puanlarını güncelle
+                await updateElo(leaverUserId, -10, false);
                 await updateElo(otherPlayer.userId, 10, true);
+                
+                // Kalan oyuncuya bildirim gönder
+                if (otherSocket) {
+                    otherSocket.emit('opponentLeft', {
+                        message: 'Rakip oyundan ayrıldı! Kazandınız! 🎉',
+                        eloChange: 10
+                    });
+                }
+                
+                // Çıkan oyuncuya bildirim gönder (eğer hala bağlıysa)
+                if (leaverSocket) {
+                    leaverSocket.emit('opponentLeft', {
+                        message: 'Oyundan ayrıldınız! Kaybettiniz 😔',
+                        eloChange: -10
+                    });
+                }
             }
             
             // Güncellenmiş liderlik tablosunu gönder
@@ -1094,13 +1117,18 @@ io.on('connection', (socket) => {
                     if (remainingSocket) {
                         remainingSocket.emit('opponentLeft');
                         remainingSocket.emit('error', { message: 'Rakip oyundan ayrıldı!' });
+                        
+                        // Eğer dereceli maç ise elo güncelle
+                        if (!room.isPrivate) {
+                            updateEloForGameLeave(room, player.userId);
+                        }
                     }
                 }
                 
                 // Odayı temizle
                 stopRoomTimer(roomCode);
                 rooms.delete(roomCode);
-                console.log('� Oyuncu odadan ayrıldı:', roomCode, '-', player.userName);
+                console.log('🚪 Oyuncu odadan ayrıldı:', roomCode, '-', player.userName);
                 break;
             }
         }
