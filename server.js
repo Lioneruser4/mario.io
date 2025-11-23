@@ -33,10 +33,18 @@ const searchTimers = new Map(); // Eşleşme timer'ları
 function calculateEloChange(winnerElo, loserElo, isRankedMatch = true) {
     if (!isRankedMatch) return { winnerChange: 0, loserChange: 0 };
     
-    // Kazanan için 12-20 arası puan (rastgele)
-    const winnerChange = Math.floor(12 + Math.random() * 9);
-    // Kaybeden için -12-20 arası puan (rastgele)
-    const loserChange = -Math.floor(12 + Math.random() * 9);
+    const winnerLevel = calculateLevel(winnerElo);
+    let winnerChange, loserChange;
+    
+    if (winnerLevel >= 5) {
+        // 5+ level için daha az puan
+        winnerChange = Math.floor(10 + Math.random() * 4); // 10-13 arası
+        loserChange = -Math.floor(13 + Math.random() * 3); // 13-15 arası
+    } else {
+        // 1-4 level için normal puan
+        winnerChange = Math.floor(12 + Math.random() * 9); // 12-20 arası
+        loserChange = -Math.floor(12 + Math.random() * 9); // 12-20 arası
+    }
     
     return { winnerChange, loserChange };
 }
@@ -45,7 +53,7 @@ function calculateEloChange(winnerElo, loserElo, isRankedMatch = true) {
 function calculateLevel(elo) {
     // 100 puanda bir seviye atlama
     const level = Math.floor(elo / 100) + 1;
-    return Math.min(10, Math.max(1, level)); // Minimum 1, maksimum 10
+    return level;
 }
 
 // Seviye ikonu belirleme
@@ -121,16 +129,18 @@ async function updateElo(userId, eloChange, isWin) {
         const currentUser = await usersCollection.findOne({ userId: userId });
         if (!currentUser) return;
         
-        // Yeni elo puanını hesapla
-        const newElo = currentUser.elo + eloChange;
+        // Yeni elo puanını hesapla (minimum 0)
+        const newElo = Math.max(0, currentUser.elo + eloChange);
+        const actualChange = newElo - currentUser.elo; // Gerçek değişim
+        
         const newLevel = calculateLevel(newElo);
         
         // Veritabanını güncelle
         const result = await usersCollection.updateOne(
             { userId: userId },
             { 
-                $inc: { elo: eloChange },
                 $set: { 
+                    elo: newElo,
                     lastLoginAt: new Date(),
                     level: newLevel
                 }
@@ -168,7 +178,7 @@ async function updateElo(userId, eloChange, isWin) {
                         losses: updatedUser.losses
                     });
                     
-                    console.log(`📊 Elo güncellendi: ${updatedUser.userName} - ${eloChange} puan (Yeni Elo: ${updatedUser.elo}, Level: ${updatedUser.level})`);
+                    console.log(`📊 Elo güncellendi: ${updatedUser.userName} - ${actualChange} puan (Yeni Elo: ${updatedUser.elo}, Level: ${updatedUser.level})`);
                 }
             }
         }
@@ -288,23 +298,6 @@ async function connectToDatabase() {
         await usersCollection.createIndex({ level: -1 });
         
         console.log('📊 Database ve index\'ler hazır');
-        
-        // Test verisi ekle (ilk kullanıcı için)
-        const testUser = await usersCollection.findOne({ userId: 'TG_test' });
-        if (!testUser) {
-            await usersCollection.insertOne({
-                userId: 'TG_test',
-                userName: 'Test User',
-                elo: 1000,
-                level: 11,
-                wins: 0,
-                losses: 0,
-                gamesPlayed: 0,
-                createdAt: new Date(),
-                lastLoginAt: new Date()
-            });
-            console.log('🧪 Test kullanıcı oluşturuldu');
-        }
         
         return true;
     } catch (error) {
@@ -690,6 +683,14 @@ io.on('connection', (socket) => {
 
     // Özel oda oluştur
     socket.on('createRoom', (data) => {
+        // Aynı Telegram ID ile oda oluşturmayı engelle
+        for (const [roomCode, room] of rooms.entries()) {
+            if (room.players.some(p => p.userId === data.userId)) {
+                socket.emit('error', { message: 'Zaten bir odanız var!' });
+                return;
+            }
+        }
+        
         const roomCode = generateRoomCode();
         
         rooms.set(roomCode, {
@@ -698,21 +699,19 @@ io.on('connection', (socket) => {
                     socketId: socket.id, 
                     userId: data.userId, 
                     userName: data.userName,
-                    userPhotoUrl: data.userPhotoUrl // Doğru resmi kullan
+                    userPhotoUrl: data.userPhotoUrl || null, // Doğru resmi kullan
+                    playerColor: 'white',
+                    ready: false
                 }
             ],
-            board: null,
-            currentPlayer: 'white',
+            board: createInitialBoard(),
             isPrivate: true,
-            createdAt: Date.now()
+            gameStarted: false,
+            currentPlayer: 'white'
         });
         
-        // Timer başlat (2 oyuncu olduğunda başlatılacak)
-
-        socket.join(roomCode);
-        socket.emit('roomCreated', { roomCode: roomCode });
-        
-        console.log('🏠 Özel oda:', roomCode, 'by', data.userName);
+        socket.emit('roomCreated', { roomCode });
+        console.log('🏠 Oda oluşturuldu:', roomCode, '-', data.userName);
     });
 
     // Odaya katıl
@@ -738,11 +737,13 @@ io.on('connection', (socket) => {
             return;
         }
 
-        room.players.push({ 
-            socketId: socket.id, 
-            userId: data.userId, 
+        room.players.push({
+            socketId: socket.id,
+            userId: data.userId,
             userName: data.userName,
-            userPhotoUrl: data.userPhotoUrl || null // Doğru resmi kullan
+            userPhotoUrl: data.userPhotoUrl || null, // Doğru resmi kullan
+            playerColor: 'black',
+            ready: false
         });
         socket.join(data.roomCode);
 
@@ -777,30 +778,43 @@ io.on('connection', (socket) => {
         const room = rooms.get(data.roomCode);
         if (!room) return;
 
-        if (!room.board) {
-            room.board = data.board;
-            
-            room.players.forEach(player => {
-                const playerSocket = io.sockets.sockets.get(player.socketId);
-                if (playerSocket) {
-                    const playerColor = room.players.indexOf(player) === 0 ? 'white' : 'black';
-                    const opponent = room.players.find(p => p.socketId !== player.socketId);
-                    
-                    playerSocket.emit('gameStart', {
-                        board: room.board,
-                        currentPlayer: room.currentPlayer,
-                        playerColor: playerColor,
-                        opponentName: opponent ? opponent.userName : 'Rakip',
-                        opponentPhotoUrl: opponent ? opponent.userPhotoUrl : null // Rakibin resmi
-                    });
-                }
-            });
-            
-            // Timer başlat
-            startRoomTimer(data.roomCode);
-            
-            console.log('🎮 Oyun başladı:', data.roomCode);
+        // Oyuncunun hazır olduğunu işaretle
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (player) {
+            player.ready = true;
         }
+
+        // Her iki oyuncu da hazır mı?
+        const allReady = room.players.every(p => p.ready);
+        if (!allReady) {
+            console.log('⏳ Oyuncu hazır:', player.userName, '-', room.players.filter(p => p.ready).length, '/2 hazır');
+            return;
+        }
+
+        // Oyunu başlat
+        room.gameStarted = true;
+        room.currentPlayer = 'white'; // Beyaz başlar
+        
+        // Timer'ı başlat
+        startRoomTimer(data.roomCode);
+
+        // Her iki oyuncuya da oyun başlangıç bilgilerini gönder
+        room.players.forEach(player => {
+            const playerSocket = io.sockets.sockets.get(player.socketId);
+            if (playerSocket) {
+                const opponent = room.players.find(p => p.socketId !== player.socketId);
+                
+                playerSocket.emit('gameStart', {
+                    board: room.board,
+                    currentPlayer: room.currentPlayer,
+                    playerColor: player.playerColor,
+                    opponentName: opponent ? opponent.userName : 'Rakip',
+                    opponentPhotoUrl: opponent ? opponent.userPhotoUrl : null // Rakibin resmi
+                });
+            }
+        });
+
+        console.log('🎮 Oyun başladı:', data.roomCode);
     });
 
     // Hamle yap
