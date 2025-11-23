@@ -3,6 +3,15 @@ let telegramUser = null;
 let userId = null;
 let userName = null;
 
+// Kullanıcı istatistikleri
+let userStats = {
+    elo: 1000,
+    level: 1,
+    levelIcon: '新人玩家',
+    wins: 0,
+    losses: 0
+};
+
 // Telegram WebApp kontrolü
 let userPhotoUrl = null;
 
@@ -943,6 +952,88 @@ socket.on('error', (data) => {
     showCustomNotification('❌ Hata: ' + data.message);
 });
 
+// Kullanıcı istatistikleri
+socket.on('userStats', (data) => {
+    userStats = data;
+    updateUserStatsDisplay();
+});
+
+// Liderlik tablosu güncelleme
+socket.on('leaderboardUpdate', (data) => {
+    updateLeaderboardDisplay(data);
+});
+
+// Kullanıcı sıralaması güncelleme
+socket.on('userRankUpdate', (data) => {
+    userStats = { ...userStats, ...data };
+    updateUserStatsDisplay();
+});
+
+// Kullanıcı istatistiklerini ekranda göster
+function updateUserStatsDisplay() {
+    const userStatsEl = document.getElementById('userStats');
+    if (userStatsEl) {
+        userStatsEl.innerHTML = `
+            <div class="user-stats-content">
+                <div class="stat-item">
+                    <span class="stat-label">Elo:</span>
+                    <span class="stat-value">${userStats.elo}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Level:</span>
+                    <span class="stat-value">${userStats.levelIcon} ${userStats.level}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">W/L:</span>
+                    <span class="stat-value">${userStats.wins}/${userStats.losses}</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Liderlik tablosunu ekranda göster
+function updateLeaderboardDisplay(leaderboard) {
+    const leaderboardEl = document.getElementById('leaderboardContent');
+    if (leaderboardEl) {
+        let leaderboardHTML = '';
+        
+        leaderboard.forEach((player, index) => {
+            const isTop3 = index < 3;
+            const rankClass = isTop3 ? `rank-${index + 1}` : '';
+            const animationClass = isTop3 ? 'top-rank-animation' : '';
+            
+            leaderboardHTML += `
+                <div class="leaderboard-item ${rankClass} ${animationClass}">
+                    <div class="rank">${index + 1}</div>
+                    <div class="player-info">
+                        <div class="player-name">${player.userName}</div>
+                        <div class="player-level">${player.levelIcon} Level ${player.level}</div>
+                    </div>
+                    <div class="player-elo">${player.elo}</div>
+                </div>
+            `;
+        });
+        
+        leaderboardEl.innerHTML = leaderboardHTML;
+    }
+}
+
+// Liderlik tablosunu göster
+function showLeaderboard() {
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('leaderboard').style.display = 'block';
+    
+    // Sunucudan liderlik tablosunu iste
+    socket.emit('getLeaderboard');
+}
+
+// Liderlik tablosunu gizle
+function hideLeaderboard() {
+    document.getElementById('leaderboard').style.display = 'none';
+    document.getElementById('lobby').style.display = 'block';
+}
+
 // Oyunu başlat
 function startGame(data) {
     gameState.roomCode = data.roomCode;
@@ -955,6 +1046,7 @@ function startGame(data) {
     gameState.afkCount = 0;
     
     document.getElementById('lobby').style.display = 'none';
+    document.getElementById('leaderboard').style.display = 'none';
     document.getElementById('game').style.display = 'block';
     
     updatePlayerNames();
@@ -969,6 +1061,9 @@ function startGame(data) {
     // Timer sunucudan yönetiliyor
     gameState.timer = 20;
     updateTimerDisplay();
+    
+    // Kullanıcının sıralamasını iste
+    socket.emit('getUserRank', { userId: userId });
 }
 
 // Oyuncu isimlerini güncelle
