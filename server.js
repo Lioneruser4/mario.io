@@ -574,6 +574,9 @@ io.on('connection', (socket) => {
                 waitingPlayers.delete(socket.id);
                 waitingPlayers.delete(opponentSocketId);
                 
+                // Debug: Bekleme listesi durumunu logla
+                console.log('🧹 Eşleşme sonrası bekleme listesi temizlendi. Kalan:', waitingPlayers.size);
+                
                 const roomCode = generateRoomCode();
                 
                 rooms.set(roomCode, {
@@ -1082,25 +1085,141 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Bağlantı kesildi
-    socket.on('disconnect', () => {
-        console.log('❌ Bağlantı kesildi:', socket.id);
+// Oyundan çıkma durumunda elo güncelleme
+async function updateEloForGameLeave(room, leaverUserId) {
+try {
+    // Sadece dereceli maçlarda elo güncelle
+    if (room.isPrivate) return;
+            
+    // Oyundan çıkan oyuncuya -10 puan, diğerine +10 puan
+    const leaverSocket = Array.from(io.sockets.sockets.values()).find(s => {
+        const user = users.get(s.id);
+        return user && user.userId === leaverUserId;
+    });
+            
+    // Diğer oyuncuyu bul
+    const otherPlayer = room.players.find(p => p.userId !== leaverUserId);
+    if (otherPlayer) {
+        const otherSocket = io.sockets.sockets.get(otherPlayer.socketId);
+                
+        // Elo puanlarını güncelle
+        await updateElo(leaverUserId, -10, false);
+        await updateElo(otherPlayer.userId, 10, true);
+                
+        // Kalan oyuncuya bildirim gönder
+        if (otherSocket) {
+            otherSocket.emit('opponentLeft', {
+                message: 'Rakip oyundan ayrıldı! Kazandınız! 🎉',
+                eloChange: 10
+            });
+        }
+                
+        // Çıkan oyuncuya bildirim gönder (eğer hala bağlıysa)
+        if (leaverSocket) {
+            leaverSocket.emit('opponentLeft', {
+                message: 'Oyundan ayrıldınız! Kaybettiniz 😔',
+                eloChange: -10
+            });
+        }
+    }
+            
+    // Güncellenmiş liderlik tablosunu gönder
+    const leaderboard = await getLeaderboard();
+    io.emit('leaderboardUpdate', leaderboard);
+            
+    console.log(`Elo güncellendi - Oyundan çıkan: ${leaverUserId} (-10), Diğer oyuncu: +10`);
+} catch (error) {
+    console.error('Elo güncelleme hatası (oyundan çıkma):', error);
+}
+}
+
+// Oyundan çık
+socket.on('leaveGame', (data) => {
+// Bekleme listesinden çıkar
+if (waitingPlayers.has(socket.id)) {
+    stopSearchTimer(socket.id);
+    waitingPlayers.delete(socket.id);
+    console.log('⏳ Oyuncu bekleme listesinden çıkarıldı:', socket.id);
+}
         
-        // Bekleme listesinden çıkar
+const room = rooms.get(data.roomCode);
+if (room) {
+    const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+    if (playerIndex !== -1) {
+        const player = room.players[playerIndex];
+                
+        // Diğer oyuncuya haber ver
+        const remainingPlayer = room.players.find(p => p.socketId !== socket.id);
+        if (remainingPlayer) {
+            const remainingSocket = io.sockets.sockets.get(remainingPlayer.socketId);
+            if (remainingSocket) {
+                remainingSocket.emit('opponentLeft', {
+                    message: 'Rakip oyundan ayrıldı! Kazandınız! 🎉',
+                    eloChange: 10
+                });
+            }
+        }
+                
+        // Oyuncuyu odadan çıkar
+        room.players.splice(playerIndex, 1);
+                
+        // Elo güncelle (sadece dereceli maçlarda)
+        if (!room.isPrivate) {
+            updateEloForGameLeave(room, data.userId);
+        }
+                
+        // Odayı temizle
+        stopRoomTimer(data.roomCode);
+        rooms.delete(data.roomCode);
+        console.log('🚪 Oyuncu oyundan çıktı:', data.roomCode, '-', player.userName);
+    }
+}
+});
+
+// Odadan çık
+socket.on('leaveRoom', (data) => {
+const room = rooms.get(data.roomCode);
+if (room) {
+    const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+    if (playerIndex !== -1) {
+        const player = room.players[playerIndex];
+        room.players.splice(playerIndex, 1);
+                
+        // Bekleme listesinden de çıkar
         if (waitingPlayers.has(socket.id)) {
             stopSearchTimer(socket.id);
             waitingPlayers.delete(socket.id);
-            console.log('⏳ Bekleme listesinden çıkarıldı:', socket.id);
+            console.log('🧹 Oyuncu bekleme listesinden çıkarıldı:', player.userName);
+        }
+    }
+            
+    if (room.players.length === 0) {
+        stopRoomTimer(data.roomCode);
+        rooms.delete(data.roomCode);
+        console.log('🗑️ Boş oda silindi:', data.roomCode);
+    }
+}
+});
+
+// Bağlantı kesildi
+    socket.on('disconnect', () => {
+        console.log('❌ Bağlantı kesildi:', socket.id);
+        
+        // Bekleme listesinden çıkar (önce kontrol et)
+        if (waitingPlayers.has(socket.id)) {
+            stopSearchTimer(socket.id);
+            waitingPlayers.delete(socket.id);
+            console.log('⏳ Bekleme listesinden çıkarıldı:', socket.id, 'Kalan:', waitingPlayers.size);
         }
         
-        // Odadan çıkar
+        // Odadan çıkar ve diğer oyuncuyu serbest bırak
         for (const [roomCode, room] of rooms.entries()) {
             const playerIndex = room.players.findIndex(p => p.socketId === socket.id);
             if (playerIndex !== -1) {
                 const player = room.players[playerIndex];
                 room.players.splice(playerIndex, 1);
                 
-                // Diğer oyuncuya haber ver
+                // Kalan oyuncu varsa onu bekleme listesine ekle ve odayı sil
                 const remainingPlayer = room.players[0];
                 if (remainingPlayer) {
                     const remainingSocket = io.sockets.sockets.get(remainingPlayer.socketId);
@@ -1108,27 +1227,30 @@ io.on('connection', (socket) => {
                         remainingSocket.emit('opponentLeft');
                         remainingSocket.emit('error', { message: 'Rakip oyundan ayrıldı!' });
                         
-                        // Eğer dereceli maç ise elo güncelle
-                        if (!room.isPrivate) {
-                            updateEloForGameLeave(room, player.userId);
+                        // Oyuncuyu tekrar bekleme listesine al
+                        if (!waitingPlayers.has(remainingPlayer.socketId)) {
+                            waitingPlayers.set(remainingPlayer.socketId, {
+                                socketId: remainingPlayer.socketId,
+                                userId: remainingPlayer.userId,
+                                userName: remainingPlayer.userName,
+                                userPhotoUrl: remainingPlayer.userPhotoUrl,
+                                userLevel: remainingPlayer.userLevel,
+                                userElo: remainingPlayer.userElo,
+                                startTime: Date.now()
+                            });
+                            console.log('🔄 Oyuncu tekrar bekleme listesine alındı:', remainingPlayer.userName);
                         }
                     }
                 }
                 
-                // Odayı temizle
                 stopRoomTimer(roomCode);
                 rooms.delete(roomCode);
-                console.log('🚪 Oyuncu odadan ayrıldı:', roomCode, '-', player.userName);
+                console.log('🗑️ Oda silindi:', roomCode, '-', player.userName);
                 break;
             }
         }
         
-        // Kullanıcı listesinden çıkar
-        const user = users.get(socket.id);
-        if (user) {
-            console.log('👤 Kullanıcı ayrıldı:', user.userName);
-            users.delete(socket.id);
-        }
+        users.delete(socket.id);
     });
 
     // Liderlik tablosu isteği
