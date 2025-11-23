@@ -161,7 +161,7 @@ async function updateElo(userId, eloChange, isWin) {
                 );
             }
             
-            // Güncellenmiş kullanıcı bilgilerini gönder
+            // Güncellenmiş kullanıcı bilgilerini al ve gönder
             const updatedUser = await usersCollection.findOne({ userId: userId });
             if (updatedUser) {
                 const socket = Array.from(io.sockets.sockets.values()).find(s => {
@@ -176,6 +176,13 @@ async function updateElo(userId, eloChange, isWin) {
                         levelIcon: getLevelIcon(updatedUser.level),
                         wins: updatedUser.wins,
                         losses: updatedUser.losses
+                    });
+                    
+                    // Kullanıcıya elo değişimini bildir
+                    socket.emit('eloUpdate', {
+                        eloChange: actualChange,
+                        newElo: updatedUser.elo,
+                        isWin: isWin
                     });
                     
                     console.log(`📊 Elo güncellendi: ${updatedUser.userName} - ${actualChange} puan (Yeni Elo: ${updatedUser.elo}, Level: ${updatedUser.level})`);
@@ -198,19 +205,10 @@ async function getLeaderboard() {
             .sort({ elo: -1 })
             .limit(10) // Sadece top 10
             .toArray();
-        
-        return leaderboard.map((user, index) => ({
-            rank: index + 1,
-            userId: user.userId,
-            userName: user.userName,
-            elo: user.elo,
-            level: user.level,
-            levelIcon: getLevelIcon(user.level),
-            wins: user.wins,
-            losses: user.losses
-        }));
+            
+        return leaderboard;
     } catch (error) {
-        console.error('Liderlik tablosu alınırken hata:', error);
+        console.error('Liderlik tablosu alınamadı:', error);
         return [];
     }
 }
@@ -771,61 +769,35 @@ io.on('connection', (socket) => {
                 opponentName: player1.userName,
                 opponentPhotoUrl: player1.userPhotoUrl || null // Rakibin resmi
             });
-        }
-
-        console.log('👥 Odaya katıldı:', data.roomCode, '-', data.userName);
-    });
-
-    // Oyun hazır
-    socket.on('gameReady', (data) => {
-        const room = rooms.get(data.roomCode);
-        if (!room) return;
-
-        // Oyuncunun hazır olduğunu işaretle
-        const player = room.players.find(p => p.socketId === socket.id);
-        if (player) {
-            player.ready = true;
-        }
-
-        // Her iki oyuncu da hazır mı?
-        const allReady = room.players.every(p => p.ready);
-        if (!allReady) {
-            console.log('⏳ Oyuncu hazır:', player.userName, '-', room.players.filter(p => p.ready).length, '/2 hazır');
-            return;
-        }
-
         // Oyunu başlat
-        room.gameStarted = true;
-        room.currentPlayer = 'white'; // Beyaz başlar
+        const firstPlayer = room.players[0];
+        const secondPlayer = room.players[1];
         
-        // Timer'ı başlat
-        startRoomTimer(data.roomCode);
-
-        // Her iki oyuncuya da oyun başlangıç bilgilerini gönder
-        room.players.forEach(player => {
-            const playerSocket = io.sockets.sockets.get(player.socketId);
-            if (playerSocket) {
-                const opponent = room.players.find(p => p.socketId !== player.socketId);
-                
-                playerSocket.emit('gameStart', {
-                    board: room.board,
-                    currentPlayer: room.currentPlayer,
-                    playerColor: player.playerColor,
-                    opponentName: opponent ? opponent.userName : 'Rakip',
-                    opponentPhotoUrl: opponent ? opponent.userPhotoUrl : null // Rakibin resmi
-                });
-            }
+        // Beyaz başlar
+        io.to(firstPlayer.socketId).emit('gameStart', {
+            roomCode: data.roomCode,
+            playerColor: 'white',
+            board: firstPlayer.board || data.board,
+            currentPlayer: 'white',
+            opponentName: secondPlayer.userName,
+            opponentPhotoUrl: secondPlayer.userPhotoUrl,
+            opponentLevel: secondPlayer.userLevel,
+            opponentElo: secondPlayer.userElo
         });
-
-        console.log('🎮 Oyun başladı:', data.roomCode);
-    });
-
-    // Hamle yap
-    socket.on('makeMove', (data) => {
-        const room = rooms.get(data.roomCode);
-        if (!room) {
-            socket.emit('error', { message: 'Oda bulunamadı!' });
-            return;
+        
+        io.to(secondPlayer.socketId).emit('gameStart', {
+            roomCode: data.roomCode,
+            playerColor: 'black',
+            board: secondPlayer.board || data.board,
+            currentPlayer: 'white',
+            opponentName: firstPlayer.userName,
+            opponentPhotoUrl: firstPlayer.userPhotoUrl,
+            opponentLevel: firstPlayer.userLevel,
+            opponentElo: firstPlayer.userElo
+        });
+        
+        room.gameStarted = true;
+        startRoomTimer(data.roomCode);
         }
         
         // Sıra kontrolü
@@ -1282,6 +1254,38 @@ if (room) {
             socket.emit('adminUsers', allUsers);
         } catch (error) {
             socket.emit('adminResponse', { message: 'Kullanıcılar alınamadı: ' + error.message, type: 'error' });
+        }
+    });
+
+    socket.on('adminGetRooms', () => {
+        try {
+            const roomData = [];
+            
+            // Aktif odaları ekle
+            rooms.forEach((room, roomCode) => {
+                roomData.push({
+                    code: roomCode,
+                    type: 'Aktif Oda',
+                    players: room.players.map(p => p.userName).join(', '),
+                    gameStarted: room.gameStarted,
+                    isPrivate: room.isPrivate
+                });
+            });
+            
+            // Bekleyen oyuncuları ekle
+            waitingPlayers.forEach((player, socketId) => {
+                roomData.push({
+                    code: 'WAITING',
+                    type: 'Bekleyen Oyuncu',
+                    players: player.userName,
+                    gameStarted: false,
+                    isPrivate: false
+                });
+            });
+            
+            socket.emit('adminRooms', roomData);
+        } catch (error) {
+            socket.emit('adminResponse', { message: 'Odalar alınamadı: ' + error.message, type: 'error' });
         }
     });
 
