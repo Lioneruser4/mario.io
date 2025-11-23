@@ -901,6 +901,13 @@ function showAdminPanel() {
                             <label>Toplam Kullanıcı:</label>
                             <span id="adminTotalUsers">0</span>
                         </div>
+                        <div class="stat-item">
+                            <label>Bekleyen Odalar:</label>
+                            <span id="adminWaitingRooms">0</span>
+                        </div>
+                    </div>
+                    <div id="adminRoomList" style="max-height: 150px; overflow-y: auto; margin-top: 10px;">
+                        <!-- Odalar burada gösterilecek -->
                     </div>
                 </div>
                 
@@ -924,6 +931,16 @@ function showAdminPanel() {
                         <button class="btn danger" onclick="adminResetAllElo()">🔄 Tüm Elo'yu Sıfırla</button>
                         <button class="btn warning" onclick="adminClearRooms()">🏠 Odaları Temizle</button>
                         <button class="btn success" onclick="adminKickAll()">👟 Herkesi At</button>
+                    </div>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>📋 Kullanıcı Listesi</h3>
+                    <div class="admin-controls">
+                        <button class="btn" onclick="loadUserList()">🔄 Kullanıcı Listesi Yükle</button>
+                        <div id="adminUserList" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                            <!-- Kullanıcılar burada gösterilecek -->
+                        </div>
                     </div>
                 </div>
                 
@@ -968,7 +985,19 @@ function loadAdminStats() {
             
             // Toplam kullanıcı sayısını al
             socket.emit('adminGetUsers');
+            
+            // Bekleyen odaları göster
+            updateWaitingRooms();
         });
+}
+
+// Bekleyen odaları güncelle
+function updateWaitingRooms() {
+    const waitingRoomsDiv = document.getElementById('adminWaitingRooms');
+    if (!waitingRoomsDiv) return;
+    
+    // Sunucudan oda bilgilerini iste
+    socket.emit('adminGetRooms');
 }
 
 // Admin işlemi yap
@@ -1014,6 +1043,18 @@ function sendAdminNotification() {
     }
 }
 
+// Kullanıcı listesini yükle
+function loadUserList() {
+    socket.emit('adminGetUsers');
+}
+
+// Kullanıcıyı sil
+function deleteUser(userId) {
+    if (confirm(`Kullanıcı ${userId} silinsin mi?`)) {
+        socket.emit('adminUserAction', { userId, action: 'deleteUser' });
+    }
+}
+
 // Sayfa yüklendiğinde kontrol et
 document.addEventListener('DOMContentLoaded', () => {
     addAdminButton();
@@ -1037,11 +1078,58 @@ socket.on('adminUsers', (users) => {
     if (totalUsersEl) {
         totalUsersEl.textContent = users.length;
     }
+    
+    // Kullanıcı listesini göster
+    const userListEl = document.getElementById('adminUserList');
+    if (userListEl) {
+        if (users.length === 0) {
+            userListEl.innerHTML = '<p style="color: #999; text-align: center;">Kullanıcı bulunamadı</p>';
+        } else {
+            const userHTML = users.map(user => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 5px;">
+                    <div>
+                        <strong>${user.userName}</strong><br>
+                        <small style="color: #999;">${user.userId} | Elo: ${user.elo}</small>
+                    </div>
+                    <button class="btn danger" style="padding: 5px 10px; font-size: 0.8em;" onclick="deleteUser('${user.userId}')">Sil</button>
+                </div>
+            `).join('');
+            userListEl.innerHTML = userHTML;
+        }
+    }
+});
+
+socket.on('adminRooms', (rooms) => {
+    const waitingRoomsEl = document.getElementById('adminWaitingRooms');
+    const roomListEl = document.getElementById('adminRoomList');
+    
+    if (waitingRoomsEl) {
+        waitingRoomsEl.textContent = rooms.length;
+    }
+    
+    if (roomListEl) {
+        if (rooms.length === 0) {
+            roomListEl.innerHTML = '<p style="color: #999; text-align: center;">Aktif oda veya bekleyen oyuncu yok</p>';
+        } else {
+            const roomHTML = rooms.map(room => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 5px;">
+                    <div>
+                        <strong>${room.code}</strong><br>
+                        <small style="color: #999;">${room.type} | ${room.players}</small>
+                    </div>
+                    <div style="font-size: 0.8em; color: ${room.gameStarted ? '#4ade80' : '#fbbf24'};">
+                        ${room.gameStarted ? '▶️' : '⏳'}
+                    </div>
+                </div>
+            `).join('');
+            roomListEl.innerHTML = roomHTML;
+        }
+    }
 });
 
 socket.on('adminResponse', (data) => {
-    // Admin bildirimini göster
-    showCustomNotification(data.message, data.type);
+    // Admin bildirimini göster (15 saniye)
+    showCustomNotification(data.message, data.type, 15000);
     
     if (data.refresh) {
         loadAdminStats();
@@ -1049,7 +1137,8 @@ socket.on('adminResponse', (data) => {
 });
 
 socket.on('adminNotification', (data) => {
-    showCustomNotification(data.message, data.type);
+    // Admin bildirimini göster (15 saniye)
+    showCustomNotification(data.message, data.type, 15000);
 });
 
 socket.on('moveMade', (data) => {
@@ -1318,9 +1407,6 @@ function startGame(data) {
     gameState.opponentElo = data.opponentElo || 0;
     gameState.afkCount = 0;
     
-    // Sunucuya hazır olduğumuzu bildir
-    socket.emit('gameReady', { roomCode: gameState.roomCode, board: gameState.board, userId: userId });
-    
     // Oyun arayüzünü göster
     document.getElementById('lobby').style.display = 'none';
     document.getElementById('leaderboard').style.display = 'none';
@@ -1329,7 +1415,14 @@ function startGame(data) {
     updatePlayerNames();
     renderBoard();
     
-    // Timer sunucudan gelecek (timerUpdate event'i)
+    // Sunucuya hazır olduğumuzu bildir (TAHTAYLA BİRLİKTE)
+    socket.emit('gameReady', { 
+        roomCode: gameState.roomCode, 
+        board: gameState.board, 
+        userId: userId 
+    });
+    
+    // Timer sunucudan yönetiliyor
     gameState.timer = 20;
     updateTimerDisplay();
     
@@ -1474,7 +1567,7 @@ function updatePlayerAvatar(avatarEl, photoUrl, name) {
 }
 
 // Custom notification fonksiyonları
-function showCustomNotification(message) {
+function showCustomNotification(message, type = 'info', duration = 3000) {
     // Bildirim elementini oluştur veya güncelle
     let notification = document.getElementById('customNotification');
     if (!notification) {
@@ -1501,10 +1594,10 @@ function showCustomNotification(message) {
     notification.textContent = message;
     notification.style.display = 'block';
     
-    // 3 saniye sonra bildirimi gizle
+    // Belirtilen süre sonra bildirimi gizle
     setTimeout(() => {
         hideCustomNotification();
-    }, 3000);
+    }, duration);
 }
 
 function hideCustomNotification() {
