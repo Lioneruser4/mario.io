@@ -834,10 +834,19 @@ socket.on('moveMade', (data) => {
 
 // Oyuncu kartlarında profil resmini göster
 function updatePlayerAvatars() {
-    // Player 1 (Beyaz) - kendi profil resmimiz
-    const player1Avatar = document.getElementById('player1Avatar');
-    if (player1Avatar && userPhotoUrl) {
-        player1Avatar.innerHTML = '';
+    // Player 1 (Beyaz) ve Player 2 (Siyah) kartlarını bul
+    const player1Card = document.getElementById('player1Card');
+    const player2Card = document.getElementById('player2Card');
+    
+    // Kendi oyuncu rengimizi belirle
+    const myColor = gameState.playerColor;
+    const myAvatar = myColor === 'white' ? player1Card : player2Card;
+    const opponentAvatar = myColor === 'white' ? player2Card : player1Card;
+    
+    // Kendi profil resmimizi doğru karta yerleştir
+    const myAvatarElement = myAvatar.querySelector('[id$="Avatar"]');
+    if (myAvatarElement && userPhotoUrl) {
+        myAvatarElement.innerHTML = '';
         const img = document.createElement('img');
         img.src = userPhotoUrl;
         img.style.width = '100%';
@@ -845,19 +854,19 @@ function updatePlayerAvatars() {
         img.style.borderRadius = '50%';
         img.style.objectFit = 'cover';
         img.onerror = function() {
-            player1Avatar.textContent = userName.charAt(0).toUpperCase();
-            player1Avatar.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+            myAvatarElement.textContent = userName.charAt(0).toUpperCase();
+            myAvatarElement.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
         };
-        player1Avatar.appendChild(img);
-    } else if (player1Avatar) {
-        player1Avatar.textContent = userName.charAt(0).toUpperCase();
-        player1Avatar.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+        myAvatarElement.appendChild(img);
+    } else if (myAvatarElement) {
+        myAvatarElement.textContent = userName.charAt(0).toUpperCase();
+        myAvatarElement.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
     }
     
-    // Player 2 (Siyah) - rakibin profil resmi
-    const player2Avatar = document.getElementById('player2Avatar');
-    if (player2Avatar && gameState.opponentPhotoUrl) {
-        player2Avatar.innerHTML = '';
+    // Rakibin profil resmini doğru karta yerleştir
+    const opponentAvatarElement = opponentAvatar.querySelector('[id$="Avatar"]');
+    if (opponentAvatarElement && gameState.opponentPhotoUrl) {
+        opponentAvatarElement.innerHTML = '';
         const img = document.createElement('img');
         img.src = gameState.opponentPhotoUrl;
         img.style.width = '100%';
@@ -865,13 +874,13 @@ function updatePlayerAvatars() {
         img.style.borderRadius = '50%';
         img.style.objectFit = 'cover';
         img.onerror = function() {
-            player2Avatar.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
-            player2Avatar.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+            opponentAvatarElement.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
+            opponentAvatarElement.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
         };
-        player2Avatar.appendChild(img);
-    } else if (player2Avatar) {
-        player2Avatar.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
-        player2Avatar.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+        opponentAvatarElement.appendChild(img);
+    } else if (opponentAvatarElement) {
+        opponentAvatarElement.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
+        opponentAvatarElement.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
     }
 }
 
@@ -886,10 +895,25 @@ socket.on('gameOver', (data) => {
     }, 500);
 });
 
-socket.on('opponentLeft', () => {
-    // Timer sunucu tarafında durduruldu
-    // Alert yerine custom notification kullan
-    showCustomNotification('⚠️ Rakibiniz oyundan ayrıldı!');
+socket.on('opponentLeft', (data) => {
+    // Rakip oyundan çıktığında bildirim göster
+    const message = data.message || 'Rakip oyundan ayrıldı!';
+    
+    // Custom notification göster
+    showCustomNotification(message, 'success');
+    
+    // Elo puanı değişikliği varsa göster
+    if (data.eloChange) {
+        const eloText = data.eloChange > 0 ? 
+            `+${data.eloChange} Elo puanı kazandınız! 🎉` : 
+            `${data.eloChange} Elo puanı kaybettiniz 😔`;
+        
+        setTimeout(() => {
+            showCustomNotification(eloText, data.eloChange > 0 ? 'success' : 'error');
+        }, 2000);
+    }
+    
+    // 3 saniye sonra lobiyi göster
     setTimeout(() => {
         resetGame();
     }, 3000);
