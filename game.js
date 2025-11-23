@@ -5,9 +5,9 @@ let userName = null;
 
 // Kullanıcı istatistikleri
 let userStats = {
-    elo: 1000,
+    elo: 0,
     level: 1,
-    levelIcon: '新人玩家',
+    levelIcon: '🎖️',
     wins: 0,
     losses: 0
 };
@@ -105,7 +105,12 @@ socket.on('connect', () => {
     document.getElementById('friendBtn').disabled = false;
     document.getElementById('joinBtn').disabled = false;
     
-    socket.emit('registerUser', { userId, userName });
+    socket.emit('registerUser', { 
+        userId, 
+        userName,
+        userLevel: userStats.level,
+        userElo: userStats.elo
+    });
 });
 
 socket.on('disconnect', () => {
@@ -590,7 +595,9 @@ function startRankedGame() {
     socket.emit('findMatch', { 
         userId, 
         userName, 
-        userPhotoUrl: userPhotoUrl || null 
+        userPhotoUrl: userPhotoUrl || null,
+        userLevel: userStats.level,
+        userElo: userStats.elo
     });
     document.getElementById('rankedModal').style.display = 'block';
     
@@ -858,11 +865,15 @@ function updateMatchModal(data) {
 }
 
 socket.on('roomJoined', (data) => {
+    // Modal ve bekleyen lobiden çık
     document.getElementById('joinModal').style.display = 'none';
-    document.getElementById('privateModal').style.display = 'none';
+    document.getElementById('waitingLobby').style.display = 'none';
+    
     if (data.opponentPhotoUrl) {
         gameState.opponentPhotoUrl = data.opponentPhotoUrl;
     }
+    
+    // Oyunu başlat
     startGame(data);
 });
 
@@ -973,23 +984,70 @@ socket.on('userRankUpdate', (data) => {
 function updateUserStatsDisplay() {
     const userStatsEl = document.getElementById('userStats');
     if (userStatsEl) {
+        const levelIcon = getLevelIconDisplay(userStats.level);
         userStatsEl.innerHTML = `
-            <div class="user-stats-content">
-                <div class="stat-item">
-                    <span class="stat-label">Elo:</span>
-                    <span class="stat-value">${userStats.elo}</span>
+            <div class="user-stats-content" style="text-align: center;">
+                <div class="level-icon-display">
+                    ${levelIcon}
                 </div>
-                <div class="stat-item">
-                    <span class="stat-label">Level:</span>
-                    <span class="stat-value">${userStats.levelIcon} ${userStats.level}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">W/L:</span>
-                    <span class="stat-value">${userStats.wins}/${userStats.losses}</span>
+                <div style="font-size: 0.8em; color: #94a3b8; margin-top: 5px;">
+                    ${userStats.elo} Puan | ${userStats.wins}W/${userStats.losses}L
                 </div>
             </div>
         `;
     }
+}
+
+// Seviye ikonunu görüntüle
+function getLevelIconDisplay(level) {
+    const icons = {
+        1: '🥉',  // Level 1 - Bronz
+        2: '🥉',  // Level 2 - Bronz
+        3: '🥉',  // Level 3 - Bronz
+        4: '🥈',  // Level 4 - Gümüş
+        5: '🥈',  // Level 5 - Gümüş
+        6: '🥈',  // Level 6 - Gümüş
+        7: '🥇',  // Level 7 - Altın
+        8: '🥇',  // Level 8 - Altın
+        9: '🥇',  // Level 9 - Altın
+        10: '🏆' // Level 10 - Kupa
+    };
+    
+    const icon = icons[level] || '🎖️';
+    const color = getLevelColorGlow(level);
+    
+    return `
+        <div style="
+            font-size: 3em;
+            animation: levelGlow 2s ease-in-out infinite;
+            filter: drop-shadow(0 0 10px ${color});
+        ">
+            ${icon}
+        </div>
+        <div style="
+            font-size: 1.2em;
+            font-weight: bold;
+            color: ${color};
+            text-shadow: 0 0 10px ${color};
+            margin-top: 5px;
+        ">
+            Level ${level}
+        </div>
+    `;
+}
+
+// Seviye renk parıltısı
+function getLevelColorGlow(level) {
+    if (level >= 1 && level <= 3) {
+        return '#cd7f32'; // Bronz
+    } else if (level >= 4 && level <= 6) {
+        return '#c0c0c0'; // Gümüş
+    } else if (level >= 7 && level <= 9) {
+        return '#ffd700'; // Altın
+    } else if (level === 10) {
+        return '#ff6b6b'; // Kırmızı (Maksimum)
+    }
+    return '#94a3b8';
 }
 
 // Liderlik tablosunu ekranda göster
@@ -1043,6 +1101,8 @@ function startGame(data) {
     gameState.gameStarted = true;
     gameState.opponentName = data.opponentName || 'Rakip';
     gameState.opponentPhotoUrl = data.opponentPhotoUrl || null;
+    gameState.opponentLevel = data.opponentLevel || 1;
+    gameState.opponentElo = data.opponentElo || 0;
     gameState.afkCount = 0;
     
     document.getElementById('lobby').style.display = 'none';
@@ -1074,20 +1134,95 @@ function updatePlayerNames() {
     const player2Avatar = document.getElementById('player2Avatar');
     
     if (gameState.playerColor === 'white') {
+        player1Name.innerHTML = '';
         player1Name.textContent = userName;
+        player2Name.innerHTML = '';
         player2Name.textContent = gameState.opponentName;
+        
+        // Kullanıcının seviye ikonlarını ekle
+        if (userStats.level) {
+            const levelBadge = document.createElement('span');
+            levelBadge.style.fontSize = '0.7em';
+            levelBadge.style.marginLeft = '5px';
+            levelBadge.style.padding = '2px 6px';
+            levelBadge.style.borderRadius = '8px';
+            levelBadge.style.background = getLevelColor(userStats.level);
+            levelBadge.textContent = `${getLevelIconSimple(userStats.level)} ${userStats.level}`;
+            player1Name.appendChild(levelBadge);
+        }
+        
+        // Rakibin seviye ikonlarını ekle
+        if (gameState.opponentLevel) {
+            const opponentLevelBadge = document.createElement('span');
+            opponentLevelBadge.style.fontSize = '0.7em';
+            opponentLevelBadge.style.marginLeft = '5px';
+            opponentLevelBadge.style.padding = '2px 6px';
+            opponentLevelBadge.style.borderRadius = '8px';
+            opponentLevelBadge.style.background = getLevelColor(gameState.opponentLevel);
+            opponentLevelBadge.textContent = `${getLevelIconSimple(gameState.opponentLevel)} ${gameState.opponentLevel}`;
+            player2Name.appendChild(opponentLevelBadge);
+        }
         
         // Avatar'ları güncelle
         updatePlayerAvatar(player1Avatar, userPhotoUrl, userName);
         updatePlayerAvatar(player2Avatar, gameState.opponentPhotoUrl, gameState.opponentName);
     } else {
+        player1Name.innerHTML = '';
         player1Name.textContent = gameState.opponentName;
+        player2Name.innerHTML = '';
         player2Name.textContent = userName;
+        
+        // Rakibin seviye ikonlarını ekle
+        if (gameState.opponentLevel) {
+            const opponentLevelBadge = document.createElement('span');
+            opponentLevelBadge.style.fontSize = '0.7em';
+            opponentLevelBadge.style.marginLeft = '5px';
+            opponentLevelBadge.style.padding = '2px 6px';
+            opponentLevelBadge.style.borderRadius = '8px';
+            opponentLevelBadge.style.background = getLevelColor(gameState.opponentLevel);
+            opponentLevelBadge.textContent = `${getLevelIconSimple(gameState.opponentLevel)} ${gameState.opponentLevel}`;
+            player1Name.appendChild(opponentLevelBadge);
+        }
+        
+        // Kullanıcının seviye ikonlarını ekle
+        if (userStats.level) {
+            const levelBadge = document.createElement('span');
+            levelBadge.style.fontSize = '0.7em';
+            levelBadge.style.marginLeft = '5px';
+            levelBadge.style.padding = '2px 6px';
+            levelBadge.style.borderRadius = '8px';
+            levelBadge.style.background = getLevelColor(userStats.level);
+            levelBadge.textContent = `${getLevelIconSimple(userStats.level)} ${userStats.level}`;
+            player2Name.appendChild(levelBadge);
+        }
         
         // Avatar'ları güncelle
         updatePlayerAvatar(player1Avatar, gameState.opponentPhotoUrl, gameState.opponentName);
         updatePlayerAvatar(player2Avatar, userPhotoUrl, userName);
     }
+}
+
+// Basit seviye ikonu
+function getLevelIconSimple(level) {
+    const icons = {
+        1: '🥉', 2: '🥉', 3: '🥉',
+        4: '🥈', 5: '🥈', 6: '🥈',
+        7: '🥇', 8: '🥇', 9: '🥇',
+        10: '🏆'
+    };
+    return icons[level] || '🎖️';
+}
+
+// Seviye rengini belirle
+function getLevelColor(level) {
+    if (level >= 1 && level <= 3) {
+        return 'rgba(255, 215, 0, 0.3)'; // Açık sarı
+    } else if (level >= 4 && level <= 6) {
+        return 'rgba(192, 192, 192, 0.3)'; // Gümüş
+    } else if (level >= 7 && level <= 10) {
+        return 'rgba(255, 215, 0, 0.5)'; // Altın
+    }
+    return 'rgba(128, 128, 128, 0.3)';
 }
 
 // Oyuncu avatar'ını güncelle
