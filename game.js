@@ -7,7 +7,7 @@ let userName = null;
 let userStats = {
     elo: 0,
     level: 1,
-    levelIcon: '🎖️',
+    levelIcon: 'bronze',
     wins: 0,
     losses: 0
 };
@@ -980,60 +980,73 @@ socket.on('userRankUpdate', (data) => {
     updateUserStatsDisplay();
 });
 
-// Kullanıcı istatistiklerini ekranda göster
+// Kullanıcı istatistiklerini ekranda göster (Faceit tarzı)
 function updateUserStatsDisplay() {
     const userStatsEl = document.getElementById('userStats');
     if (userStatsEl) {
-        const levelIcon = getLevelIconDisplay(userStats.level);
+        const levelIcon = getLevelIconSVG(userStats.level);
         userStatsEl.innerHTML = `
-            <div class="user-stats-content" style="text-align: center;">
-                <div class="level-icon-display">
+            <div class="user-stats-content" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+                <div class="level-icon-display" style="margin-bottom: 8px;">
                     ${levelIcon}
                 </div>
-                <div style="font-size: 0.8em; color: #94a3b8; margin-top: 5px;">
-                    ${userStats.elo} Puan | ${userStats.wins}W/${userStats.losses}L
+                <div style="font-size: 1.2em; font-weight: bold; color: ${getLevelColorGlow(userStats.level)};">
+                    LEVEL ${userStats.level}
+                </div>
+                <div style="font-size: 0.85em; color: #94a3b8; margin-top: 4px;">
+                    ${userStats.elo} ELO
+                </div>
+                <div style="font-size: 0.75em; color: #64748b; margin-top: 2px;">
+                    ${userStats.wins}W - ${userStats.losses}L
                 </div>
             </div>
         `;
     }
 }
 
-// Seviye ikonunu görüntüle
-function getLevelIconDisplay(level) {
-    const icons = {
-        1: '🥉',  // Level 1 - Bronz
-        2: '🥉',  // Level 2 - Bronz
-        3: '🥉',  // Level 3 - Bronz
-        4: '🥈',  // Level 4 - Gümüş
-        5: '🥈',  // Level 5 - Gümüş
-        6: '🥈',  // Level 6 - Gümüş
-        7: '🥇',  // Level 7 - Altın
-        8: '🥇',  // Level 8 - Altın
-        9: '🥇',  // Level 9 - Altın
-        10: '🏆' // Level 10 - Kupa
-    };
-    
-    const icon = icons[level] || '🎖️';
+// SVG Level İkonu (Faceit tarzı)
+function getLevelIconSVG(level) {
     const color = getLevelColorGlow(level);
+    const size = 50;
     
-    return `
-        <div style="
-            font-size: 3em;
-            animation: levelGlow 2s ease-in-out infinite;
-            filter: drop-shadow(0 0 10px ${color});
-        ">
-            ${icon}
-        </div>
-        <div style="
-            font-size: 1.2em;
-            font-weight: bold;
-            color: ${color};
-            text-shadow: 0 0 10px ${color};
-            margin-top: 5px;
-        ">
-            Level ${level}
-        </div>
-    `;
+    // Level'a göre şekil
+    let shape = '';
+    
+    if (level >= 1 && level <= 3) {
+        // Bronz - Üçgen
+        shape = `
+            <svg width="${size}" height="${size}" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 8px ${color});">
+                <polygon points="50,10 90,80 10,80" fill="${color}" stroke="#fff" stroke-width="3"/>
+                <text x="50" y="65" text-anchor="middle" fill="#1e293b" font-size="35" font-weight="bold">${level}</text>
+            </svg>
+        `;
+    } else if (level >= 4 && level <= 6) {
+        // Gümüş - Kare
+        shape = `
+            <svg width="${size}" height="${size}" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 8px ${color});">
+                <rect x="15" y="15" width="70" height="70" fill="${color}" stroke="#fff" stroke-width="3" rx="5"/>
+                <text x="50" y="65" text-anchor="middle" fill="#1e293b" font-size="35" font-weight="bold">${level}</text>
+            </svg>
+        `;
+    } else if (level >= 7 && level <= 9) {
+        // Altın - Beşgen
+        shape = `
+            <svg width="${size}" height="${size}" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 8px ${color});">
+                <polygon points="50,10 90,35 75,80 25,80 10,35" fill="${color}" stroke="#fff" stroke-width="3"/>
+                <text x="50" y="60" text-anchor="middle" fill="#1e293b" font-size="35" font-weight="bold">${level}</text>
+            </svg>
+        `;
+    } else if (level === 10) {
+        // Elmas - Yıldız
+        shape = `
+            <svg width="${size}" height="${size}" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 12px ${color}); animation: levelGlow 2s ease-in-out infinite;">
+                <polygon points="50,5 61,35 92,35 67,54 78,85 50,65 22,85 33,54 8,35 39,35" fill="${color}" stroke="#fff" stroke-width="3"/>
+                <text x="50" y="55" text-anchor="middle" fill="#1e293b" font-size="28" font-weight="bold">10</text>
+            </svg>
+        `;
+    }
+    
+    return shape;
 }
 
 // Seviye renk parıltısı
@@ -1142,24 +1155,30 @@ function updatePlayerNames() {
         // Kullanıcının seviye ikonlarını ekle
         if (userStats.level) {
             const levelBadge = document.createElement('span');
-            levelBadge.style.fontSize = '0.7em';
+            levelBadge.style.fontSize = '0.8em';
             levelBadge.style.marginLeft = '5px';
-            levelBadge.style.padding = '2px 6px';
+            levelBadge.style.padding = '3px 8px';
             levelBadge.style.borderRadius = '8px';
             levelBadge.style.background = getLevelColor(userStats.level);
-            levelBadge.textContent = `${getLevelIconSimple(userStats.level)} ${userStats.level}`;
+            levelBadge.style.display = 'inline-flex';
+            levelBadge.style.alignItems = 'center';
+            levelBadge.style.gap = '4px';
+            levelBadge.innerHTML = `${getLevelIconSimple(userStats.level)} <span style="font-weight: bold;">${userStats.level}</span>`;
             player1Name.appendChild(levelBadge);
         }
         
         // Rakibin seviye ikonlarını ekle
         if (gameState.opponentLevel) {
             const opponentLevelBadge = document.createElement('span');
-            opponentLevelBadge.style.fontSize = '0.7em';
+            opponentLevelBadge.style.fontSize = '0.8em';
             opponentLevelBadge.style.marginLeft = '5px';
-            opponentLevelBadge.style.padding = '2px 6px';
+            opponentLevelBadge.style.padding = '3px 8px';
             opponentLevelBadge.style.borderRadius = '8px';
             opponentLevelBadge.style.background = getLevelColor(gameState.opponentLevel);
-            opponentLevelBadge.textContent = `${getLevelIconSimple(gameState.opponentLevel)} ${gameState.opponentLevel}`;
+            opponentLevelBadge.style.display = 'inline-flex';
+            opponentLevelBadge.style.alignItems = 'center';
+            opponentLevelBadge.style.gap = '4px';
+            opponentLevelBadge.innerHTML = `${getLevelIconSimple(gameState.opponentLevel)} <span style="font-weight: bold;">${gameState.opponentLevel}</span>`;
             player2Name.appendChild(opponentLevelBadge);
         }
         
@@ -1175,24 +1194,30 @@ function updatePlayerNames() {
         // Rakibin seviye ikonlarını ekle
         if (gameState.opponentLevel) {
             const opponentLevelBadge = document.createElement('span');
-            opponentLevelBadge.style.fontSize = '0.7em';
+            opponentLevelBadge.style.fontSize = '0.8em';
             opponentLevelBadge.style.marginLeft = '5px';
-            opponentLevelBadge.style.padding = '2px 6px';
+            opponentLevelBadge.style.padding = '3px 8px';
             opponentLevelBadge.style.borderRadius = '8px';
             opponentLevelBadge.style.background = getLevelColor(gameState.opponentLevel);
-            opponentLevelBadge.textContent = `${getLevelIconSimple(gameState.opponentLevel)} ${gameState.opponentLevel}`;
+            opponentLevelBadge.style.display = 'inline-flex';
+            opponentLevelBadge.style.alignItems = 'center';
+            opponentLevelBadge.style.gap = '4px';
+            opponentLevelBadge.innerHTML = `${getLevelIconSimple(gameState.opponentLevel)} <span style="font-weight: bold;">${gameState.opponentLevel}</span>`;
             player1Name.appendChild(opponentLevelBadge);
         }
         
         // Kullanıcının seviye ikonlarını ekle
         if (userStats.level) {
             const levelBadge = document.createElement('span');
-            levelBadge.style.fontSize = '0.7em';
+            levelBadge.style.fontSize = '0.8em';
             levelBadge.style.marginLeft = '5px';
-            levelBadge.style.padding = '2px 6px';
+            levelBadge.style.padding = '3px 8px';
             levelBadge.style.borderRadius = '8px';
             levelBadge.style.background = getLevelColor(userStats.level);
-            levelBadge.textContent = `${getLevelIconSimple(userStats.level)} ${userStats.level}`;
+            levelBadge.style.display = 'inline-flex';
+            levelBadge.style.alignItems = 'center';
+            levelBadge.style.gap = '4px';
+            levelBadge.innerHTML = `${getLevelIconSimple(userStats.level)} <span style="font-weight: bold;">${userStats.level}</span>`;
             player2Name.appendChild(levelBadge);
         }
         
@@ -1202,15 +1227,21 @@ function updatePlayerNames() {
     }
 }
 
-// Basit seviye ikonu
+// Basit seviye ikonu (oyun içi)
 function getLevelIconSimple(level) {
-    const icons = {
-        1: '🥉', 2: '🥉', 3: '🥉',
-        4: '🥈', 5: '🥈', 6: '🥈',
-        7: '🥇', 8: '🥇', 9: '🥇',
-        10: '🏆'
-    };
-    return icons[level] || '🎖️';
+    const color = getLevelColorGlow(level);
+    const size = 20;
+    
+    if (level >= 1 && level <= 3) {
+        return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="display: inline-block; vertical-align: middle;"><polygon points="50,10 90,80 10,80" fill="${color}" stroke="#fff" stroke-width="5"/></svg>`;
+    } else if (level >= 4 && level <= 6) {
+        return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="display: inline-block; vertical-align: middle;"><rect x="15" y="15" width="70" height="70" fill="${color}" stroke="#fff" stroke-width="5" rx="5"/></svg>`;
+    } else if (level >= 7 && level <= 9) {
+        return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="display: inline-block; vertical-align: middle;"><polygon points="50,10 90,35 75,80 25,80 10,35" fill="${color}" stroke="#fff" stroke-width="5"/></svg>`;
+    } else if (level === 10) {
+        return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="display: inline-block; vertical-align: middle;"><polygon points="50,5 61,35 92,35 67,54 78,85 50,65 22,85 33,54 8,35 39,35" fill="${color}" stroke="#fff" stroke-width="5"/></svg>`;
+    }
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="display: inline-block; vertical-align: middle;"><circle cx="50" cy="50" r="40" fill="${color}" stroke="#fff" stroke-width="5"/></svg>`;
 }
 
 // Seviye rengini belirle
