@@ -966,7 +966,22 @@ socket.on('error', (data) => {
 // Kullanıcı istatistikleri
 socket.on('userStats', (data) => {
     userStats = data;
-    updateUserStatsDisplay();
+    
+    // Guest kullanıcılar için elo gösterme
+    if (data.isGuest) {
+        const userStatsEl = document.getElementById('userStats');
+        if (userStatsEl) {
+            userStatsEl.innerHTML = `
+                <div class="user-stats-content" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+                    <div style="font-size: 2em; opacity: 0.5;">👤</div>
+                    <div style="font-size: 0.9em; color: #94a3b8; margin-top: 5px;">Guest Kullanıcı</div>
+                    <div style="font-size: 0.75em; color: #64748b; margin-top: 2px;">Telegram ile giriş yap</div>
+                </div>
+            `;
+        }
+    } else {
+        updateUserStatsDisplay();
+    }
 });
 
 // Liderlik tablosu güncelleme
