@@ -87,9 +87,21 @@ async function findOrCreateUser(userId, userName) {
                 wins: 0,
                 losses: 0,
                 gamesPlayed: 0,
-                createdAt: new Date()
+                createdAt: new Date(),
+                lastLoginAt: new Date()
             };
             await usersCollection.insertOne(user);
+        } else {
+            // Son giriş tarihini güncelle
+            await usersCollection.updateOne(
+                { userId: userId },
+                { 
+                    $set: { 
+                        lastLoginAt: new Date(),
+                        userName: userName // İsim değişmişse güncelle
+                    }
+                }
+            );
         }
         
         return user;
@@ -205,8 +217,34 @@ async function connectToDatabase() {
         // Index'leri oluştur
         await usersCollection.createIndex({ userId: 1 }, { unique: true });
         await usersCollection.createIndex({ elo: -1 });
+        await usersCollection.createIndex({ lastLoginAt: 1 });
+        
+        // Eski hesapları temizle (1 aydan fazla giriş yapmamış)
+        await cleanupInactiveUsers();
+        
+        // Her gün eski hesapları temizle
+        setInterval(cleanupInactiveUsers, 24 * 60 * 60 * 1000); // 24 saat
     } catch (error) {
         console.error('❌ MongoDB bağlantı hatası:', error);
+    }
+}
+
+// Aktif olmayan kullanıcıları temizle (1 aydan fazla giriş yapmamış)
+async function cleanupInactiveUsers() {
+    try {
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        
+        const result = await usersCollection.deleteMany({
+            lastLoginAt: { $lt: oneMonthAgo },
+            userId: { $regex: /^TG_/ } // Sadece Telegram kullanıcıları
+        });
+        
+        if (result.deletedCount > 0) {
+            console.log(`🧹 ${result.deletedCount} aktif olmayan kullanıcı temizlendi`);
+        }
+    } catch (error) {
+        console.error('Kullanıcı temizleme hatası:', error);
     }
 }
 
@@ -370,21 +408,34 @@ io.on('connection', (socket) => {
     socket.on('findMatch', (data) => {
         console.log('🔍 Oyuncu arama yapıyor:', data.userName);
         
+        // Eğer zaten beklemedeyse veya oyundaysa, öncekini temizle
         if (waitingPlayers.has(socket.id)) {
-            console.log('⚠️ Oyuncu zaten beklemede');
-            return;
+            console.log('⚠️ Oyuncu zaten beklemede, yenileniyor');
+            stopSearchTimer(socket.id);
+            waitingPlayers.delete(socket.id);
         }
 
         // Oyuncu bilgilerini sakla (fotoğraf dahil)
         const playerData = {
             userId: data.userId,
             userName: data.userName,
-            userPhotoUrl: data.userPhotoUrl || null
+            userPhotoUrl: data.userPhotoUrl || null,
+            userLevel: data.userLevel || 1,
+            userElo: data.userElo || 0
         };
 
         if (waitingPlayers.size > 0) {
             const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
             const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+            
+            // Kendisiyle eşleşmesin
+            if (opponentSocketId === socket.id) {
+                console.log('⚠️ Aynı kullanıcı, atlanıyor');
+                waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.set(socket.id, playerData);
+                startSearchTimer(socket.id);
+                return;
+            }
             
             if (opponentSocket) {
                 // Eşleşme bulundu - timer'ları durdur
