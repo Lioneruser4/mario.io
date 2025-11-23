@@ -40,6 +40,15 @@ if (window.Telegram && window.Telegram.WebApp) {
             img.style.height = '100%';
             img.style.borderRadius = '50%';
             img.style.objectFit = 'cover';
+            
+            // Resim yüklenemezse emoji göster
+            img.onerror = function() {
+                console.log('Profil resmi yüklenemedi, emoji kullanılıyor');
+                const avatarEmojis = ['😎', '🎮', '🎯', '🚀', '⚡', '🔥', '💎', '👑'];
+                const avatarIndex = telegramUser.id % avatarEmojis.length;
+                avatarEl.textContent = avatarEmojis[avatarIndex];
+            };
+            
             avatarEl.appendChild(img);
         } else {
             // Fotoğraf yoksa emoji kullan
@@ -84,13 +93,35 @@ let gameState = {
     mustCapture: false,
     timer: 20,
     timerInterval: null,
-    afkCount: 0,
-    canContinueCapture: false, // Çoklu yeme durumu
-    capturingPiece: null // Çoklu yeme yapan taş
+    afkCount: 0
 };
 
 // Timer elementini ekle
 let timerElement = null;
+
+// Level iconunu güncelle
+function updateLevelIcon(level) {
+    const levelIcon = document.getElementById('levelIcon');
+    if (levelIcon) {
+        levelIcon.setAttribute('data-level', level);
+        levelIcon.querySelector('.level-icon-inner').textContent = level;
+    }
+}
+
+// Kullanıcı istatistiklerini güncelle
+socket.on('userStats', (data) => {
+    userStats = data;
+    
+    // İstatistikleri güncelle
+    const eloElement = document.querySelector('.user-stats .stat-item:first-child .stat-value');
+    const wlElement = document.querySelector('.user-stats .stat-item:last-child .stat-value');
+    
+    if (eloElement) eloElement.textContent = data.elo;
+    if (wlElement) wlElement.textContent = `${data.wins}/${data.losses}`;
+    
+    // Level iconunu güncelle
+    updateLevelIcon(data.level);
+});
 
 // Bağlantı durumu yönetimi
 let connectionTimeout;
@@ -234,23 +265,21 @@ function renderBoard() {
     const boardElement = document.getElementById('board');
     boardElement.innerHTML = '';
     
-    // Mecburi yeme kontrolü (çoklu yeme sırasında değilse)
-    if (!gameState.canContinueCapture) {
-        const allMoves = getAllPossibleMoves(gameState.playerColor);
-        const captureMoves = allMoves.filter(m => m.capture);
-        gameState.mustCapture = captureMoves.length > 0;
-    }
+    // Mecburi yeme kontrolü
+    const allMoves = getAllPossibleMoves(gameState.playerColor);
+    const captureMoves = allMoves.filter(m => m.capture);
+    gameState.mustCapture = captureMoves.length > 0;
     
     // Siyah oyuncu için tahtayı ters çevir (kendini en altta görsün)
-    // Sadece satırları ters çevir, sütunları değil
+    // Hem satırları hem de sütunları ters çevir (yüz yüze oynama efekti)
     const isFlipped = gameState.playerColor === 'black';
     
     for (let displayRow = 0; displayRow < 8; displayRow++) {
         for (let displayCol = 0; displayCol < 8; displayCol++) {
             // Görüntüleme koordinatlarından gerçek koordinatlara çevir
-            // Sadece satırları ters çevir
+            // Siyah oyuncu için tam ters çevirme (ayna efekti)
             const realRow = isFlipped ? 7 - displayRow : displayRow;
-            const realCol = isFlipped ? 7 - displayCol : displayCol; // Sütunları da ters çevir (yüz yüze)
+            const realCol = isFlipped ? 7 - displayCol : displayCol;
             
             const square = document.createElement('div');
             square.className = 'square ' + ((realRow + realCol) % 2 === 0 ? 'light' : 'dark');
@@ -299,22 +328,9 @@ function handleSquareClick(row, col) {
         return;
     }
     
-    // Çoklu yeme sırasında sadece aynı taş seçilebilir
-    if (gameState.canContinueCapture && gameState.capturingPiece) {
-        if (row !== gameState.capturingPiece.row || col !== gameState.capturingPiece.col) {
-            // Çoklu yeme sırasında başka taş seçilemez
-            return;
-        }
-    }
-    
     const piece = gameState.board[row][col];
     
     if (piece && piece.color === gameState.playerColor) {
-        // Çoklu yeme sırasında başka taş seçilemez
-        if (gameState.canContinueCapture) {
-            return;
-        }
-        
         const moves = getValidMoves(row, col);
         
         // Mecburi yeme varsa, sadece yeme yapabilecek taşları seç
@@ -364,85 +380,6 @@ function selectPiece(row, col) {
             }
         });
     });
-    
-    // Çoklu yeme durumunda seçenek sun
-    if (gameState.canContinueCapture && gameState.capturingPiece && 
-        row === gameState.capturingPiece.row && col === gameState.capturingPiece.col) {
-        showContinueCaptureOptions(row, col);
-    }
-}
-
-// Çoklu yeme seçeneklerini göster
-function showContinueCaptureOptions(row, col) {
-    // Önceki butonları kaldır
-    const existingContinueBtn = document.getElementById('continueCaptureBtn');
-    const existingFinishBtn = document.getElementById('finishCaptureBtn');
-    if (existingContinueBtn) existingContinueBtn.remove();
-    if (existingFinishBtn) existingFinishBtn.remove();
-    
-    // Oyun tahtasında bir buton veya seçenek göster
-    const boardElement = document.getElementById('board');
-    
-    // Devam et butonu - başka taş seçmeye izin ver
-    const continueBtn = document.createElement('div');
-    continueBtn.id = 'continueCaptureBtn';
-    continueBtn.style.cssText = `
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(34, 197, 94, 0.9);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 10px;
-        font-weight: 700;
-        cursor: pointer;
-        z-index: 100;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        backdrop-filter: blur(10px);
-        border: 2px solid white;
-    `;
-    continueBtn.textContent = '⏭️ Devam Et (Başka taş seç)';
-    continueBtn.onclick = () => {
-        // Çoklu yeme durumunu bitir ve diğer taşları seçmeye izin ver
-        gameState.canContinueCapture = false;
-        gameState.capturingPiece = null;
-        gameState.selectedPiece = null;
-        renderBoard();
-        continueBtn.remove();
-        if (finishBtn) finishBtn.remove();
-    };
-    
-    // Bitir butonu - aynı taşla devam et
-    const finishBtn = document.createElement('div');
-    finishBtn.id = 'finishCaptureBtn';
-    finishBtn.style.cssText = `
-        position: absolute;
-        bottom: 70px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(239, 68, 68, 0.9);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 10px;
-        font-weight: 700;
-        cursor: pointer;
-        z-index: 100;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        backdrop-filter: blur(10px);
-        border: 2px solid white;
-    `;
-    finishBtn.textContent = '🏁 Bitir (Aynı taşla devam et)';
-    finishBtn.onclick = () => {
-        // Aynı taşla devam et - butonları kaldır
-        continueBtn.remove();
-        finishBtn.remove();
-    };
-    
-    // Butonları ekle
-    boardElement.parentElement.style.position = 'relative';
-    boardElement.parentElement.appendChild(continueBtn);
-    boardElement.parentElement.appendChild(finishBtn);
 }
 
 // Geçerli hamleleri bul - Amerikan Daması kuralları
@@ -524,51 +461,24 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     // Hemen render et (gecikme olmasın)
     renderBoard();
     
-    // Çoklu yeme kontrolü - aynı taş tekrar yeme yapabilir mi?
-    let canContinueCapture = false;
-    if (capture) {
-        const nextMoves = getValidMoves(toRow, toCol);
-        const nextCaptures = nextMoves.filter(m => m.capture);
-        canContinueCapture = nextCaptures.length > 0;
-    }
-    
-    // Önceki butonları kaldır
+    // Önceki butonları kaldır (temizlik)
     const existingContinueBtn = document.getElementById('continueCaptureBtn');
     const existingFinishBtn = document.getElementById('finishCaptureBtn');
     if (existingContinueBtn) existingContinueBtn.remove();
     if (existingFinishBtn) existingFinishBtn.remove();
     
-    if (canContinueCapture) {
-        // Çoklu yeme devam ediyor - aynı taş seçili kalır, sıra değişmez
-        gameState.canContinueCapture = true;
-        gameState.capturingPiece = { row: toRow, col: toCol };
-        gameState.selectedPiece = { row: toRow, col: toCol };
-        
-        socket.emit('makeMove', {
-            roomCode: gameState.roomCode,
-            from: { row: fromRow, col: fromCol },
-            to: { row: toRow, col: toCol },
-            board: gameState.board,
-            capture: capture,
-            userId: userId,
-            continueCapture: true
-        });
-    } else {
-        // Normal hamle veya çoklu yeme bitti
-        gameState.canContinueCapture = false;
-        gameState.capturingPiece = null;
-        gameState.selectedPiece = null;
-        gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
-        
-        socket.emit('makeMove', {
-            roomCode: gameState.roomCode,
-            from: { row: fromRow, col: fromCol },
-            to: { row: toRow, col: toCol },
-            board: gameState.board,
-            capture: capture,
-            userId: userId
-        });
-    }
+    // Sırayı değiştir ve hamleyi gönder
+    gameState.selectedPiece = null;
+    gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+    
+    socket.emit('makeMove', {
+        roomCode: gameState.roomCode,
+        from: { row: fromRow, col: fromCol },
+        to: { row: toRow, col: toCol },
+        board: gameState.board,
+        capture: capture,
+        userId: userId
+    });
 }
 
 // Oyuncu vurgusunu güncelle
@@ -800,9 +710,7 @@ function resetGame() {
         mustCapture: false,
         timer: 20,
         timerInterval: null,
-        afkCount: 0,
-        canContinueCapture: false,
-        capturingPiece: null
+        afkCount: 0
     };
     document.getElementById('game').style.display = 'none';
     document.getElementById('lobby').style.display = 'block';
@@ -892,6 +800,7 @@ socket.on('gameStart', (data) => {
     }
     
     updatePlayerNames();
+    updatePlayerAvatars(); // Profil resimlerini güncelle
     renderBoard();
     
     // Timer sunucudan gelecek (timerUpdate event'i)
@@ -916,18 +825,55 @@ socket.on('timerTimeout', (data) => {
 socket.on('moveMade', (data) => {
     // Sunucudan gelen hamleyi hemen uygula (gecikme olmasın)
     gameState.board = data.board;
-    
-    // Çoklu yeme devam ediyorsa sıra değişmez
-    if (!data.continueCapture) {
-        gameState.currentPlayer = data.currentPlayer;
-        gameState.canContinueCapture = false;
-        gameState.capturingPiece = null;
-    }
+    gameState.currentPlayer = data.currentPlayer;
     
     // Hemen render et
     renderBoard();
     // Timer sunucudan gelecek (timerUpdate event'i)
 });
+
+// Oyuncu kartlarında profil resmini göster
+function updatePlayerAvatars() {
+    // Player 1 (Beyaz) - kendi profil resmimiz
+    const player1Avatar = document.getElementById('player1Avatar');
+    if (player1Avatar && userPhotoUrl) {
+        player1Avatar.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = userPhotoUrl;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.borderRadius = '50%';
+        img.style.objectFit = 'cover';
+        img.onerror = function() {
+            player1Avatar.textContent = userName.charAt(0).toUpperCase();
+            player1Avatar.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+        };
+        player1Avatar.appendChild(img);
+    } else if (player1Avatar) {
+        player1Avatar.textContent = userName.charAt(0).toUpperCase();
+        player1Avatar.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+    }
+    
+    // Player 2 (Siyah) - rakibin profil resmi
+    const player2Avatar = document.getElementById('player2Avatar');
+    if (player2Avatar && gameState.opponentPhotoUrl) {
+        player2Avatar.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = gameState.opponentPhotoUrl;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.borderRadius = '50%';
+        img.style.objectFit = 'cover';
+        img.onerror = function() {
+            player2Avatar.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
+            player2Avatar.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+        };
+        player2Avatar.appendChild(img);
+    } else if (player2Avatar) {
+        player2Avatar.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
+        player2Avatar.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+    }
+}
 
 socket.on('gameOver', (data) => {
     // Timer sunucu tarafında durduruldu
@@ -966,22 +912,7 @@ socket.on('error', (data) => {
 // Kullanıcı istatistikleri
 socket.on('userStats', (data) => {
     userStats = data;
-    
-    // Guest kullanıcılar için elo gösterme
-    if (data.isGuest) {
-        const userStatsEl = document.getElementById('userStats');
-        if (userStatsEl) {
-            userStatsEl.innerHTML = `
-                <div class="user-stats-content" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-                    <div style="font-size: 2em; opacity: 0.5;">👤</div>
-                    <div style="font-size: 0.9em; color: #94a3b8; margin-top: 5px;">Guest Kullanıcı</div>
-                    <div style="font-size: 0.75em; color: #64748b; margin-top: 2px;">Telegram ile giriş yap</div>
-                </div>
-            `;
-        }
-    } else {
-        updateUserStatsDisplay();
-    }
+    updateUserStatsDisplay();
 });
 
 // Liderlik tablosu güncelleme
