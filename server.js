@@ -12,7 +12,15 @@ const io = require('socket.io')(http, {
     allowEIO3: true
 });
 
-const PORT = process.env.PORT || 3000;
+// MongoDB bağlantısı
+const { MongoClient } = require('mongodb');
+const uri = "mongodb+srv://xaliqmustafayev7313_db_user:R4Cno5z1Enhtr09u@sayt.1oqunne.mongodb.net/?appName=sayt";
+const client = new MongoClient(uri);
+
+// Veritabanı ve koleksiyon
+let db;
+let usersCollection;
+let leaderboardCollection;
 
 // Veri yapıları
 const rooms = new Map();
@@ -21,7 +29,184 @@ const users = new Map();
 const roomTimers = new Map(); // Oda timer'ları
 const searchTimers = new Map(); // Eşleşme timer'ları
 
+// Elo hesaplama fonksiyonu (Elo rating sistemi)
+function calculateEloChange(winnerElo, loserElo, isRankedMatch = true) {
+    if (!isRankedMatch) return { winnerChange: 0, loserChange: 0 };
+    
+    const K = 32; // Elo değişimi katsayısı
+    const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+    const expectedLoser = 1 / (1 + Math.pow(10, (winnerElo - loserElo) / 400));
+    
+    // Kazanan için 12-20 arası puan (rastgele)
+    const winnerChange = Math.floor(12 + Math.random() * 9);
+    // Kaybeden için -12-20 arası puan (rastgele)
+    const loserChange = -Math.floor(12 + Math.random() * 9);
+    
+    return { winnerChange, loserChange };
+}
+
+// Seviye hesaplama fonksiyonu
+function calculateLevel(elo) {
+    // 100 puanda bir seviye atlama
+    return Math.min(10, Math.floor(elo / 100) + 1);
+}
+
+// Seviye ikonu belirleme
+function getLevelIcon(level) {
+    if (level >= 1 && level <= 3) {
+        return '🥉'; // Bronz
+    } else if (level >= 4 && level <= 6) {
+        return '🥈'; // Gümüş
+    } else if (level >= 7 && level <= 9) {
+        return '🥇'; // Altın
+    } else if (level === 10) {
+        return '🏆'; // Kupa (Maksimum seviye)
+    }
+    return '新人玩家'; // Yeni oyuncu
+}
+
+// Kullanıcıyı veritabanında bul veya oluştur
+async function findOrCreateUser(userId, userName) {
+    try {
+        // Sadece Telegram kullanıcıları için elo sistemi
+        if (!userId.startsWith('TG_')) {
+            return null;
+        }
+        
+        let user = await usersCollection.findOne({ userId: userId });
+        
+        if (!user) {
+            // Yeni kullanıcı oluştur
+            user = {
+                userId: userId,
+                userName: userName,
+                elo: 1000, // Başlangıç elo puanı
+                level: 1,
+                wins: 0,
+                losses: 0,
+                gamesPlayed: 0,
+                createdAt: new Date()
+            };
+            await usersCollection.insertOne(user);
+        }
+        
+        return user;
+    } catch (error) {
+        console.error('Kullanıcı bulunurken/oluşturulurken hata:', error);
+        return null;
+    }
+}
+
+// Kullanıcı elo puanını güncelle
+async function updateElo(userId, eloChange, isWin) {
+    try {
+        // Sadece Telegram kullanıcıları için elo sistemi
+        if (!userId.startsWith('TG_')) {
+            return;
+        }
+        
+        const user = await usersCollection.findOne({ userId: userId });
+        if (!user) return;
+        
+        const newElo = Math.max(0, user.elo + eloChange); // Elo puanı negatif olmasın
+        const newLevel = calculateLevel(newElo);
+        
+        await usersCollection.updateOne(
+            { userId: userId },
+            { 
+                $set: { 
+                    elo: newElo,
+                    level: newLevel
+                },
+                $inc: { 
+                    wins: isWin ? 1 : 0,
+                    losses: isWin ? 0 : 1,
+                    gamesPlayed: 1
+                }
+            }
+        );
+        
+        console.log(`Elo güncellendi: ${userId} - ${eloChange} puan`);
+    } catch (error) {
+        console.error('Elo güncellenirken hata:', error);
+    }
+}
+
+// Liderlik tablosunu al
+async function getLeaderboard() {
+    try {
+        const leaderboard = await usersCollection
+            .find({ userId: { $regex: /^TG_/ } }) // Sadece Telegram kullanıcıları
+            .sort({ elo: -1 })
+            .limit(10)
+            .toArray();
+        
+        return leaderboard.map((user, index) => ({
+            rank: index + 1,
+            userId: user.userId,
+            userName: user.userName,
+            elo: user.elo,
+            level: user.level,
+            levelIcon: getLevelIcon(user.level),
+            wins: user.wins,
+            losses: user.losses
+        }));
+    } catch (error) {
+        console.error('Liderlik tablosu alınırken hata:', error);
+        return [];
+    }
+}
+
+// Kullanıcının sıralamasını al
+async function getUserRank(userId) {
+    try {
+        // Sadece Telegram kullanıcıları için elo sistemi
+        if (!userId.startsWith('TG_')) {
+            return null;
+        }
+        
+        const user = await usersCollection.findOne({ userId: userId });
+        if (!user) return null;
+        
+        const higherRankedUsers = await usersCollection.countDocuments({
+            elo: { $gt: user.elo },
+            userId: { $regex: /^TG_/ }
+        });
+        
+        return {
+            rank: higherRankedUsers + 1,
+            elo: user.elo,
+            level: user.level,
+            levelIcon: getLevelIcon(user.level),
+            wins: user.wins,
+            losses: user.losses
+        };
+    } catch (error) {
+        console.error('Kullanıcı sıralaması alınırken hata:', error);
+        return null;
+    }
+}
+
+const PORT = process.env.PORT || 3000;
+
 console.log('🚀 Server Başladılır / Connect Server..');
+
+// MongoDB bağlantısını başlat
+async function connectToDatabase() {
+    try {
+        await client.connect();
+        console.log('✅ MongoDB bağlantısı başarılı');
+        db = client.db('checkers_db');
+        usersCollection = db.collection('users');
+        leaderboardCollection = db.collection('leaderboard');
+        
+        // Index'leri oluştur
+        await usersCollection.createIndex({ userId: 1 }, { unique: true });
+        await usersCollection.createIndex({ elo: -1 });
+    } catch (error) {
+        console.error('❌ MongoDB bağlantı hatası:', error);
+    }
+}
 
 // Rastgele 4 haneli oda kodu oluştur
 function generateRoomCode() {
@@ -157,13 +342,26 @@ io.on('connection', (socket) => {
     console.log('✅ Yeni bağlantı:', socket.id);
 
     // Kullanıcı kaydı
-    socket.on('registerUser', (data) => {
+    socket.on('registerUser', async (data) => {
         users.set(socket.id, {
             userId: data.userId,
             userName: data.userName,
             socketId: socket.id
         });
         console.log('👤 Kullanıcı kaydedildi:', data.userName, '| ID:', data.userId);
+        
+        // MongoDB'ye kullanıcıyı kaydet veya bul
+        const user = await findOrCreateUser(data.userId, data.userName);
+        if (user) {
+            // Kullanıcıya elo ve seviye bilgisini gönder
+            socket.emit('userStats', {
+                elo: user.elo,
+                level: user.level,
+                levelIcon: getLevelIcon(user.level),
+                wins: user.wins,
+                losses: user.losses
+            });
+        }
     });
 
     // Dereceli oyun arama
@@ -202,6 +400,7 @@ io.on('connection', (socket) => {
                     ],
                     board: null,
                     currentPlayer: 'white',
+                    isPrivate: false,
                     createdAt: Date.now()
                 });
                 
@@ -476,6 +675,11 @@ io.on('connection', (socket) => {
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             console.log('🏆 Oyun bitti (taş bitti):', data.roomCode, '- Kazanan:', winner);
             
+            // Elo puanlarını güncelle (sadece dereceli maçlarda)
+            if (!room.isPrivate) {
+                updateEloForGameEnd(room, winner);
+            }
+            
             setTimeout(() => {
                 rooms.delete(data.roomCode);
             }, 5000);
@@ -524,11 +728,64 @@ io.on('connection', (socket) => {
             io.to(data.roomCode).emit('gameOver', { winner: winner });
             console.log('🏆 Oyun bitti (hamle yok):', data.roomCode, '- Kazanan:', winner);
             
+            // Elo puanlarını güncelle (sadece dereceli maçlarda)
+            if (!room.isPrivate) {
+                updateEloForGameEnd(room, winner);
+            }
+            
             setTimeout(() => {
                 rooms.delete(data.roomCode);
             }, 5000);
         }
     });
+
+    // Oyun sonu elo güncelleme
+    async function updateEloForGameEnd(room, winner) {
+        try {
+            // Sadece dereceli maçlarda elo güncelle
+            if (room.isPrivate) return;
+            
+            const [player1, player2] = room.players;
+            const winnerPlayer = winner === 'white' ? player1 : player2;
+            const loserPlayer = winner === 'white' ? player2 : player1;
+            
+            // Kullanıcıların mevcut elo puanlarını al
+            const winnerUser = await usersCollection.findOne({ userId: winnerPlayer.userId });
+            const loserUser = await usersCollection.findOne({ userId: loserPlayer.userId });
+            
+            if (!winnerUser || !loserUser) return;
+            
+            // Elo değişimi hesapla
+            const { winnerChange, loserChange } = calculateEloChange(winnerUser.elo, loserUser.elo, true);
+            
+            // Elo puanlarını güncelle
+            await updateElo(winnerPlayer.userId, winnerChange, true);
+            await updateElo(loserPlayer.userId, loserChange, false);
+            
+            // Güncellenmiş liderlik tablosunu gönder
+            const leaderboard = await getLeaderboard();
+            io.emit('leaderboardUpdate', leaderboard);
+            
+            // Kazanan ve kaybeden oyunculara kendi sıralamalarını gönder
+            const winnerRank = await getUserRank(winnerPlayer.userId);
+            const loserRank = await getUserRank(loserPlayer.userId);
+            
+            const winnerSocket = io.sockets.sockets.get(winnerPlayer.socketId);
+            const loserSocket = io.sockets.sockets.get(loserPlayer.socketId);
+            
+            if (winnerSocket && winnerRank) {
+                winnerSocket.emit('userRankUpdate', winnerRank);
+            }
+            
+            if (loserSocket && loserRank) {
+                loserSocket.emit('userRankUpdate', loserRank);
+            }
+            
+            console.log(`Elo güncellendi - Kazanan: ${winnerPlayer.userName} (+${winnerChange}), Kaybeden: ${loserPlayer.userName} (${loserChange})`);
+        } catch (error) {
+            console.error('Elo güncelleme hatası:', error);
+        }
+    }
 
     // Oyun terk edildi
     socket.on('gameAbandoned', (data) => {
@@ -536,6 +793,12 @@ io.on('connection', (socket) => {
         if (room) {
             stopRoomTimer(data.roomCode);
             io.to(data.roomCode).emit('gameAbandoned');
+            
+            // Elo puanlarını güncelle (sadece dereceli maçlarda)
+            if (!room.isPrivate) {
+                updateEloForGameAbandon(room, data.userId);
+            }
+            
             rooms.delete(data.roomCode);
             console.log('⚠️ Oyun terk edildi:', data.roomCode);
         }
@@ -547,10 +810,66 @@ io.on('connection', (socket) => {
         if (room) {
             stopRoomTimer(data.roomCode);
             socket.to(data.roomCode).emit('opponentLeft');
+            
+            // Elo puanlarını güncelle (sadece dereceli maçlarda)
+            if (!room.isPrivate) {
+                updateEloForGameLeave(room, data.userId);
+            }
+            
             rooms.delete(data.roomCode);
             console.log('🚪 Oyundan çıkıldı:', data.roomCode);
         }
     });
+
+    // Oyun terk etme durumunda elo güncelleme
+    async function updateEloForGameAbandon(room, abandonerUserId) {
+        try {
+            // Sadece dereceli maçlarda elo güncelle
+            if (room.isPrivate) return;
+            
+            // Oyundan çıkan oyuncuya -20 puan, diğerine +20 puan
+            await updateElo(abandonerUserId, -20, false);
+            
+            // Diğer oyuncuyu bul
+            const otherPlayer = room.players.find(p => p.userId !== abandonerUserId);
+            if (otherPlayer) {
+                await updateElo(otherPlayer.userId, 20, true);
+            }
+            
+            // Güncellenmiş liderlik tablosunu gönder
+            const leaderboard = await getLeaderboard();
+            io.emit('leaderboardUpdate', leaderboard);
+            
+            console.log(`Elo güncellendi - Oyundan çıkan: ${abandonerUserId} (-20), Diğer oyuncu: +20`);
+        } catch (error) {
+            console.error('Elo güncelleme hatası (oyun terk):', error);
+        }
+    }
+
+    // Oyundan çıkma durumunda elo güncelleme
+    async function updateEloForGameLeave(room, leaverUserId) {
+        try {
+            // Sadece dereceli maçlarda elo güncelle
+            if (room.isPrivate) return;
+            
+            // Oyundan çıkan oyuncuya -10 puan, diğerine +10 puan
+            await updateElo(leaverUserId, -10, false);
+            
+            // Diğer oyuncuyu bul
+            const otherPlayer = room.players.find(p => p.userId !== leaverUserId);
+            if (otherPlayer) {
+                await updateElo(otherPlayer.userId, 10, true);
+            }
+            
+            // Güncellenmiş liderlik tablosunu gönder
+            const leaderboard = await getLeaderboard();
+            io.emit('leaderboardUpdate', leaderboard);
+            
+            console.log(`Elo güncellendi - Oyundan çıkan: ${leaverUserId} (-10), Diğer oyuncu: +10`);
+        } catch (error) {
+            console.error('Elo güncelleme hatası (oyundan çıkma):', error);
+        }
+    }
 
     // Odadan çık
     socket.on('leaveRoom', (data) => {
@@ -594,6 +913,29 @@ io.on('connection', (socket) => {
             }
         });
     });
+
+    // Liderlik tablosu isteği
+    socket.on('getLeaderboard', async () => {
+        try {
+            const leaderboard = await getLeaderboard();
+            socket.emit('leaderboardUpdate', leaderboard);
+        } catch (error) {
+            console.error('Liderlik tablosu gönderilirken hata:', error);
+        }
+    });
+
+    // Kullanıcı sıralaması isteği
+    socket.on('getUserRank', async (data) => {
+        try {
+            const userRank = await getUserRank(data.userId);
+            if (userRank) {
+                socket.emit('userRankUpdate', userRank);
+            }
+        } catch (error) {
+            console.error('Kullanıcı sıralaması gönderilirken hata:', error);
+        }
+    });
+
 });
 
 // Middleware
@@ -631,13 +973,15 @@ app.use((req, res) => {
 });
 
 // Sunucuyu başlat
-http.listen(PORT, '0.0.0.0', () => {
-    console.log('═══════════════════════════════════════');
-    console.log('🚀 Sunucu çalışıyor!');
-    console.log('📡 Port:', PORT);
-    console.log('🌐 URL: http://localhost:' + PORT);
-    console.log('🎮 Amerikan Daması Online hazır!');
-    console.log('═══════════════════════════════════════');
+connectToDatabase().then(() => {
+    http.listen(PORT, '0.0.0.0', () => {
+        console.log('═══════════════════════════════════════');
+        console.log('🚀 Sunucu çalışıyor!');
+        console.log('📡 Port:', PORT);
+        console.log('🌐 URL: http://localhost:' + PORT);
+        console.log('🎮 Amerikan Daması Online hazır!');
+        console.log('═══════════════════════════════════════');
+    });
 });
 
 // Periyodik temizlik
