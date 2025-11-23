@@ -250,7 +250,7 @@ function renderBoard() {
             // Görüntüleme koordinatlarından gerçek koordinatlara çevir
             // Sadece satırları ters çevir
             const realRow = isFlipped ? 7 - displayRow : displayRow;
-            const realCol = displayCol; // Sütunlar aynı kalır
+            const realCol = isFlipped ? 7 - displayCol : displayCol; // Sütunları da ters çevir (yüz yüze)
             
             const square = document.createElement('div');
             square.className = 'square ' + ((realRow + realCol) % 2 === 0 ? 'light' : 'dark');
