@@ -518,6 +518,26 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Son eşleşme bilgilerini takip et
+    const lastMatches = new Map();
+
+    // Eski eşleşmeleri temizle (1 saat sonra)
+    setInterval(() => {
+        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        let cleanedCount = 0;
+        
+        for (const [key, timestamp] of lastMatches.entries()) {
+            if (timestamp < oneHourAgo) {
+                lastMatches.delete(key);
+                cleanedCount++;
+            }
+        }
+        
+        if (cleanedCount > 0) {
+            console.log('🧹 Eski eşleşmeler temizlendi:', cleanedCount, 'adet');
+        }
+    }, 5 * 60 * 1000); // Her 5 dakikada bir kontrol et
+
     // Dereceli oyun arama
     socket.on('findMatch', (data) => {
         console.log('🔍 Oyuncu arama yapıyor:', data.userName);
@@ -549,11 +569,33 @@ io.on('connection', (socket) => {
         };
 
         if (waitingPlayers.size > 0) {
-            const [opponentSocketId, opponentData] = Array.from(waitingPlayers.entries())[0];
+            // Bekleyen oyuncuları array'e çevir ve son eşleşme kontrolü yap
+            const waitingArray = Array.from(waitingPlayers.entries());
+            let opponentSocketId = null;
+            let opponentData = null;
+            
+            // Önce son eşleşme olmayan oyuncuyu bul
+            for (const [waitingId, waitingData] of waitingArray) {
+                const lastMatchKey = `${data.userId}_${waitingData.userId}`;
+                const reverseLastMatchKey = `${waitingData.userId}_${data.userId}`;
+                
+                // Eğer bu iki oyuncu daha önce eşleşmemişse veya başka oyuncu varsa
+                if (!lastMatches.has(lastMatchKey) && !lastMatches.has(reverseLastMatchKey)) {
+                    opponentSocketId = waitingId;
+                    opponentData = waitingData;
+                    break;
+                }
+            }
+            
+            // Eğer son eşleşme olmayan oyuncu bulunamazsa, ilk bekleyeni al (son çare)
+            if (!opponentSocketId && waitingArray.length > 0) {
+                [opponentSocketId, opponentData] = waitingArray[0];
+            }
+            
             const opponentSocket = io.sockets.sockets.get(opponentSocketId);
             
             // Aynı Telegram ID ile eşleşmeyi engelle
-            if (opponentSocketId === socket.id || data.userId === opponentData.userId) {
+            if (!opponentSocket || opponentSocketId === socket.id || data.userId === opponentData.userId) {
                 console.log('⚠️ Aynı kullanıcı ile eşleşme engellendi:', data.userName, 'vs', opponentData.userName);
                 // Her iki kaydı da temizle
                 waitingPlayers.delete(opponentSocketId);
@@ -572,8 +614,15 @@ io.on('connection', (socket) => {
                 waitingPlayers.delete(socket.id);
                 waitingPlayers.delete(opponentSocketId);
                 
+                // Son eşleşmeleri kaydet
+                const matchKey1 = `${data.userId}_${opponentData.userId}`;
+                const matchKey2 = `${opponentData.userId}_${data.userId}`;
+                lastMatches.set(matchKey1, Date.now());
+                lastMatches.set(matchKey2, Date.now());
+                
                 // Debug: Bekleme listesi durumunu logla
                 console.log('🧹 Eşleşme sonrası bekleme listesi temizlendi. Kalan:', waitingPlayers.size);
+                console.log('💾 Son eşleşmeler kaydedildi:', matchKey1, matchKey2);
                 
                 const roomCode = generateRoomCode();
                 
@@ -773,7 +822,6 @@ io.on('connection', (socket) => {
         
         // Oyun başlatma kodunu KALDIR - sadece gameReady ile başlayacak
         console.log(`👥 İkinci oyuncu katıldı: ${player2.userName} - Oda: ${data.roomCode}`);
-        }
         
         // Sıra kontrolü
         const playerColor = room.players.find(p => p.socketId === socket.id)?.playerColor;
@@ -1279,6 +1327,8 @@ if (room) {
 
             switch (action) {
                 case 'giveElo':
+                case 'giveElo500':
+                case 'giveElo1000':
                     const newElo = user.elo + amount;
                     await usersCollection.updateOne(
                         { userId },
