@@ -746,7 +746,7 @@ io.on('connection', (socket) => {
                             userElo: opponentData.userElo || 0
                         }
                     ],
-                    board: null,
+                    board: createInitialBoard(),
                     currentPlayer: 'white',
                     isPrivate: false,
                     createdAt: Date.now()
@@ -924,6 +924,12 @@ io.on('connection', (socket) => {
         
         // Oyun başlatma kodunu KALDIR - sadece gameReady ile başlayacak
         console.log(`👥 İkinci oyuncu katıldı: ${player2.userName} - Oda: ${data.roomCode}`);
+    });
+
+    // Hamle yap
+    socket.on('makeMove', (data) => {
+        const room = rooms.get(data.roomCode);
+        if (!room) return;
         
         // Sıra kontrolü
         const playerColor = room.players.find(p => p.socketId === socket.id)?.playerColor;
