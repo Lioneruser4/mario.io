@@ -723,8 +723,16 @@ function resetGame() {
 
 // Socket olayları
 socket.on('roomCreated', (data) => {
+    console.log('📥 Client oda kodu aldı:', data.roomCode);
     gameState.roomCode = data.roomCode;
-    document.getElementById('waitingRoomCode').textContent = data.roomCode;
+    
+    const roomCodeElement = document.getElementById('waitingRoomCode');
+    if (roomCodeElement) {
+        roomCodeElement.textContent = data.roomCode;
+        console.log('📝 Oda kodu elemente yazıldı:', data.roomCode);
+    } else {
+        console.error('❌ waitingRoomCode elementi bulunamadı!');
+    }
     // Bekleyen lobi zaten açık
 });
 
