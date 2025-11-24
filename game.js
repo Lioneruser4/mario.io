@@ -324,7 +324,32 @@ function renderBoard() {
 
 // Kare tıklama işlemi
 function handleSquareClick(row, col) {
-    if (!gameState.gameStarted || gameState.currentPlayer !== gameState.playerColor) {
+    console.log(`🖱️ Kare tıklandı: ${row},${col} - Sıra: ${gameState.currentPlayer} - Ben: ${gameState.playerColor}`);
+    
+    if (!gameState.gameStarted) {
+        console.log('❌ Oyun başlamamış');
+        return;
+    }
+    
+    // Çoklu yeme durumunda seçili taşı koru, sadece sıra kontrolü yap
+    if (gameState.selectedPiece && gameState.selectedPiece.row !== undefined) {
+        const selectedMoves = getValidMoves(gameState.selectedPiece.row, gameState.selectedPiece.col);
+        const hasCaptures = selectedMoves.some(m => m.capture);
+        
+        // Eğer çoklu yeme durumu varsa ve sıra bizdeyse devam et
+        if (hasCaptures && gameState.currentPlayer === gameState.playerColor) {
+            const move = selectedMoves.find(m => m.row === row && m.col === col);
+            if (move) {
+                console.log('🎯 Çoklu yeme hamlesi yapılıyor');
+                makeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col, move.capture);
+                return;
+            }
+        }
+    }
+    
+    // Normal sıra kontrolü
+    if (gameState.currentPlayer !== gameState.playerColor) {
+        console.log('⏳ Sıra sizde değil!');
         return;
     }
     
@@ -347,8 +372,8 @@ function handleSquareClick(row, col) {
     } else if (gameState.selectedPiece) {
         const validMoves = getValidMoves(gameState.selectedPiece.row, gameState.selectedPiece.col);
         const move = validMoves.find(m => m.row === row && m.col === col);
-        
         if (move) {
+            console.log('🎯 Normal hamle yapılıyor');
             makeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col, move.capture);
             gameState.afkCount = 0; // Hamle yapıldı, AFK sayacını sıfırla
         }
@@ -559,11 +584,16 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
                 box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             `;
             continueBtn.onclick = () => {
-                continueBtn.remove();
-                finishBtn.remove();
-                // Seçili taşı koru, yeni hamleler için highlight yap
-                highlightValidMoves();
-            };
+            continueBtn.remove();
+            finishBtn.remove();
+            // Sıra kontrolü yap
+            if (gameState.currentPlayer !== gameState.playerColor) {
+                showCustomNotification('Sıra sizde değil!', 'error');
+                return;
+            }
+            // Seçili taşı koru, yeni hamleler için highlight yap
+            highlightValidMoves();
+        };
             
             const finishBtn = document.createElement('button');
             finishBtn.id = 'finishCaptureBtn';
