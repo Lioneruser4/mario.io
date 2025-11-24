@@ -929,11 +929,20 @@ io.on('connection', (socket) => {
     // Hamle yap
     socket.on('makeMove', (data) => {
         const room = rooms.get(data.roomCode);
-        if (!room) return;
+        if (!room) {
+            socket.emit('error', { message: 'Oda bulunamadı!' });
+            return;
+        }
+        
+        // Oyuncu bul
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (!player) {
+            socket.emit('error', { message: 'Oyuncu bulunamadı!' });
+            return;
+        }
         
         // Sıra kontrolü
-        const playerColor = room.players.find(p => p.socketId === socket.id)?.playerColor;
-        if (!playerColor || room.currentPlayer !== playerColor) {
+        if (room.currentPlayer !== player.playerColor) {
             socket.emit('error', { message: 'Sıra sizde değil!' });
             return;
         }
@@ -951,7 +960,7 @@ io.on('connection', (socket) => {
 
         // Taş kontrolü - doğru taş mı?
         const piece = room.board[data.from.row] && room.board[data.from.row][data.from.col];
-        if (!piece || piece.color !== playerColor) {
+        if (!piece || piece.color !== player.playerColor) {
             socket.emit('error', { message: 'Geçersiz taş!' });
             return;
         }
@@ -963,12 +972,14 @@ io.on('connection', (socket) => {
         const moveData = validMoves.find(m => m.row === data.to.row && m.col === data.to.col);
         const canContinueCapture = moveData && moveData.canContinueCapture;
         
-        // Eğer çoklu yeme devam ediyorsa sırayı değiştirme
+        // Eğer çoklu yeme devam etmiyorsa sırayı değiştir
         if (!canContinueCapture) {
             room.currentPlayer = room.currentPlayer === 'white' ? 'black' : 'white';
+            console.log(`🔄 Sıra değişti: ${room.currentPlayer === 'white' ? 'Beyaz' : 'Siyah'} - Oda: ${data.roomCode}`);
             resetRoomTimer(data.roomCode);
         }
 
+        // Herkese hamleyi bildir
         io.to(data.roomCode).emit('moveMade', {
             board: room.board,
             currentPlayer: room.currentPlayer,
