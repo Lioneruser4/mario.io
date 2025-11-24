@@ -408,10 +408,29 @@ function getValidMoves(row, col) {
                 
                 if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
                     if (!gameState.board[jumpRow][jumpCol]) {
+                        // Taşı geçici olarak hareket ettir
+                        const tempBoard = JSON.parse(JSON.stringify(gameState.board));
+                        tempBoard[jumpRow][jumpCol] = piece;
+                        tempBoard[row][col] = null;
+                        tempBoard[enemyRow][enemyCol] = null;
+                        
+                        // Kral yapma kontrolü
+                        if (!piece.king && ((piece.color === 'white' && jumpRow === 0) || (piece.color === 'black' && jumpRow === 7))) {
+                            tempBoard[jumpRow][jumpCol].king = true;
+                        }
+                        
+                        // Çoklu yeme kontrolü - bu pozisyondan daha fazla yeme var mı?
+                        const furtherCaptures = getValidMovesFromBoard(tempBoard, jumpRow, jumpCol).filter(m => {
+                            const dR = m.row - jumpRow;
+                            const dC = m.col - jumpCol;
+                            return Math.abs(dR) === 2 && Math.abs(dC) === 2;
+                        });
+                        
                         captureMoves.push({ 
                             row: jumpRow, 
                             col: jumpCol, 
-                            capture: { row: enemyRow, col: enemyCol }
+                            capture: { row: enemyRow, col: enemyCol },
+                            canContinueCapture: furtherCaptures.length > 0
                         });
                     }
                 }
@@ -432,6 +451,44 @@ function getValidMoves(row, col) {
         if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
             if (!gameState.board[newRow][newCol]) {
                 moves.push({ row: newRow, col: newCol, capture: null });
+            }
+        }
+    });
+    
+    return moves;
+}
+
+// Geçici tahtadan hamle kontrolü (çoklu yeme için)
+function getValidMovesFromBoard(board, row, col) {
+    const moves = [];
+    const piece = board[row][col];
+    if (!piece) return moves;
+    
+    const directions = piece.king ? 
+        [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
+        piece.color === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+    
+    // Sadece yeme hamlelerini kontrol et
+    directions.forEach(([dRow, dCol]) => {
+        const enemyRow = row + dRow;
+        const enemyCol = col + dCol;
+        
+        if (enemyRow >= 0 && enemyRow < 8 && enemyCol >= 0 && enemyCol < 8) {
+            const enemyPiece = board[enemyRow][enemyCol];
+            
+            if (enemyPiece && enemyPiece.color !== piece.color) {
+                const jumpRow = enemyRow + dRow;
+                const jumpCol = enemyCol + dCol;
+                
+                if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
+                    if (!board[jumpRow][jumpCol]) {
+                        moves.push({ 
+                            row: jumpRow, 
+                            col: jumpCol, 
+                            capture: { row: enemyRow, col: enemyCol }
+                        });
+                    }
+                }
             }
         }
     });
@@ -467,9 +524,91 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     if (existingContinueBtn) existingContinueBtn.remove();
     if (existingFinishBtn) existingFinishBtn.remove();
     
-    // Sırayı değiştir ve hamleyi gönder
+    // Çoklu yeme kontrolü
+    if (capture) {
+        const furtherCaptures = getValidMoves(toRow, toCol).filter(m => {
+            const dR = m.row - toRow;
+            const dC = m.col - toCol;
+            return Math.abs(dR) === 2 && Math.abs(dC) === 2;
+        });
+        
+        if (furtherCaptures.length > 0) {
+            // Devam eden yeme var - seçimi koru ve butonlar göster
+            gameState.selectedPiece = { row: toRow, col: toCol };
+            highlightValidMoves();
+            
+            // Devam et/Bitir butonları oluştur
+            const gameContainer = document.getElementById('game');
+            
+            const continueBtn = document.createElement('button');
+            continueBtn.id = 'continueCaptureBtn';
+            continueBtn.textContent = 'Yemeye Devam Et';
+            continueBtn.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 40%;
+                transform: translate(-50%, -50%);
+                padding: 15px 20px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                z-index: 1000;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            `;
+            continueBtn.onclick = () => {
+                continueBtn.remove();
+                finishBtn.remove();
+                // Seçili taşı koru, yeni hamleler için highlight yap
+                highlightValidMoves();
+            };
+            
+            const finishBtn = document.createElement('button');
+            finishBtn.id = 'finishCaptureBtn';
+            finishBtn.textContent = 'Yemeyi Bitir';
+            finishBtn.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 60%;
+                transform: translate(-50%, -50%);
+                padding: 15px 20px;
+                background: linear-gradient(135deg, #f093fb, #f5576c);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                z-index: 1000;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            `;
+            finishBtn.onclick = () => {
+                continueBtn.remove();
+                finishBtn.remove();
+                // Seçimi temizle (sırayı değiştirme - server halleder)
+                gameState.selectedPiece = null;
+                
+                // Hamleyi sunucuya gönder
+                socket.emit('makeMove', {
+                    roomCode: gameState.roomCode,
+                    from: { row: fromRow, col: fromCol },
+                    to: { row: toRow, col: toCol },
+                    board: gameState.board,
+                    capture: capture,
+                    userId: userId
+                });
+            };
+            
+            gameContainer.appendChild(continueBtn);
+            gameContainer.appendChild(finishBtn);
+            return; // Sırayı değiştirme, hamleyi gönderme
+        }
+    }
+    
+    // Normal hamle veya çoklu yeme bitince
     gameState.selectedPiece = null;
-    gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+    // Sırayı değiştirme - server'dan gelen moveMade event'i ile yapılacak
     
     socket.emit('makeMove', {
         roomCode: gameState.roomCode,
@@ -1182,6 +1321,81 @@ socket.on('moveMade', (data) => {
     // Sunucudan gelen hamleyi hemen uygula (gecikme olmasın)
     gameState.board = data.board;
     gameState.currentPlayer = data.currentPlayer;
+    
+    // Eğer çoklu yeme devam ediyorsa ve bizim sıramızda ise
+    if (data.canContinueCapture && gameState.currentPlayer === gameState.playerColor) {
+        // Seçili taşı koru
+        const lastMove = data.to;
+        gameState.selectedPiece = { row: lastMove.row, col: lastMove.col };
+        
+        // Butonları göster
+        const existingContinueBtn = document.getElementById('continueCaptureBtn');
+        const existingFinishBtn = document.getElementById('finishCaptureBtn');
+        if (existingContinueBtn) existingContinueBtn.remove();
+        if (existingFinishBtn) existingFinishBtn.remove();
+        
+        const gameContainer = document.getElementById('game');
+        
+        const continueBtn = document.createElement('button');
+        continueBtn.id = 'continueCaptureBtn';
+        continueBtn.textContent = 'Yemeye Devam Et';
+        continueBtn.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 40%;
+            transform: translate(-50%, -50%);
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        `;
+        continueBtn.onclick = () => {
+            continueBtn.remove();
+            finishBtn.remove();
+            highlightValidMoves();
+        };
+        
+        const finishBtn = document.createElement('button');
+        finishBtn.id = 'finishCaptureBtn';
+        finishBtn.textContent = 'Yemeyi Bitir';
+        finishBtn.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 60%;
+            transform: translate(-50%, -50%);
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        `;
+        finishBtn.onclick = () => {
+            continueBtn.remove();
+            finishBtn.remove();
+            gameState.selectedPiece = null;
+        };
+        
+        gameContainer.appendChild(continueBtn);
+        gameContainer.appendChild(finishBtn);
+    } else {
+        // Normal durum - seçimi temizle
+        gameState.selectedPiece = null;
+        
+        // Butonları temizle
+        const existingContinueBtn = document.getElementById('continueCaptureBtn');
+        const existingFinishBtn = document.getElementById('finishCaptureBtn');
+        if (existingContinueBtn) existingContinueBtn.remove();
+        if (existingFinishBtn) existingFinishBtn.remove();
+    }
     
     // Hemen render et
     renderBoard();
