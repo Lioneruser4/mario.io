@@ -431,6 +431,22 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
         }
     }
     
+    // Çoklu yeme kontrolü
+    if (capture) {
+        const furtherCaptures = getValidMoves(toRow, toCol).filter(m => {
+            const dR = m.row - toRow;
+            const dC = m.col - toCol;
+            return Math.abs(dR) === 2 && Math.abs(dC) === 2;
+        });
+        
+        if (furtherCaptures.length > 0) {
+            // Çoklu yeme devamı - butonları göster
+            renderBoard();
+            showCaptureButtons(toRow, toCol, furtherCaptures);
+            return; // Sırayı değiştirme
+        }
+    }
+    
     // Hemen render et (gecikme olmasın)
     renderBoard();
     
@@ -452,6 +468,108 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
         capture: capture,
         userId: userId
     });
+}
+
+// Çoklu yeme butonlarını göster
+function showCaptureButtons(pieceRow, pieceCol, furtherCaptures) {
+    const boardElement = document.getElementById('board');
+    
+    // Devam butonu
+    const continueBtn = document.createElement('button');
+    continueBtn.id = 'continueCaptureBtn';
+    continueBtn.textContent = '🎯 Devam Et';
+    continueBtn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+        z-index: 1000;
+    `;
+    
+    // Bitir butonu
+    const finishBtn = document.createElement('button');
+    finishBtn.id = 'finishCaptureBtn';
+    finishBtn.textContent = '✅ Bitir';
+    finishBtn.style.cssText = `
+        position: fixed;
+        bottom: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #f093fb, #f5576c);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(240, 147, 251, 0.4);
+        transition: all 0.3s ease;
+        z-index: 1000;
+    `;
+    
+    // Hover efektleri
+    continueBtn.addEventListener('mouseenter', () => {
+        continueBtn.style.transform = 'translateX(-50%) translateY(-2px)';
+        continueBtn.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.6)';
+    });
+    
+    continueBtn.addEventListener('mouseleave', () => {
+        continueBtn.style.transform = 'translateX(-50%)';
+        continueBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+    });
+    
+    finishBtn.addEventListener('mouseenter', () => {
+        finishBtn.style.transform = 'translateX(-50%) translateY(-2px)';
+        finishBtn.style.boxShadow = '0 6px 20px rgba(240, 147, 251, 0.6)';
+    });
+    
+    finishBtn.addEventListener('mouseleave', () => {
+        finishBtn.style.transform = 'translateX(-50%)';
+        finishBtn.style.boxShadow = '0 4px 15px rgba(240, 147, 251, 0.4)';
+    });
+    
+    // Devam et butonu tıklama
+    continueBtn.addEventListener('click', () => {
+        // İlk yeme hamlesini otomatik yap
+        const firstCapture = furtherCaptures[0];
+        makeMove(pieceRow, pieceCol, firstCapture.row, firstCapture.col, firstCapture.capture);
+        continueBtn.remove();
+        finishBtn.remove();
+    });
+    
+    // Bitir butonu tıklama
+    finishBtn.addEventListener('click', () => {
+        // Çoklu yemeyi bitir, sırayı değiştir
+        gameState.selectedPiece = null;
+        gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+        
+        socket.emit('makeMove', {
+            roomCode: gameState.roomCode,
+            from: { row: pieceRow, col: pieceCol },
+            to: { row: pieceRow, col: pieceCol }, // Aynı konumda kal
+            board: gameState.board,
+            capture: null, // Ekstra yeme yok
+            userId: userId
+        });
+        
+        continueBtn.remove();
+        finishBtn.remove();
+        renderBoard();
+    });
+    
+    document.body.appendChild(continueBtn);
+    document.body.appendChild(finishBtn);
 }
 
 // Oyuncu vurgusunu güncelle
@@ -803,6 +921,31 @@ socket.on('moveMade', (data) => {
     gameState.currentPlayer = data.currentPlayer;
     
     console.log(`🔄 Sıra değişti: ${gameState.currentPlayer} - Ben: ${gameState.playerColor}`);
+    
+    // Önceki butonları kaldır (temizlik)
+    const existingContinueBtn = document.getElementById('continueCaptureBtn');
+    const existingFinishBtn = document.getElementById('finishCaptureBtn');
+    if (existingContinueBtn) existingContinueBtn.remove();
+    if (existingFinishBtn) existingFinishBtn.remove();
+    
+    // Çoklu yeme devamı kontrolü
+    if (data.canContinueCapture && data.capture) {
+        // Devam edilebilecek yeme varsa butonları göster
+        const pieceRow = data.to.row;
+        const pieceCol = data.to.col;
+        
+        // Bu pozisyondan devam edilebilecek yeme hamlelerini bul
+        const furtherCaptures = getValidMoves(pieceRow, pieceCol).filter(m => {
+            const dR = m.row - pieceRow;
+            const dC = m.col - pieceCol;
+            return Math.abs(dR) === 2 && Math.abs(dC) === 2;
+        });
+        
+        if (furtherCaptures.length > 0 && gameState.playerColor === gameState.currentPlayer) {
+            // Sıra bizdeyse butonları göster
+            showCaptureButtons(pieceRow, pieceCol, furtherCaptures);
+        }
+    }
     
     // Hemen render et
     renderBoard();
