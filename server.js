@@ -600,25 +600,25 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Son eşleşme bilgilerini takip et
-    const lastMatches = new Map();
+    // Son eşleşme bilgilerini takip et (kaldırıldı - FIFO sistemi)
+    // const lastMatches = new Map();
 
-    // Eski eşleşmeleri temizle (1 saat sonra)
-    setInterval(() => {
-        const oneHourAgo = Date.now() - (60 * 60 * 1000);
-        let cleanedCount = 0;
-        
-        for (const [key, timestamp] of lastMatches.entries()) {
-            if (timestamp < oneHourAgo) {
-                lastMatches.delete(key);
-                cleanedCount++;
-            }
-        }
-        
-        if (cleanedCount > 0) {
-            console.log('🧹 Eski eşleşmeler temizlendi:', cleanedCount, 'adet');
-        }
-    }, 5 * 60 * 1000); // Her 5 dakikada bir kontrol et
+    // Eski eşleşmeleri temizle (kaldırıldı - FIFO sistemi)
+    // setInterval(() => {
+    //     const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    //     let cleanedCount = 0;
+    //     
+    //     for (const [key, timestamp] of lastMatches.entries()) {
+    //         if (timestamp < oneHourAgo) {
+    //             lastMatches.delete(key);
+    //             cleanedCount++;
+    //         }
+    //     }
+    //     
+    //     if (cleanedCount > 0) {
+    //         console.log('🧹 Eski eşleşmeler temizlendi:', cleanedCount, 'adet');
+    //     }
+    // }, 5 * 60 * 1000); // Her 5 dakikada bir kontrol et
 
     // Dereceli oyun arama
     socket.on('findMatch', (data) => {
@@ -647,59 +647,20 @@ io.on('connection', (socket) => {
             userName: data.userName,
             userPhotoUrl: data.userPhotoUrl || null,
             userLevel: data.userLevel || 1,
-            userElo: data.userElo || 0
+            userElo: data.userElo || 0,
+            searchStartTime: Date.now() // Arama başlangıç zamanı
         };
 
         if (waitingPlayers.size > 0) {
-            // Bekleyen oyuncuları array'e çevir ve son eşleşme kontrolü yap
-            const waitingArray = Array.from(waitingPlayers.entries());
-            let opponentSocketId = null;
-            let opponentData = null;
-            
-            // Eğer sadece 1 kişi beklemedeyse ve o kişi son eşleştiğimiz ise beklemede kal
-            if (waitingArray.length === 1) {
-                const [waitingId, waitingData] = waitingArray[0];
-                const lastMatchKey = `${data.userId}_${waitingData.userId}`;
-                const reverseLastMatchKey = `${waitingData.userId}_${data.userId}`;
-                
-                // Eğer son eşleştiğimiz kişi ise, eşleşme yapma ve beklemede kal
-                if (lastMatches.has(lastMatchKey) || lastMatches.has(reverseLastMatchKey)) {
-                    console.log('⏳ Son eşleştiğiniz kişi beklemede, yeni rakip bekleniyor:', data.userName);
-                    waitingPlayers.set(socket.id, playerData);
-                    startSearchTimer(socket.id);
-                    return;
-                }
-                
-                // Son eşleşme olmadıysa eşleş
-                opponentSocketId = waitingId;
-                opponentData = waitingData;
-            } else {
-                // Çok kişi beklemedeyse, son eşleşme olmayan ilk kişiyi bul
-                for (const [waitingId, waitingData] of waitingArray) {
-                    const lastMatchKey = `${data.userId}_${waitingData.userId}`;
-                    const reverseLastMatchKey = `${waitingData.userId}_${data.userId}`;
-                    
-                    // Eğer bu iki oyuncu daha önce eşleşmemişse
-                    if (!lastMatches.has(lastMatchKey) && !lastMatches.has(reverseLastMatchKey)) {
-                        opponentSocketId = waitingId;
-                        opponentData = waitingData;
-                        break;
-                    }
-                }
-                
-                // Eğer son eşleşme olmayan oyuncu bulunamazsa, en eski bekleyeni al (son çare)
-                if (!opponentSocketId && waitingArray.length > 0) {
-                    [opponentSocketId, opponentData] = waitingArray[0];
-                }
-            }
-            
-            const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+            // İlk bekleyen oyuncuyu al (FIFO - First In First Out)
+            const [waitingSocketId, waitingData] = waitingPlayers.entries().next().value;
+            const opponentSocket = io.sockets.sockets.get(waitingSocketId);
             
             // Aynı Telegram ID ile eşleşmeyi engelle
-            if (!opponentSocket || opponentSocketId === socket.id || data.userId === opponentData.userId) {
-                console.log('⚠️ Aynı kullanıcı ile eşleşme engellendi:', data.userName, 'vs', opponentData.userName);
+            if (!opponentSocket || waitingSocketId === socket.id || data.userId === waitingData.userId) {
+                console.log('⚠️ Aynı kullanıcı ile eşleşme engellendi:', data.userName, 'vs', waitingData.userName);
                 // Her iki kaydı da temizle
-                waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.delete(waitingSocketId);
                 waitingPlayers.delete(socket.id);
                 waitingPlayers.set(socket.id, playerData);
                 startSearchTimer(socket.id);
@@ -709,47 +670,45 @@ io.on('connection', (socket) => {
             if (opponentSocket) {
                 // Eşleşme bulundu - timer'ları durdur
                 stopSearchTimer(socket.id);
-                stopSearchTimer(opponentSocketId);
+                stopSearchTimer(waitingSocketId);
                 
                 // Her iki oyuncuyu da bekleme listesinden çıkar
                 waitingPlayers.delete(socket.id);
-                waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.delete(waitingSocketId);
                 
-                // Son eşleşmeleri kaydet
-                const matchKey1 = `${data.userId}_${opponentData.userId}`;
-                const matchKey2 = `${opponentData.userId}_${data.userId}`;
-                lastMatches.set(matchKey1, Date.now());
-                lastMatches.set(matchKey2, Date.now());
-                
-                // Debug: Bekleme listesi durumunu logla
                 console.log('🧹 Eşleşme sonrası bekleme listesi temizlendi. Kalan:', waitingPlayers.size);
-                console.log('💾 Son eşleşmeler kaydedildi:', matchKey1, matchKey2);
                 
                 const roomCode = generateRoomCode();
+                
+                // İlk arayan oyuncu beyaz oynar, ikinci arayan siyah oynar
+                const firstPlayer = waitingData.searchStartTime < playerData.searchStartTime ? waitingData : playerData;
+                const secondPlayer = waitingData.searchStartTime < playerData.searchStartTime ? playerData : waitingData;
+                const firstSocket = waitingData.searchStartTime < playerData.searchStartTime ? opponentSocket : socket;
+                const secondSocket = waitingData.searchStartTime < playerData.searchStartTime ? socket : opponentSocket;
                 
                 rooms.set(roomCode, {
                     players: [
                         { 
-                            socketId: socket.id, 
-                            userId: data.userId, 
-                            userName: data.userName, 
-                            userPhotoUrl: data.userPhotoUrl || null, // Doğru resmi kullan
-                            userLevel: data.userLevel || 1,
-                            userElo: data.userElo || 0,
+                            socketId: firstSocket.id, 
+                            userId: firstPlayer.userId, 
+                            userName: firstPlayer.userName, 
+                            userPhotoUrl: firstPlayer.userPhotoUrl || null,
+                            userLevel: firstPlayer.userLevel || 1,
+                            userElo: firstPlayer.userElo || 0,
                             playerColor: 'white'
                         },
                         { 
-                            socketId: opponentSocketId, 
-                            userId: opponentData.userId, 
-                            userName: opponentData.userName, 
-                            userPhotoUrl: opponentData.userPhotoUrl || null, // Doğru resmi kullan
-                            userLevel: opponentData.userLevel || 1,
-                            userElo: opponentData.userElo || 0,
+                            socketId: secondSocket.id, 
+                            userId: secondPlayer.userId, 
+                            userName: secondPlayer.userName, 
+                            userPhotoUrl: secondPlayer.userPhotoUrl || null,
+                            userLevel: secondPlayer.userLevel || 1,
+                            userElo: secondPlayer.userElo || 0,
                             playerColor: 'black'
                         }
                     ],
                     board: createInitialBoard(),
-                    currentPlayer: 'white',
+                    currentPlayer: 'white', // Beyaz her zaman başlar
                     isPrivate: false,
                     createdAt: Date.now()
                 });
@@ -757,32 +716,35 @@ io.on('connection', (socket) => {
                 // Timer başlat
                 startRoomTimer(roomCode);
 
-                socket.join(roomCode);
-                opponentSocket.join(roomCode);
+                firstSocket.join(roomCode);
+                secondSocket.join(roomCode);
 
-                socket.emit('matchFound', {
+                // İlk arayan oyuncuya (beyaz) bilgi gönder
+                firstSocket.emit('matchFound', {
                     roomCode: roomCode,
                     playerColor: 'white',
-                    opponentName: opponentData.userName,
-                    opponentPhotoUrl: opponentData.userPhotoUrl || null, // Rakibin resmi
-                    opponentLevel: opponentData.userLevel || 1,
-                    opponentElo: opponentData.userElo || 0,
-                    opponentUserId: opponentData.userId
+                    opponentName: secondPlayer.userName,
+                    opponentPhotoUrl: secondPlayer.userPhotoUrl || null,
+                    opponentLevel: secondPlayer.userLevel || 1,
+                    opponentElo: secondPlayer.userElo || 0,
+                    opponentUserId: secondPlayer.userId
                 });
                 
-                opponentSocket.emit('matchFound', {
+                // İkinci arayan oyuncuya (siyah) bilgi gönder
+                secondSocket.emit('matchFound', {
                     roomCode: roomCode,
                     playerColor: 'black',
-                    opponentName: data.userName,
-                    opponentPhotoUrl: data.userPhotoUrl || null, // Rakibin resmi
-                    opponentLevel: data.userLevel || 1,
-                    opponentElo: data.userElo || 0,
-                    opponentUserId: data.userId
+                    opponentName: firstPlayer.userName,
+                    opponentPhotoUrl: firstPlayer.userPhotoUrl || null,
+                    opponentLevel: firstPlayer.userLevel || 1,
+                    opponentElo: firstPlayer.userElo || 0,
+                    opponentUserId: firstPlayer.userId
                 });
 
-                console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
+                console.log('🎮 Eşleşme:', roomCode, '-', firstPlayer.userName, '(Beyaz) vs', secondPlayer.userName, '(Siyah)');
+                console.log('⏰ İlk arayan:', firstPlayer.userName, 'başlıyor!');
             } else {
-                waitingPlayers.delete(opponentSocketId);
+                waitingPlayers.delete(waitingSocketId);
                 waitingPlayers.set(socket.id, playerData);
                 startSearchTimer(socket.id);
                 console.log('⏳ Bekleme listesine eklendi:', data.userName);
