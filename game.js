@@ -90,6 +90,7 @@ let gameState = {
     gameStarted: false,
     opponentName: 'Rakip',
     opponentPhotoUrl: null,
+    opponentUserId: null,
     mustCapture: false,
     timer: 20,
     timerInterval: null,
@@ -584,16 +585,14 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
                 box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             `;
             continueBtn.onclick = () => {
-            continueBtn.remove();
-            finishBtn.remove();
-            // Sıra kontrolü yap
-            if (gameState.currentPlayer !== gameState.playerColor) {
-                showCustomNotification('Sıra sizde değil!', 'error');
-                return;
-            }
-            // Seçili taşı koru, yeni hamleler için highlight yap
-            highlightValidMoves();
-        };
+                // Sıra kontrolü yap
+                if (gameState.currentPlayer !== gameState.playerColor) {
+                    showCustomNotification('Sıra sizde değil!', 'error');
+                    return;
+                }
+                // Seçili taşı koru, yeni hamleler için highlight yap
+                highlightValidMoves();
+            };
             
             const finishBtn = document.createElement('button');
             finishBtn.id = 'finishCaptureBtn';
@@ -616,7 +615,7 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
             finishBtn.onclick = () => {
                 continueBtn.remove();
                 finishBtn.remove();
-                // Seçimi temizle (sırayı değiştirme - server halleder)
+                // Seçimi temizle
                 gameState.selectedPiece = null;
                 
                 // Hamleyi sunucuya gönder
@@ -638,8 +637,8 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     
     // Normal hamle veya çoklu yeme bitince
     gameState.selectedPiece = null;
-    // Sırayı değiştirme - server'dan gelen moveMade event'i ile yapılacak
     
+    // Hamleyi sunucuya gönder
     socket.emit('makeMove', {
         roomCode: gameState.roomCode,
         from: { row: fromRow, col: fromCol },
@@ -676,7 +675,8 @@ function startRankedGame() {
         userName, 
         userPhotoUrl: userPhotoUrl || null,
         userLevel: userStats.level,
-        userElo: userStats.elo
+        userElo: userStats.elo,
+        avoidUserId: gameState.opponentUserId // Son oynanan kullanıcıyı hariç tut
     });
     document.getElementById('rankedModal').style.display = 'block';
     
@@ -870,6 +870,9 @@ function resetGame() {
     if (existingContinueBtn) existingContinueBtn.remove();
     if (existingFinishBtn) existingFinishBtn.remove();
     
+    // Rakip kullanıcı ID'sini sıfırlama (son oynanan kullanıcıyı hatırlamak için)
+    const lastOpponentId = gameState.opponentUserId;
+    
     gameState = {
         board: [],
         currentPlayer: 'white',
@@ -879,6 +882,7 @@ function resetGame() {
         gameStarted: false,
         opponentName: 'Rakip',
         opponentPhotoUrl: null,
+        opponentUserId: lastOpponentId, // Son oynanan kullanıcıyı koru
         mustCapture: false,
         timer: 20,
         timerInterval: null,
@@ -906,6 +910,9 @@ socket.on('roomCreated', (data) => {
 });
 
 socket.on('matchFound', (data) => {
+    // Rakip kullanıcı ID'sini kaydet
+    gameState.opponentUserId = data.opponentUserId;
+    
     // Eşleşme timer'ını durdur (sunucu zaten durdurdu)
     searchTimer = 0;
     updateSearchTimer();
@@ -953,6 +960,9 @@ function updateMatchModal(data) {
 }
 
 socket.on('roomJoined', (data) => {
+    // Rakip kullanıcı ID'sini kaydet
+    gameState.opponentUserId = data.opponentUserId;
+    
     // Modal ve bekleyen lobiden çık
     document.getElementById('joinModal').style.display = 'none';
     document.getElementById('waitingLobby').style.display = 'none';
@@ -1753,6 +1763,7 @@ function startGame(data) {
     gameState.gameStarted = true;
     gameState.opponentName = data.opponentName || 'Rakip';
     gameState.opponentPhotoUrl = data.opponentPhotoUrl || null;
+    gameState.opponentUserId = data.opponentUserId || null;
     gameState.opponentLevel = data.opponentLevel || 1;
     gameState.opponentElo = data.opponentElo || 0;
     gameState.afkCount = 0;
