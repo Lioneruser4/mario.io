@@ -1,4 +1,4 @@
-// Telegram Web App ve Kullanıcı Bilgisi
+// Telegram Web App ve Kullanıcı Bilgileri
 let telegramUser = null;
 let userId = null;
 let userName = null;
@@ -90,7 +90,6 @@ let gameState = {
     gameStarted: false,
     opponentName: 'Rakip',
     opponentPhotoUrl: null,
-    // opponentUserId kaldırıldı - FIFO sistemi kullanılıyor
     mustCapture: false,
     timer: 20,
     timerInterval: null,
@@ -181,16 +180,6 @@ function initBoard() {
     return board;
 }
 
-// Timer başlat (artık sunucu yönetiyor, bu fonksiyon kullanılmıyor)
-function startTimer() {
-    // Sunucu timer'ı yönetiyor, client sadece gösteriyor
-}
-
-// Timer durdur
-function stopTimer() {
-    // Sunucu timer'ı yönetiyor, client sadece gösteriyor
-}
-
 // Timer gösterimini güncelle
 function updateTimerDisplay() {
     if (!timerElement) {
@@ -207,32 +196,6 @@ function updateTimerDisplay() {
     } else {
         timerElement.style.color = '#667eea';
         timerElement.style.animation = 'none';
-    }
-}
-
-// Süre dolduğunda
-function handleTimeout() {
-    gameState.afkCount++;
-    
-    if (gameState.afkCount >= 2) {
-        // Alert yerine custom notification kullan
-        showCustomNotification('⚠️ 2 kez süre aşımı! Oyun sonlandırılıyor...');
-        socket.emit('gameAbandoned', { roomCode: gameState.roomCode, userId });
-        resetGame();
-        return;
-    }
-    
-    // Otomatik hamle yap
-    const moves = getAllPossibleMoves(gameState.currentPlayer);
-    
-    if (moves.length > 0) {
-        // Yeme hamlesi varsa öncelik ver
-        const captureMoves = moves.filter(m => m.capture);
-        const moveToMake = captureMoves.length > 0 ? 
-            captureMoves[Math.floor(Math.random() * captureMoves.length)] :
-            moves[Math.floor(Math.random() * moves.length)];
-        
-        makeMove(moveToMake.fromRow, moveToMake.fromCol, moveToMake.toRow, moveToMake.toCol, moveToMake.capture);
     }
 }
 
@@ -272,13 +235,11 @@ function renderBoard() {
     gameState.mustCapture = captureMoves.length > 0;
     
     // Siyah oyuncu için tahtayı ters çevir (kendini en altta görsün)
-    // Hem satırları hem de sütunları ters çevir (yüz yüze oynama efekti)
     const isFlipped = gameState.playerColor === 'black';
     
     for (let displayRow = 0; displayRow < 8; displayRow++) {
         for (let displayCol = 0; displayCol < 8; displayCol++) {
             // Görüntüleme koordinatlarından gerçek koordinatlara çevir
-            // Siyah oyuncu için tam ters çevirme (ayna efekti)
             const realRow = isFlipped ? 7 - displayRow : displayRow;
             const realCol = isFlipped ? 7 - displayCol : displayCol;
             
@@ -327,21 +288,13 @@ function renderBoard() {
 function handleSquareClick(row, col) {
     console.log(`🖱️ Kare tıklandı: ${row},${col} - Sıra: ${gameState.currentPlayer} - Ben: ${gameState.playerColor}`);
     
-    if (!gameState.gameStarted) {
-        console.log('❌ Oyun başlamamış');
-        return;
-    }
-    
-    // Sadece kendi sıramızda hamle yapabiliriz
-    if (gameState.currentPlayer !== gameState.playerColor) {
-        console.log('⏳ Sıra sizde değil!');
-        showCustomNotification('⏳ Sıra sizde değil!', 'info', 2000);
+    if (!gameState.gameStarted || gameState.currentPlayer !== gameState.playerColor) {
+        console.log('❌ Hamle yapılamaz - Oyun başlamadı veya sıra sizde değil');
         return;
     }
     
     const piece = gameState.board[row][col];
     
-    // Kendi taşımı seçiyorum
     if (piece && piece.color === gameState.playerColor) {
         const moves = getValidMoves(row, col);
         
@@ -349,27 +302,25 @@ function handleSquareClick(row, col) {
         if (gameState.mustCapture) {
             const hasCapture = moves.some(m => m.capture);
             if (!hasCapture) {
-                showCustomNotification('⚠️ Önce rakip taşı yemelisiniz!', 'warning', 2000);
+                console.log('❌ Bu taş yeme yapamıyor');
                 return; // Bu taş yeme yapamıyor, seçilemesin
             }
         }
         
         if (moves.length > 0) {
+            console.log(`🎯 Taş seçildi: ${row},${col} - Geçerli hamleler:`, moves);
             selectPiece(row, col);
         }
-    } 
-    // Seçili taşı hareket ettiriyorum
-    else if (gameState.selectedPiece) {
+    } else if (gameState.selectedPiece) {
         const validMoves = getValidMoves(gameState.selectedPiece.row, gameState.selectedPiece.col);
         const move = validMoves.find(m => m.row === row && m.col === col);
+        
         if (move) {
-            console.log('🎯 Hamle yapılıyor');
+            console.log(`🎮 Hamle yapılıyor: ${gameState.selectedPiece.row},${gameState.selectedPiece.col} -> ${row},${col}`);
             makeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col, move.capture);
             gameState.afkCount = 0; // Hamle yapıldı, AFK sayacını sıfırla
         } else {
-            // Geçersiz hamle, seçimi iptal et
-            gameState.selectedPiece = null;
-            renderBoard();
+            console.log('❌ Geçersiz hamle');
         }
     }
 }
@@ -427,29 +378,10 @@ function getValidMoves(row, col) {
                 
                 if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
                     if (!gameState.board[jumpRow][jumpCol]) {
-                        // Taşı geçici olarak hareket ettir
-                        const tempBoard = JSON.parse(JSON.stringify(gameState.board));
-                        tempBoard[jumpRow][jumpCol] = piece;
-                        tempBoard[row][col] = null;
-                        tempBoard[enemyRow][enemyCol] = null;
-                        
-                        // Kral yapma kontrolü
-                        if (!piece.king && ((piece.color === 'white' && jumpRow === 0) || (piece.color === 'black' && jumpRow === 7))) {
-                            tempBoard[jumpRow][jumpCol].king = true;
-                        }
-                        
-                        // Çoklu yeme kontrolü - bu pozisyondan daha fazla yeme var mı?
-                        const furtherCaptures = getValidMovesFromBoard(tempBoard, jumpRow, jumpCol).filter(m => {
-                            const dR = m.row - jumpRow;
-                            const dC = m.col - jumpCol;
-                            return Math.abs(dR) === 2 && Math.abs(dC) === 2;
-                        });
-                        
                         captureMoves.push({ 
                             row: jumpRow, 
                             col: jumpCol, 
-                            capture: { row: enemyRow, col: enemyCol },
-                            canContinueCapture: furtherCaptures.length > 0
+                            capture: { row: enemyRow, col: enemyCol }
                         });
                     }
                 }
@@ -470,44 +402,6 @@ function getValidMoves(row, col) {
         if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
             if (!gameState.board[newRow][newCol]) {
                 moves.push({ row: newRow, col: newCol, capture: null });
-            }
-        }
-    });
-    
-    return moves;
-}
-
-// Geçici tahtadan hamle kontrolü (çoklu yeme için)
-function getValidMovesFromBoard(board, row, col) {
-    const moves = [];
-    const piece = board[row][col];
-    if (!piece) return moves;
-    
-    const directions = piece.king ? 
-        [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
-        piece.color === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
-    
-    // Sadece yeme hamlelerini kontrol et
-    directions.forEach(([dRow, dCol]) => {
-        const enemyRow = row + dRow;
-        const enemyCol = col + dCol;
-        
-        if (enemyRow >= 0 && enemyRow < 8 && enemyCol >= 0 && enemyCol < 8) {
-            const enemyPiece = board[enemyRow][enemyCol];
-            
-            if (enemyPiece && enemyPiece.color !== piece.color) {
-                const jumpRow = enemyRow + dRow;
-                const jumpCol = enemyCol + dCol;
-                
-                if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
-                    if (!board[jumpRow][jumpCol]) {
-                        moves.push({ 
-                            row: jumpRow, 
-                            col: jumpCol, 
-                            capture: { row: enemyRow, col: enemyCol }
-                        });
-                    }
-                }
             }
         }
     });
@@ -537,101 +431,19 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
         }
     }
     
-    // Çoklu yeme kontrolü
-    if (capture) {
-        const furtherCaptures = getValidMoves(toRow, toCol).filter(m => {
-            const dR = m.row - toRow;
-            const dC = m.col - toCol;
-            return Math.abs(dR) === 2 && Math.abs(dC) === 2;
-        });
-        
-        if (furtherCaptures.length > 0) {
-            console.log('🔄 Çoklu yeme var, butonlar gösteriliyor');
-            
-            // Devam eden yeme var - seçimi koru ve butonlar göster
-            gameState.selectedPiece = { row: toRow, col: toCol };
-            renderBoard();
-            
-            // Devam et/Bitir butonları oluştur
-            const gameContainer = document.getElementById('game');
-            
-            // Önceki butonları temizle
-            const existingContinueBtn = document.getElementById('continueCaptureBtn');
-            const existingFinishBtn = document.getElementById('finishCaptureBtn');
-            if (existingContinueBtn) existingContinueBtn.remove();
-            if (existingFinishBtn) existingFinishBtn.remove();
-            
-            const continueBtn = document.createElement('button');
-            continueBtn.id = 'continueCaptureBtn';
-            continueBtn.textContent = 'Yemeye Devam Et';
-            continueBtn.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 40%;
-                transform: translate(-50%, -50%);
-                padding: 15px 20px;
-                background: linear-gradient(135deg, #667eea, #764ba2);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                cursor: pointer;
-                z-index: 1000;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            `;
-            continueBtn.onclick = () => {
-                continueBtn.remove();
-                finishBtn.remove();
-                renderBoard();
-            };
-            
-            const finishBtn = document.createElement('button');
-            finishBtn.id = 'finishCaptureBtn';
-            finishBtn.textContent = 'Yemeyi Bitir';
-            finishBtn.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 60%;
-                transform: translate(-50%, -50%);
-                padding: 15px 20px;
-                background: linear-gradient(135deg, #f093fb, #f5576c);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                cursor: pointer;
-                z-index: 1000;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            `;
-            finishBtn.onclick = () => {
-                continueBtn.remove();
-                finishBtn.remove();
-                gameState.selectedPiece = null;
-                
-                // Hamleyi sunucuya gönder
-                console.log('📤 Çoklu yeme hamlesi sunucuya gönderiliyor');
-                socket.emit('makeMove', {
-                    roomCode: gameState.roomCode,
-                    from: { row: fromRow, col: fromCol },
-                    to: { row: toRow, col: toCol },
-                    board: gameState.board,
-                    capture: capture,
-                    userId: userId
-                });
-            };
-            
-            gameContainer.appendChild(continueBtn);
-            gameContainer.appendChild(finishBtn);
-            return; // Sırayı değiştirme, hamleyi gönderme
-        }
-    }
-    
-    // Normal hamle veya çoklu yeme bitince
-    gameState.selectedPiece = null;
+    // Hemen render et (gecikme olmasın)
     renderBoard();
     
-    // Hamleyi sunucuya gönder
-    console.log('📤 Normal hamle sunucuya gönderiliyor');
+    // Önceki butonları kaldır (temizlik)
+    const existingContinueBtn = document.getElementById('continueCaptureBtn');
+    const existingFinishBtn = document.getElementById('finishCaptureBtn');
+    if (existingContinueBtn) existingContinueBtn.remove();
+    if (existingFinishBtn) existingFinishBtn.remove();
+    
+    // Sırayı değiştir VE hamleyi gönder
+    gameState.selectedPiece = null;
+    gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+    
     socket.emit('makeMove', {
         roomCode: gameState.roomCode,
         from: { row: fromRow, col: fromCol },
@@ -669,7 +481,6 @@ function startRankedGame() {
         userPhotoUrl: userPhotoUrl || null,
         userLevel: userStats.level,
         userElo: userStats.elo
-        // avoidUserId kaldırıldı - FIFO sistemi kullanılıyor
     });
     document.getElementById('rankedModal').style.display = 'block';
     
@@ -841,10 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Oyundan çık
 function leaveGame() {
     if (confirm('❓ Oyundan çıkmak istediğinize emin misiniz?')) {
-        // Sunucuya oyunu terk etme haberini gönder
         socket.emit('leaveGame', { roomCode: gameState.roomCode, userId });
-        
-        // Hemen oyunu bitir ve lobiye dön
         resetGame();
     }
 }
@@ -863,9 +671,6 @@ function resetGame() {
     if (existingContinueBtn) existingContinueBtn.remove();
     if (existingFinishBtn) existingFinishBtn.remove();
     
-    // Rakip kullanıcı ID'sini sıfırlama (FIFO'da gerek yok)
-    // const lastOpponentId = gameState.opponentUserId; // Kaldırıldı
-    
     gameState = {
         board: [],
         currentPlayer: 'white',
@@ -875,7 +680,6 @@ function resetGame() {
         gameStarted: false,
         opponentName: 'Rakip',
         opponentPhotoUrl: null,
-        // opponentUserId: lastOpponentId, // Kaldırıldı
         mustCapture: false,
         timer: 20,
         timerInterval: null,
@@ -889,23 +693,12 @@ function resetGame() {
 
 // Socket olayları
 socket.on('roomCreated', (data) => {
-    console.log('📥 Client oda kodu aldı:', data.roomCode);
     gameState.roomCode = data.roomCode;
-    
-    const roomCodeElement = document.getElementById('waitingRoomCode');
-    if (roomCodeElement) {
-        roomCodeElement.textContent = data.roomCode;
-        console.log('📝 Oda kodu elemente yazıldı:', data.roomCode);
-    } else {
-        console.error('❌ waitingRoomCode elementi bulunamadı!');
-    }
+    document.getElementById('waitingRoomCode').textContent = data.roomCode;
     // Bekleyen lobi zaten açık
 });
 
 socket.on('matchFound', (data) => {
-    // Rakip kullanıcı ID'sini kaydet (FIFO'da gerek yok ama bilgi amaçlı)
-    // gameState.opponentUserId = data.opponentUserId; // Kaldırıldı
-    
     // Eşleşme timer'ını durdur (sunucu zaten durdurdu)
     searchTimer = 0;
     updateSearchTimer();
@@ -932,7 +725,7 @@ function updateMatchModal(data) {
                 <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(102, 126, 234, 0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; overflow: hidden; border: 3px solid #667eea;">
                     ${userPhotoUrl ? 
                         `<img src="${userPhotoUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />` :
-                        `<span style="font-size: 2em;">${userName.charAt(0).toUpperCase()}</span>`
+                        `<span style="font-size: 2em;">${userName.charAt(0).toUpperCase()}</span>` 
                     }
                 </div>
                 <div style="font-weight: bold; color: #667eea;">${userName}</div>
@@ -942,7 +735,7 @@ function updateMatchModal(data) {
                 <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(102, 126, 234, 0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; overflow: hidden; border: 3px solid #667eea;">
                     ${data.opponentPhotoUrl ? 
                         `<img src="${data.opponentPhotoUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />` :
-                        `<span style="font-size: 2em;">${data.opponentName ? data.opponentName.charAt(0).toUpperCase() : '?'}</span>`
+                        `<span style="font-size: 2em;">${data.opponentName ? data.opponentName.charAt(0).toUpperCase() : '?'}</span>` 
                     }
                 </div>
                 <div style="font-weight: bold; color: #667eea;">${data.opponentName || 'Rakip'}</div>
@@ -953,9 +746,6 @@ function updateMatchModal(data) {
 }
 
 socket.on('roomJoined', (data) => {
-    // Rakip kullanıcı ID'sini kaydet (FIFO'da gerek yok)
-    // gameState.opponentUserId = data.opponentUserId; // Kaldırıldı
-    
     // Modal ve bekleyen lobiden çık
     document.getElementById('joinModal').style.display = 'none';
     document.getElementById('waitingLobby').style.display = 'none';
@@ -1005,453 +795,26 @@ socket.on('timerTimeout', (data) => {
     }
 });
 
-// Admin paneli kontrolü
-function checkAdminAccess() {
-    // Sadece bu Telegram ID'ye admin paneli göster
-    const adminTelegramId = '976640409';
-    return userId === `TG_${adminTelegramId}`;
-}
-
-// Admin paneli butonunu ekle
-function addAdminButton() {
-    if (!checkAdminAccess()) return;
-    
-    // Eğer admin butonu zaten varsa ekleme
-    if (document.getElementById('adminBtn')) return;
-    
-    const adminBtn = document.createElement('button');
-    adminBtn.id = 'adminBtn';
-    adminBtn.className = 'btn admin-btn';
-    adminBtn.innerHTML = '🔧 Admin';
-    adminBtn.onclick = () => {
-        showAdminPanel();
-    };
-    
-    // SADECE lobiye ekle (oyun ekranında gösterme)
-    const lobby = document.getElementById('lobby');
-    if (lobby) {
-        const header = lobby.querySelector('.header');
-        if (header) {
-            header.appendChild(adminBtn);
-        } else {
-            lobby.insertBefore(adminBtn, lobby.firstChild);
-        }
-    }
-}
-
-// Admin panelini göster
-function showAdminPanel() {
-    // Admin panel modal'ı oluştur
-    const existingModal = document.getElementById('adminModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    const modal = document.createElement('div');
-    modal.id = 'adminModal';
-    modal.className = 'admin-modal';
-    modal.innerHTML = `
-        <div class="admin-modal-content">
-            <div class="admin-modal-header">
-                <h2>🔧 Admin Panel</h2>
-                <button class="admin-close-btn" onclick="closeAdminPanel()">×</button>
-            </div>
-            <div class="admin-modal-body">
-                <div class="admin-section">
-                    <h3>📊 İstatistikler</h3>
-                    <div class="admin-stats">
-                        <div class="stat-item">
-                            <label>Aktif Oda:</label>
-                            <span id="adminActiveRooms">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Bekleyen Oyuncu:</label>
-                            <span id="adminWaitingPlayers">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Toplam Kullanıcı:</label>
-                            <span id="adminTotalUsers">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <label>Bekleyen Odalar:</label>
-                            <span id="adminWaitingRooms">0</span>
-                        </div>
-                    </div>
-                    <div id="adminRoomList" style="max-height: 150px; overflow-y: auto; margin-top: 10px;">
-                        <!-- Odalar burada gösterilecek -->
-                    </div>
-                </div>
-                
-                <div class="admin-section">
-                    <h3>👥 Kullanıcı İşlemleri</h3>
-                    <div class="admin-controls">
-                        <input type="text" id="adminUserId" placeholder="Kullanıcı ID (1840079939 veya TG_1840079939)">
-                        <select id="adminAction">
-                            <option value="giveElo">Elo Ver (+100)</option>
-                            <option value="takeElo">Elo Al (-100)</option>
-                            <option value="giveElo500">Elo Ver (+500)</option>
-                            <option value="giveElo1000">Elo Ver (+1000)</option>
-                            <option value="deleteUser">Kullanıcı Sil</option>
-                            <option value="resetUser">Sıfırla</option>
-                        </select>
-                        <button class="btn" onclick="executeAdminAction()">Uygula</button>
-                    </div>
-                </div>
-                
-                <div class="admin-section">
-                    <h3>⚙️ Sistem İşlemleri</h3>
-                    <div class="admin-controls">
-                        <button class="btn danger" onclick="adminResetAllElo()">🔄 Tüm Elo'yu Sıfırla</button>
-                        <button class="btn warning" onclick="adminClearRooms()">🏠 Odaları Temizle</button>
-                        <button class="btn success" onclick="adminKickAll()">👟 Herkesi At</button>
-                    </div>
-                </div>
-                
-                <div class="admin-section">
-                    <h3>🏆 Liderlik Tablosu</h3>
-                    <div class="admin-controls">
-                        <button class="btn" onclick="loadLeaderboard()">🔄 Liderlik Tablosu Yükle</button>
-                        <div id="adminLeaderboard" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
-                            <!-- Liderlik tablosu burada gösterilecek -->
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="admin-section">
-                    <h3>📋 Kullanıcı Listesi</h3>
-                    <div class="admin-controls">
-                        <button class="btn" onclick="loadUserList()">🔄 Kullanıcı Listesi Yükle</button>
-                        <div id="adminUserList" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
-                            <!-- Kullanıcılar burada gösterilecek -->
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="admin-section">
-                    <h3>📢 Bildirim Gönder</h3>
-                    <div class="admin-controls">
-                        <input type="text" id="adminNotification" placeholder="Bildirim mesajı...">
-                        <button class="btn" onclick="sendAdminNotification()">Gönder</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // İstatistikleri yükle
-    loadAdminStats();
-    
-    // 5 saniyede bir istatistikleri güncelle
-    window.adminStatsInterval = setInterval(loadAdminStats, 5000);
-}
-
-// Admin panelini kapat
-function closeAdminPanel() {
-    const modal = document.getElementById('adminModal');
-    if (modal) {
-        modal.remove();
-    }
-    if (window.adminStatsInterval) {
-        clearInterval(window.adminStatsInterval);
-    }
-}
-
-// Admin istatistiklerini yükle
-function loadAdminStats() {
-    fetch('/status')
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('adminActiveRooms').textContent = data.activeRooms;
-            document.getElementById('adminWaitingPlayers').textContent = data.waitingPlayers;
-            
-            // Toplam kullanıcı sayısını al
-            socket.emit('adminGetUsers');
-            
-            // Bekleyen odaları göster
-            updateWaitingRooms();
-            
-            // Liderlik tablosunu yükle
-            loadLeaderboard();
-        });
-}
-
-// Bekleyen odaları güncelle
-function updateWaitingRooms() {
-    const waitingRoomsDiv = document.getElementById('adminWaitingRooms');
-    if (!waitingRoomsDiv) return;
-    
-    // Sunucudan oda bilgilerini iste
-    socket.emit('adminGetRooms');
-}
-
-// Admin işlemi yap
-function executeAdminAction() {
-    let userId = document.getElementById('adminUserId').value.trim();
-    const action = document.getElementById('adminAction').value;
-    
-    if (!userId) {
-        alert('Kullanıcı ID girin!');
-        return;
-    }
-    
-    // Eğer sadece sayı ise TG_ prefix ekle
-    if (/^\d+$/.test(userId)) {
-        userId = `TG_${userId}`;
-    }
-    
-    // Action'a göre amount belirle
-    let amount = 100;
-    if (action === 'giveElo500') amount = 500;
-    if (action === 'giveElo1000') amount = 1000;
-    if (action === 'takeElo') amount = -100;
-    
-    socket.emit('adminUserAction', { userId, action, amount });
-}
-
-// Tüm elo'yu sıfırla
-function adminResetAllElo() {
-    if (confirm('Tüm elo puanlarını sıfırlamak istediğinizden emin misiniz?')) {
-        socket.emit('adminResetAllElo');
-    }
-}
-
-// Odaları temizle
-function adminClearRooms() {
-    if (confirm('Tüm odaları temizlemek istediğinizden emin misiniz?')) {
-        socket.emit('adminClearAllRooms');
-    }
-}
-
-// Herkesi at
-function adminKickAll() {
-    if (confirm('Tüm kullanıcıları atmak istediğinizden emin misiniz?')) {
-        socket.emit('adminKickAll');
-    }
-}
-
-// Bildirim gönder
-function sendAdminNotification() {
-    const message = document.getElementById('adminNotification').value;
-    if (message) {
-        socket.emit('adminNotification', { message, type: 'info' });
-        document.getElementById('adminNotification').value = '';
-    }
-}
-
-// Kullanıcı listesini yükle
-function loadUserList() {
-    socket.emit('adminGetUsers');
-}
-
-// Kullanıcıyı sil
-function deleteUser(userId) {
-    if (confirm(`Kullanıcı ${userId} silinsin mi?`)) {
-        socket.emit('adminUserAction', { userId, action: 'deleteUser' });
-    }
-}
-
-// Liderlik tablosunu yükle
-function loadLeaderboard() {
-    socket.emit('getLeaderboard');
-}
-
-// Liderlik tablosundan kullanıcı sil
-function deleteFromLeaderboard(userId) {
-    if (confirm(`Kullanıcı ${userId} liderlik tablosundan ve veritabanından silinsin mi?`)) {
-        socket.emit('adminUserAction', { userId, action: 'deleteUser' });
-    }
-}
-
-// Sayfa yüklendiğinde kontrol et
-document.addEventListener('DOMContentLoaded', () => {
-    addAdminButton();
-});
-
-// Kullanıcı bilgileri geldiğinde kontrol et
-socket.on('userStats', (data) => {
-    setTimeout(() => addAdminButton(), 100);
-});
-
-socket.on('gameStart', () => {
-    // Oyun ekranında da admin butonu olsun
-    setTimeout(() => addAdminButton(), 100);
-});
-
-socket.on('matchFound', () => {
-    setTimeout(() => addAdminButton(), 100);
-});
-socket.on('adminUsers', (users) => {
-    const totalUsersEl = document.getElementById('adminTotalUsers');
-    if (totalUsersEl) {
-        totalUsersEl.textContent = users.length;
-    }
-    
-    // Kullanıcı listesini göster
-    const userListEl = document.getElementById('adminUserList');
-    if (userListEl) {
-        if (users.length === 0) {
-            userListEl.innerHTML = '<p style="color: #999; text-align: center;">Kullanıcı bulunamadı</p>';
-        } else {
-            const userHTML = users.map(user => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 5px;">
-                    <div>
-                        <strong>${user.userName}</strong><br>
-                        <small style="color: #999;">${user.userId} | Elo: ${user.elo}</small>
-                    </div>
-                    <button class="btn danger" style="padding: 5px 10px; font-size: 0.8em;" onclick="deleteUser('${user.userId}')">Sil</button>
-                </div>
-            `).join('');
-            userListEl.innerHTML = userHTML;
-        }
-    }
-});
-
-socket.on('adminRooms', (rooms) => {
-    const waitingRoomsEl = document.getElementById('adminWaitingRooms');
-    const roomListEl = document.getElementById('adminRoomList');
-    
-    if (waitingRoomsEl) {
-        waitingRoomsEl.textContent = rooms.length;
-    }
-    
-    if (roomListEl) {
-        if (rooms.length === 0) {
-            roomListEl.innerHTML = '<p style="color: #999; text-align: center;">Aktif oda veya bekleyen oyuncu yok</p>';
-        } else {
-            const roomHTML = rooms.map(room => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 5px;">
-                    <div>
-                        <strong>${room.code}</strong><br>
-                        <small style="color: #999;">${room.type} | ${room.players}</small>
-                    </div>
-                    <div style="font-size: 0.8em; color: ${room.gameStarted ? '#4ade80' : '#fbbf24'};">
-                        ${room.gameStarted ? '▶️' : '⏳'}
-                    </div>
-                </div>
-            `).join('');
-            roomListEl.innerHTML = roomHTML;
-        }
-    }
-});
-
-socket.on('adminResponse', (data) => {
-    // Admin bildirimini göster (15 saniye)
-    showCustomNotification(data.message, data.type, 15000);
-    
-    if (data.refresh) {
-        loadAdminStats();
-    }
-});
-
-socket.on('adminNotification', (data) => {
-    // Admin bildirimini göster (15 saniye)
-    showCustomNotification(data.message, data.type, 15000);
-});
-
 socket.on('moveMade', (data) => {
     console.log('📥 Sunucudan hamle geldi:', data);
     
-    // Sunucudan gelen hamleyi hemen uygula
+    // Sunucudan gelen hamleyi hemen uygula (gecikme olmasın)
     gameState.board = data.board;
     gameState.currentPlayer = data.currentPlayer;
     
     console.log(`🔄 Sıra değişti: ${gameState.currentPlayer} - Ben: ${gameState.playerColor}`);
     
-    // Seçimi temizle
-    gameState.selectedPiece = null;
-    
-    // Butonları temizle
-    const existingContinueBtn = document.getElementById('continueCaptureBtn');
-    const existingFinishBtn = document.getElementById('finishCaptureBtn');
-    if (existingContinueBtn) existingContinueBtn.remove();
-    if (existingFinishBtn) existingFinishBtn.remove();
-    
-    // Eğer çoklu yeme devam ediyorsa ve bizim sıramızda ise
-    if (data.canContinueCapture && gameState.currentPlayer === gameState.playerColor) {
-        console.log('🎯 Çoklu yeme devam ediyor');
-        
-        // Seçili taşı koru
-        const lastMove = data.to;
-        gameState.selectedPiece = { row: lastMove.row, col: lastMove.col };
-        
-        // Butonları göster
-        const gameContainer = document.getElementById('game');
-        
-        const continueBtn = document.createElement('button');
-        continueBtn.id = 'continueCaptureBtn';
-        continueBtn.textContent = 'Yemeye Devam Et';
-        continueBtn.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 40%;
-            transform: translate(-50%, -50%);
-            padding: 15px 20px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            z-index: 1000;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        `;
-        continueBtn.onclick = () => {
-            continueBtn.remove();
-            finishBtn.remove();
-            renderBoard();
-        };
-        
-        const finishBtn = document.createElement('button');
-        finishBtn.id = 'finishCaptureBtn';
-        finishBtn.textContent = 'Yemeyi Bitir';
-        finishBtn.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 60%;
-            transform: translate(-50%, -50%);
-            padding: 15px 20px;
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            z-index: 1000;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        `;
-        finishBtn.onclick = () => {
-            continueBtn.remove();
-            finishBtn.remove();
-            gameState.selectedPiece = null;
-        };
-        
-        gameContainer.appendChild(continueBtn);
-        gameContainer.appendChild(finishBtn);
-    }
-    
     // Hemen render et
     renderBoard();
-    updatePlayerHighlight();
-    updateTimerDisplay();
+    // Timer sunucudan gelecek (timerUpdate event'i)
 });
 
 // Oyuncu kartlarında profil resmini göster
 function updatePlayerAvatars() {
-    // Player 1 (Beyaz) ve Player 2 (Siyah) kartlarını bul
-    const player1Card = document.getElementById('player1Card');
-    const player2Card = document.getElementById('player2Card');
-    
-    // Kendi oyuncu rengimizi belirle
-    const myColor = gameState.playerColor;
-    const myAvatar = myColor === 'white' ? player1Card : player2Card;
-    const opponentAvatar = myColor === 'white' ? player2Card : player1Card;
-    
-    // Kendi profil resmimizi doğru karta yerleştir
-    const myAvatarElement = myAvatar.querySelector('[id$="Avatar"]');
-    if (myAvatarElement && userPhotoUrl) {
-        myAvatarElement.innerHTML = '';
+    // Player 1 (Beyaz) - kendi profil resmimiz
+    const player1Avatar = document.getElementById('player1Avatar');
+    if (player1Avatar && userPhotoUrl) {
+        player1Avatar.innerHTML = '';
         const img = document.createElement('img');
         img.src = userPhotoUrl;
         img.style.width = '100%';
@@ -1459,19 +822,19 @@ function updatePlayerAvatars() {
         img.style.borderRadius = '50%';
         img.style.objectFit = 'cover';
         img.onerror = function() {
-            myAvatarElement.textContent = userName.charAt(0).toUpperCase();
-            myAvatarElement.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+            player1Avatar.textContent = userName.charAt(0).toUpperCase();
+            player1Avatar.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
         };
-        myAvatarElement.appendChild(img);
-    } else if (myAvatarElement) {
-        myAvatarElement.textContent = userName.charAt(0).toUpperCase();
-        myAvatarElement.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+        player1Avatar.appendChild(img);
+    } else if (player1Avatar) {
+        player1Avatar.textContent = userName.charAt(0).toUpperCase();
+        player1Avatar.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
     }
     
-    // Rakibin profil resmini doğru karta yerleştir
-    const opponentAvatarElement = opponentAvatar.querySelector('[id$="Avatar"]');
-    if (opponentAvatarElement && gameState.opponentPhotoUrl) {
-        opponentAvatarElement.innerHTML = '';
+    // Player 2 (Siyah) - rakibin profil resmi
+    const player2Avatar = document.getElementById('player2Avatar');
+    if (player2Avatar && gameState.opponentPhotoUrl) {
+        player2Avatar.innerHTML = '';
         const img = document.createElement('img');
         img.src = gameState.opponentPhotoUrl;
         img.style.width = '100%';
@@ -1479,93 +842,31 @@ function updatePlayerAvatars() {
         img.style.borderRadius = '50%';
         img.style.objectFit = 'cover';
         img.onerror = function() {
-            opponentAvatarElement.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
-            opponentAvatarElement.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+            player2Avatar.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
+            player2Avatar.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
         };
-        opponentAvatarElement.appendChild(img);
-    } else if (opponentAvatarElement) {
-        opponentAvatarElement.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
-        opponentAvatarElement.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+        player2Avatar.appendChild(img);
+    } else if (player2Avatar) {
+        player2Avatar.textContent = gameState.opponentName ? gameState.opponentName.charAt(0).toUpperCase() : 'R';
+        player2Avatar.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
     }
 }
 
 socket.on('gameOver', (data) => {
     // Timer sunucu tarafında durduruldu
-    const isWin = data.winner === gameState.playerColor;
-    const eloChange = data.eloChange || 0;
-    
-    // Şeffaf overlay oluştur
-    const overlay = document.createElement('div');
-    overlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        backdrop-filter: blur(5px);
-    `;
-    
-    const messageBox = document.createElement('div');
-    messageBox.style.cssText = `
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
-        padding: 40px;
-        border-radius: 20px;
-        text-align: center;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        max-width: 400px;
-        animation: slideIn 0.5s ease-out;
-    `;
-    
-    const title = isWin ? '🎉 TEBRİKLER! KAZANDINIZ! 🎉' : '😔 MALESEF KAYBETTİNİZ!';
-    const eloText = eloChange > 0 ? `+${eloChange} Elo` : eloChange < 0 ? `${eloChange} Elo` : '';
-    const eloColor = eloChange > 0 ? '#4ade80' : eloChange < 0 ? '#f87171' : '#fff';
-    
-    messageBox.innerHTML = `
-        <h2 style="margin: 0 0 20px 0; font-size: 1.8em;">${title}</h2>
-        <div style="font-size: 1.5em; font-weight: bold; color: ${eloColor}; margin: 15px 0;">
-            ${eloText}
-        </div>
-        <div style="font-size: 1.1em; opacity: 0.9;">
-            Yeni Elo: ${data.newElo || 'Bilinmiyor'}
-        </div>
-    `;
-    
-    overlay.appendChild(messageBox);
-    document.body.appendChild(overlay);
-    
-    // 4 saniye sonra kaldır ve oyunu sıfırla
     setTimeout(() => {
-        overlay.remove();
+        const winnerText = data.winner === gameState.playerColor ? 
+            '🎉 TEBRİKLER! KAZANDINIZ! 🎉' : 
+            '😔 Maalesef kaybettiniz!';
+        alert(winnerText);
         resetGame();
-    }, 4000);
+    }, 500);
 });
 
-socket.on('opponentLeft', (data) => {
-    // Rakip oyundan çıktığında bildirim göster
-    const message = data.message || 'Rakip oyundan ayrıldı!';
-    
-    // Custom notification göster
-    showCustomNotification(message, 'success');
-    
-    // Elo puanı değişikliği varsa göster
-    if (data.eloChange) {
-        const eloText = data.eloChange > 0 ? 
-            `+${data.eloChange} Elo puanı kazandınız! 🎉` : 
-            `${data.eloChange} Elo puanı kaybettiniz 😔`;
-        
-        setTimeout(() => {
-            showCustomNotification(eloText, data.eloChange > 0 ? 'success' : 'error');
-        }, 2000);
-    }
-    
-    // 3 saniye sonra lobiyi göster
+socket.on('opponentLeft', () => {
+    // Timer sunucu tarafında durduruldu
+    // Alert yerine custom notification kullan
+    showCustomNotification('⚠️ Rakibiniz oyundan ayrıldı!');
     setTimeout(() => {
         resetGame();
     }, 3000);
@@ -1592,30 +893,8 @@ socket.on('userStats', (data) => {
 });
 
 // Liderlik tablosu güncelleme
-socket.on('leaderboardUpdate', (leaderboard) => {
-    updateLeaderboardDisplay(leaderboard);
-    
-    // Admin panelindeki liderlik tablosunu da güncelle
-    const adminLeaderboardEl = document.getElementById('adminLeaderboard');
-    if (adminLeaderboardEl) {
-        if (leaderboard.length === 0) {
-            adminLeaderboardEl.innerHTML = '<p style="color: #999; text-align: center;">Liderlik tablosu boş</p>';
-        } else {
-            const leaderboardHTML = leaderboard.map((player, index) => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 5px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-weight: bold; color: #ffd700;">#${index + 1}</span>
-                        <div>
-                            <strong>${player.userName}</strong><br>
-                            <small style="color: #999;">${player.userId} | Elo: ${player.elo}</small>
-                        </div>
-                    </div>
-                    <button class="btn danger" style="padding: 5px 10px; font-size: 0.8em;" onclick="deleteFromLeaderboard('${player.userId}')">Sil</button>
-                </div>
-            `).join('');
-            adminLeaderboardEl.innerHTML = leaderboardHTML;
-        }
-    }
+socket.on('leaderboardUpdate', (data) => {
+    updateLeaderboardDisplay(data);
 });
 
 // Kullanıcı sıralaması güncelleme
@@ -1758,12 +1037,10 @@ function startGame(data) {
     gameState.gameStarted = true;
     gameState.opponentName = data.opponentName || 'Rakip';
     gameState.opponentPhotoUrl = data.opponentPhotoUrl || null;
-    // gameState.opponentUserId = data.opponentUserId || null; // Kaldırıldı
     gameState.opponentLevel = data.opponentLevel || 1;
     gameState.opponentElo = data.opponentElo || 0;
     gameState.afkCount = 0;
     
-    // Oyun arayüzünü göster
     document.getElementById('lobby').style.display = 'none';
     document.getElementById('leaderboard').style.display = 'none';
     document.getElementById('game').style.display = 'block';
@@ -1771,11 +1048,10 @@ function startGame(data) {
     updatePlayerNames();
     renderBoard();
     
-    // Sunucuya hazır olduğumuzu bildir (TAHTAYLA BİRLİKTE)
-    socket.emit('gameReady', { 
-        roomCode: gameState.roomCode, 
-        board: gameState.board, 
-        userId: userId 
+    socket.emit('gameReady', {
+        roomCode: gameState.roomCode,
+        board: gameState.board,
+        userId: userId
     });
     
     // Timer sunucudan yönetiliyor
@@ -1923,7 +1199,7 @@ function updatePlayerAvatar(avatarEl, photoUrl, name) {
 }
 
 // Custom notification fonksiyonları
-function showCustomNotification(message, type = 'info', duration = 3000) {
+function showCustomNotification(message) {
     // Bildirim elementini oluştur veya güncelle
     let notification = document.getElementById('customNotification');
     if (!notification) {
@@ -1950,10 +1226,10 @@ function showCustomNotification(message, type = 'info', duration = 3000) {
     notification.textContent = message;
     notification.style.display = 'block';
     
-    // Belirtilen süre sonra bildirimi gizle
+    // 3 saniye sonra bildirimi gizle
     setTimeout(() => {
         hideCustomNotification();
-    }, duration);
+    }, 3000);
 }
 
 function hideCustomNotification() {
