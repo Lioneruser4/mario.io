@@ -896,8 +896,11 @@ io.on('connection', (socket) => {
 
     // Hamle yap
     socket.on('makeMove', (data) => {
+        console.log('📥 Hamle isteği geldi:', data);
+        
         const room = rooms.get(data.roomCode);
         if (!room) {
+            console.log('❌ Oda bulunamadı:', data.roomCode);
             socket.emit('error', { message: 'Oda bulunamadı!' });
             return;
         }
@@ -905,12 +908,16 @@ io.on('connection', (socket) => {
         // Oyuncu bul
         const player = room.players.find(p => p.socketId === socket.id);
         if (!player) {
+            console.log('❌ Oyuncu bulunamadı:', socket.id);
             socket.emit('error', { message: 'Oyuncu bulunamadı!' });
             return;
         }
         
+        console.log(`👤 Oyuncu: ${player.userName} (${player.playerColor}) - Sıra: ${room.currentPlayer}`);
+        
         // Sıra kontrolü
         if (room.currentPlayer !== player.playerColor) {
+            console.log('❌ Sıra bu oyuncuda değil!', player.playerColor, 'vs', room.currentPlayer);
             socket.emit('error', { message: 'Sıra sizde değil!' });
             return;
         }
@@ -921,7 +928,11 @@ io.on('connection', (socket) => {
             move.row === data.to.row && move.col === data.to.col
         );
         
+        console.log('🎯 Geçerli hamleler:', validMoves);
+        console.log('🎯 İstenen hamle:', { row: data.to.row, col: data.to.col });
+        
         if (!isValidMove) {
+            console.log('❌ Geçersiz hamle!');
             socket.emit('error', { message: 'Geçersiz hamle!' });
             return;
         }
@@ -929,6 +940,7 @@ io.on('connection', (socket) => {
         // Taş kontrolü - doğru taş mı?
         const piece = room.board[data.from.row] && room.board[data.from.row][data.from.col];
         if (!piece || piece.color !== player.playerColor) {
+            console.log('❌ Yanlış taş!');
             socket.emit('error', { message: 'Geçersiz taş!' });
             return;
         }
@@ -939,6 +951,8 @@ io.on('connection', (socket) => {
         // Çoklu yeme kontrolü
         const moveData = validMoves.find(m => m.row === data.to.row && m.col === data.to.col);
         const canContinueCapture = moveData && moveData.canContinueCapture;
+        
+        console.log('🔄 Çoklu yeme devamı:', canContinueCapture);
         
         // Eğer çoklu yeme devam etmiyorsa sırayı değiştir
         if (!canContinueCapture) {
@@ -956,6 +970,8 @@ io.on('connection', (socket) => {
             capture: moveData ? moveData.capture : null,
             canContinueCapture: canContinueCapture
         });
+        
+        console.log('📤 Hamle broadcast edildi:', data.roomCode);
         
         // Oyunu kontrol et
         checkGameEnd(data.roomCode);
