@@ -332,30 +332,16 @@ function handleSquareClick(row, col) {
         return;
     }
     
-    // Çoklu yeme durumunda seçili taşı koru, sadece sıra kontrolü yap
-    if (gameState.selectedPiece && gameState.selectedPiece.row !== undefined) {
-        const selectedMoves = getValidMoves(gameState.selectedPiece.row, gameState.selectedPiece.col);
-        const hasCaptures = selectedMoves.some(m => m.capture);
-        
-        // Eğer çoklu yeme durumu varsa ve sıra bizdeyse devam et
-        if (hasCaptures && gameState.currentPlayer === gameState.playerColor) {
-            const move = selectedMoves.find(m => m.row === row && m.col === col);
-            if (move) {
-                console.log('🎯 Çoklu yeme hamlesi yapılıyor');
-                makeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col, move.capture);
-                return;
-            }
-        }
-    }
-    
-    // Normal sıra kontrolü
+    // Sadece kendi sıramızda hamle yapabiliriz
     if (gameState.currentPlayer !== gameState.playerColor) {
         console.log('⏳ Sıra sizde değil!');
+        showCustomNotification('⏳ Sıra sizde değil!', 'info', 2000);
         return;
     }
     
     const piece = gameState.board[row][col];
     
+    // Kendi taşımı seçiyorum
     if (piece && piece.color === gameState.playerColor) {
         const moves = getValidMoves(row, col);
         
@@ -363,6 +349,7 @@ function handleSquareClick(row, col) {
         if (gameState.mustCapture) {
             const hasCapture = moves.some(m => m.capture);
             if (!hasCapture) {
+                showCustomNotification('⚠️ Önce rakip taşı yemelisiniz!', 'warning', 2000);
                 return; // Bu taş yeme yapamıyor, seçilemesin
             }
         }
@@ -370,13 +357,19 @@ function handleSquareClick(row, col) {
         if (moves.length > 0) {
             selectPiece(row, col);
         }
-    } else if (gameState.selectedPiece) {
+    } 
+    // Seçili taşı hareket ettiriyorum
+    else if (gameState.selectedPiece) {
         const validMoves = getValidMoves(gameState.selectedPiece.row, gameState.selectedPiece.col);
         const move = validMoves.find(m => m.row === row && m.col === col);
         if (move) {
-            console.log('🎯 Normal hamle yapılıyor');
+            console.log('🎯 Hamle yapılıyor');
             makeMove(gameState.selectedPiece.row, gameState.selectedPiece.col, row, col, move.capture);
             gameState.afkCount = 0; // Hamle yapıldı, AFK sayacını sıfırla
+        } else {
+            // Geçersiz hamle, seçimi iptal et
+            gameState.selectedPiece = null;
+            renderBoard();
         }
     }
 }
@@ -526,29 +519,21 @@ function getValidMovesFromBoard(board, row, col) {
 function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     const piece = gameState.board[fromRow][fromCol];
     
-    // Optimistik update - hemen render et
+    // Taşı hareket ettir
     gameState.board[toRow][toCol] = piece;
     gameState.board[fromRow][fromCol] = null;
     
+    // Yeme işlemi
     if (capture) {
         gameState.board[capture.row][capture.col] = null;
     }
     
-    // Kral yapma - karşı tarafa ulaşınca
+    // Kral yapma
     if (!piece.king) {
         if ((piece.color === 'white' && toRow === 0) || (piece.color === 'black' && toRow === 7)) {
             piece.king = true;
         }
     }
-    
-    // Hemen render et (gecikme olmasın)
-    renderBoard();
-    
-    // Önceki butonları kaldır (temizlik)
-    const existingContinueBtn = document.getElementById('continueCaptureBtn');
-    const existingFinishBtn = document.getElementById('finishCaptureBtn');
-    if (existingContinueBtn) existingContinueBtn.remove();
-    if (existingFinishBtn) existingFinishBtn.remove();
     
     // Çoklu yeme kontrolü
     if (capture) {
@@ -561,10 +546,16 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
         if (furtherCaptures.length > 0) {
             // Devam eden yeme var - seçimi koru ve butonlar göster
             gameState.selectedPiece = { row: toRow, col: toCol };
-            highlightValidMoves();
+            renderBoard();
             
             // Devam et/Bitir butonları oluştur
             const gameContainer = document.getElementById('game');
+            
+            // Önceki butonları temizle
+            const existingContinueBtn = document.getElementById('continueCaptureBtn');
+            const existingFinishBtn = document.getElementById('finishCaptureBtn');
+            if (existingContinueBtn) existingContinueBtn.remove();
+            if (existingFinishBtn) existingFinishBtn.remove();
             
             const continueBtn = document.createElement('button');
             continueBtn.id = 'continueCaptureBtn';
@@ -585,13 +576,10 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
                 box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             `;
             continueBtn.onclick = () => {
-                // Sıra kontrolü yap
-                if (gameState.currentPlayer !== gameState.playerColor) {
-                    showCustomNotification('Sıra sizde değil!', 'error');
-                    return;
-                }
-                // Seçili taşı koru, yeni hamleler için highlight yap
-                highlightValidMoves();
+                continueBtn.remove();
+                finishBtn.remove();
+                // Seçili taşı koru ve devam et
+                renderBoard();
             };
             
             const finishBtn = document.createElement('button');
@@ -615,7 +603,6 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
             finishBtn.onclick = () => {
                 continueBtn.remove();
                 finishBtn.remove();
-                // Seçimi temizle
                 gameState.selectedPiece = null;
                 
                 // Hamleyi sunucuya gönder
@@ -637,6 +624,7 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     
     // Normal hamle veya çoklu yeme bitince
     gameState.selectedPiece = null;
+    renderBoard();
     
     // Hamleyi sunucuya gönder
     socket.emit('makeMove', {
