@@ -90,7 +90,7 @@ let gameState = {
     gameStarted: false,
     opponentName: 'Rakip',
     opponentPhotoUrl: null,
-    opponentUserId: null,
+    // opponentUserId kaldırıldı - FIFO sistemi kullanılıyor
     mustCapture: false,
     timer: 20,
     timerInterval: null,
@@ -668,8 +668,8 @@ function startRankedGame() {
         userName, 
         userPhotoUrl: userPhotoUrl || null,
         userLevel: userStats.level,
-        userElo: userStats.elo,
-        avoidUserId: gameState.opponentUserId // Son oynanan kullanıcıyı hariç tut
+        userElo: userStats.elo
+        // avoidUserId kaldırıldı - FIFO sistemi kullanılıyor
     });
     document.getElementById('rankedModal').style.display = 'block';
     
@@ -863,8 +863,8 @@ function resetGame() {
     if (existingContinueBtn) existingContinueBtn.remove();
     if (existingFinishBtn) existingFinishBtn.remove();
     
-    // Rakip kullanıcı ID'sini sıfırlama (son oynanan kullanıcıyı hatırlamak için)
-    const lastOpponentId = gameState.opponentUserId;
+    // Rakip kullanıcı ID'sini sıfırlama (FIFO'da gerek yok)
+    // const lastOpponentId = gameState.opponentUserId; // Kaldırıldı
     
     gameState = {
         board: [],
@@ -875,7 +875,7 @@ function resetGame() {
         gameStarted: false,
         opponentName: 'Rakip',
         opponentPhotoUrl: null,
-        opponentUserId: lastOpponentId, // Son oynanan kullanıcıyı koru
+        // opponentUserId: lastOpponentId, // Kaldırıldı
         mustCapture: false,
         timer: 20,
         timerInterval: null,
@@ -903,8 +903,8 @@ socket.on('roomCreated', (data) => {
 });
 
 socket.on('matchFound', (data) => {
-    // Rakip kullanıcı ID'sini kaydet
-    gameState.opponentUserId = data.opponentUserId;
+    // Rakip kullanıcı ID'sini kaydet (FIFO'da gerek yok ama bilgi amaçlı)
+    // gameState.opponentUserId = data.opponentUserId; // Kaldırıldı
     
     // Eşleşme timer'ını durdur (sunucu zaten durdurdu)
     searchTimer = 0;
@@ -953,8 +953,8 @@ function updateMatchModal(data) {
 }
 
 socket.on('roomJoined', (data) => {
-    // Rakip kullanıcı ID'sini kaydet
-    gameState.opponentUserId = data.opponentUserId;
+    // Rakip kullanıcı ID'sini kaydet (FIFO'da gerek yok)
+    // gameState.opponentUserId = data.opponentUserId; // Kaldırıldı
     
     // Modal ve bekleyen lobiden çık
     document.getElementById('joinModal').style.display = 'none';
@@ -1758,7 +1758,7 @@ function startGame(data) {
     gameState.gameStarted = true;
     gameState.opponentName = data.opponentName || 'Rakip';
     gameState.opponentPhotoUrl = data.opponentPhotoUrl || null;
-    gameState.opponentUserId = data.opponentUserId || null;
+    // gameState.opponentUserId = data.opponentUserId || null; // Kaldırıldı
     gameState.opponentLevel = data.opponentLevel || 1;
     gameState.opponentElo = data.opponentElo || 0;
     gameState.afkCount = 0;
