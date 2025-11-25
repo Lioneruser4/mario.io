@@ -735,7 +735,8 @@ io.on('connection', (socket) => {
                             userName: data.userName, 
                             userPhotoUrl: data.userPhotoUrl || null, // Doğru resmi kullan
                             userLevel: data.userLevel || 1,
-                            userElo: data.userElo || 0
+                            userElo: data.userElo || 0,
+                            playerColor: 'white'
                         },
                         { 
                             socketId: opponentSocketId, 
@@ -743,7 +744,8 @@ io.on('connection', (socket) => {
                             userName: opponentData.userName, 
                             userPhotoUrl: opponentData.userPhotoUrl || null, // Doğru resmi kullan
                             userLevel: opponentData.userLevel || 1,
-                            userElo: opponentData.userElo || 0
+                            userElo: opponentData.userElo || 0,
+                            playerColor: 'black'
                         }
                     ],
                     board: createInitialBoard(),
@@ -764,7 +766,8 @@ io.on('connection', (socket) => {
                     opponentName: opponentData.userName,
                     opponentPhotoUrl: opponentData.userPhotoUrl || null, // Rakibin resmi
                     opponentLevel: opponentData.userLevel || 1,
-                    opponentElo: opponentData.userElo || 0
+                    opponentElo: opponentData.userElo || 0,
+                    opponentUserId: opponentData.userId
                 });
                 
                 opponentSocket.emit('matchFound', {
@@ -773,7 +776,8 @@ io.on('connection', (socket) => {
                     opponentName: data.userName,
                     opponentPhotoUrl: data.userPhotoUrl || null, // Rakibin resmi
                     opponentLevel: data.userLevel || 1,
-                    opponentElo: data.userElo || 0
+                    opponentElo: data.userElo || 0,
+                    opponentUserId: data.userId
                 });
 
                 console.log('🎮 Eşleşme:', roomCode, '-', data.userName, 'vs', opponentData.userName);
@@ -909,7 +913,8 @@ io.on('connection', (socket) => {
                 roomCode: data.roomCode,
                 playerColor: 'white',
                 opponentName: player2.userName,
-                opponentPhotoUrl: player2.userPhotoUrl || null // Rakibin resmi
+                opponentPhotoUrl: player2.userPhotoUrl || null, // Rakibin resmi
+                opponentUserId: player2.userId
             });
         }
         
@@ -918,7 +923,8 @@ io.on('connection', (socket) => {
                 roomCode: data.roomCode,
                 playerColor: 'black',
                 opponentName: player1.userName,
-                opponentPhotoUrl: player1.userPhotoUrl || null // Rakibin resmi
+                opponentPhotoUrl: player1.userPhotoUrl || null, // Rakibin resmi
+                opponentUserId: player1.userId
             });
         }
         
