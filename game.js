@@ -517,6 +517,8 @@ function getValidMovesFromBoard(board, row, col) {
 
 // Hamle yap
 function makeMove(fromRow, fromCol, toRow, toCol, capture) {
+    console.log(`🎯 Hamle gönderiliyor: ${fromRow},${fromCol} -> ${toRow},${toCol}`);
+    
     const piece = gameState.board[fromRow][fromCol];
     
     // Taşı hareket ettir
@@ -544,6 +546,8 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
         });
         
         if (furtherCaptures.length > 0) {
+            console.log('🔄 Çoklu yeme var, butonlar gösteriliyor');
+            
             // Devam eden yeme var - seçimi koru ve butonlar göster
             gameState.selectedPiece = { row: toRow, col: toCol };
             renderBoard();
@@ -578,7 +582,6 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
             continueBtn.onclick = () => {
                 continueBtn.remove();
                 finishBtn.remove();
-                // Seçili taşı koru ve devam et
                 renderBoard();
             };
             
@@ -606,6 +609,7 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
                 gameState.selectedPiece = null;
                 
                 // Hamleyi sunucuya gönder
+                console.log('📤 Çoklu yeme hamlesi sunucuya gönderiliyor');
                 socket.emit('makeMove', {
                     roomCode: gameState.roomCode,
                     from: { row: fromRow, col: fromCol },
@@ -627,6 +631,7 @@ function makeMove(fromRow, fromCol, toRow, toCol, capture) {
     renderBoard();
     
     // Hamleyi sunucuya gönder
+    console.log('📤 Normal hamle sunucuya gönderiliyor');
     socket.emit('makeMove', {
         roomCode: gameState.roomCode,
         from: { row: fromRow, col: fromCol },
@@ -1346,22 +1351,32 @@ socket.on('adminNotification', (data) => {
 });
 
 socket.on('moveMade', (data) => {
-    // Sunucudan gelen hamleyi hemen uygula (gecikme olmasın)
+    console.log('📥 Sunucudan hamle geldi:', data);
+    
+    // Sunucudan gelen hamleyi hemen uygula
     gameState.board = data.board;
     gameState.currentPlayer = data.currentPlayer;
     
+    console.log(`🔄 Sıra değişti: ${gameState.currentPlayer} - Ben: ${gameState.playerColor}`);
+    
+    // Seçimi temizle
+    gameState.selectedPiece = null;
+    
+    // Butonları temizle
+    const existingContinueBtn = document.getElementById('continueCaptureBtn');
+    const existingFinishBtn = document.getElementById('finishCaptureBtn');
+    if (existingContinueBtn) existingContinueBtn.remove();
+    if (existingFinishBtn) existingFinishBtn.remove();
+    
     // Eğer çoklu yeme devam ediyorsa ve bizim sıramızda ise
     if (data.canContinueCapture && gameState.currentPlayer === gameState.playerColor) {
+        console.log('🎯 Çoklu yeme devam ediyor');
+        
         // Seçili taşı koru
         const lastMove = data.to;
         gameState.selectedPiece = { row: lastMove.row, col: lastMove.col };
         
         // Butonları göster
-        const existingContinueBtn = document.getElementById('continueCaptureBtn');
-        const existingFinishBtn = document.getElementById('finishCaptureBtn');
-        if (existingContinueBtn) existingContinueBtn.remove();
-        if (existingFinishBtn) existingFinishBtn.remove();
-        
         const gameContainer = document.getElementById('game');
         
         const continueBtn = document.createElement('button');
@@ -1385,7 +1400,7 @@ socket.on('moveMade', (data) => {
         continueBtn.onclick = () => {
             continueBtn.remove();
             finishBtn.remove();
-            highlightValidMoves();
+            renderBoard();
         };
         
         const finishBtn = document.createElement('button');
@@ -1414,20 +1429,12 @@ socket.on('moveMade', (data) => {
         
         gameContainer.appendChild(continueBtn);
         gameContainer.appendChild(finishBtn);
-    } else {
-        // Normal durum - seçimi temizle
-        gameState.selectedPiece = null;
-        
-        // Butonları temizle
-        const existingContinueBtn = document.getElementById('continueCaptureBtn');
-        const existingFinishBtn = document.getElementById('finishCaptureBtn');
-        if (existingContinueBtn) existingContinueBtn.remove();
-        if (existingFinishBtn) existingFinishBtn.remove();
     }
     
     // Hemen render et
     renderBoard();
-    // Timer sunucudan gelecek (timerUpdate event'i)
+    updatePlayerHighlight();
+    updateTimerDisplay();
 });
 
 // Oyuncu kartlarında profil resmini göster
