@@ -1,6 +1,8 @@
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 const io = require('socket.io')(http, {
     cors: {
         origin: "*",
@@ -17,58 +19,50 @@ const { MongoClient } = require('mongodb');
 const uri = "mongodb+srv://xaliqmustafayev7313_db_user:R4Cno5z1Enhtr09u@sayt.1oqunne.mongodb.net/?appName=sayt";
 const client = new MongoClient(uri);
 
-// Veritabanı ve koleksiyon
+// Veritabanı ve koleksiyonlar
 let db;
 let usersCollection;
-let leaderboardCollection;
+let roomsCollection;
+let messagesCollection;
 
-// Veri yapıları
-const rooms = new Map();
-const waitingPlayers = new Map();
-const users = new Map();
-const roomTimers = new Map(); // Oda timer'ları
-const searchTimers = new Map(); // Eşleşme timer'ları
+// Bellekte tutulan veriler
+const onlineUsers = new Map(); // socket.id -> {userId, username, avatar, status}
+const userSockets = new Map(); // userId -> Set<socket.id>
+const roomMembers = new Map(); // roomId -> Set<userId>
+const typingUsers = new Map(); // roomId -> Set<userId>
 
-// Elo hesaplama fonksiyonu (Elo rating sistemi)
-function calculateEloChange(winnerElo, loserElo, isRankedMatch = true) {
-    if (!isRankedMatch) return { winnerChange: 0, loserChange: 0 };
-    
-    const winnerLevel = calculateLevel(winnerElo);
-    let winnerChange, loserChange;
-    
-    if (winnerLevel >= 5) {
-        // 5+ level için daha az puan
-        winnerChange = Math.floor(10 + Math.random() * 4); // 10-13 arası
-        loserChange = -Math.floor(13 + Math.random() * 3); // 13-15 arası
-    } else {
-        // 1-4 level için normal puan
-        winnerChange = Math.floor(12 + Math.random() * 9); // 12-20 arası
-        loserChange = -Math.floor(12 + Math.random() * 9); // 12-20 arası
-    }
-    
-    return { winnerChange, loserChange };
+// Kullanıcı durumları
+const UserStatus = {
+    ONLINE: 'online',
+    OFFLINE: 'offline',
+    AWAY: 'away',
+    BUSY: 'busy'
+};
+
+// Oda tipleri
+const RoomType = {
+    DIRECT: 'direct',
+    GROUP: 'group',
+    CHANNEL: 'channel'
+};
+
+// Varsayılan avatar URL'leri
+const DEFAULT_AVATARS = [
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=1',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=2',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=3',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=4',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=5'
+];
+
+// Rastgele avatar seç
+function getRandomAvatar() {
+    return DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)];
 }
 
-// Seviye hesaplama fonksiyonu
-function calculateLevel(elo) {
-    // 100 puanda bir seviye atlama
-    const level = Math.floor(elo / 100) + 1;
-    return level;
-}
-
-// Seviye ikonu belirleme
-function getLevelIcon(level) {
-    // SVG icon path'leri level'a göre
-    if (level >= 1 && level <= 3) {
-        return 'bronze'; // Bronz
-    } else if (level >= 4 && level <= 6) {
-        return 'silver'; // Gümüş
-    } else if (level >= 7 && level <= 9) {
-        return 'gold'; // Altın
-    } else if (level === 10) {
-        return 'diamond'; // Elmas (Maksimum seviye)
-    }
-    return 'bronze';
+// Kullanıcı adı kontrolü
+function isValidUsername(username) {
+    return /^[a-zA-Z0-9_]{3,20}$/.test(username);
 }
 
 // Kullanıcıyı veritabanında bul veya oluştur
